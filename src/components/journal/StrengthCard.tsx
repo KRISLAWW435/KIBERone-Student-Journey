@@ -16,16 +16,16 @@ export function StrengthCard({
   return (
     <div
       style={{ backgroundColor: strength.bgColor }}
-      className="rounded-xl px-3 py-2.5 flex flex-col items-center justify-center text-center border border-black/8 shadow-[0_2px_6px_rgba(0,0,0,0.04)]"
+      className="rounded-xl px-[12px] py-[10px] flex flex-col items-center justify-center text-center border border-black/15 shadow-[0_2px_6px_rgba(0,0,0,0.04)] self-stretch"
     >
-      <div className="mb-1">
-        <StrengthLineIcon type={strength.iconKey} />
+      <div className="mb-[6px] shrink-0">
+        <StrengthLineIcon type={strength.iconKey} size={compact ? 30 : 34} />
       </div>
-      <div className="font-bold text-[12.5px] leading-[1.2] text-[#111827]">
+      <div className="font-extrabold text-[13px] leading-[1.2] text-[#111827]">
         {strength.title}
       </div>
-      {!compact && strength.example && ageCategory !== '8-10' && (
-        <p className="text-[9.5px] leading-[1.25] text-[#111827]/75 mt-1 line-clamp-2">
+      {!compact && strength.example && (
+        <p className="text-[11px] leading-[1.3] font-medium text-[#111827] mt-[4px] line-clamp-2">
           {strength.example}
         </p>
       )}

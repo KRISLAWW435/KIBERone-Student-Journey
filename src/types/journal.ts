@@ -8,7 +8,7 @@ export type JournalStatus =
   | 'ready'
   | 'exported';
 
-export type StudentStatus = 'active' | 'dropped' | 'transferred';
+export type StudentStatus = 'active' | 'paused' | 'completed';
 
 export interface Branch {
   id: string;
@@ -218,6 +218,7 @@ export interface ModuleItem {
   size: 'normal' | 'compact';
   order: number;
   hidden?: boolean;
+  isIndividual?: boolean;
   suggestedSkills?: string[];
 }
 
@@ -227,6 +228,8 @@ export interface SkillItem {
   label: string;
   bgColor: string;
   status?: SkillMasteryStatus;
+  hidden?: boolean;
+  isIndividual?: boolean;
 }
 
 export interface ProjectItem {
@@ -444,6 +447,7 @@ export interface LibraryModule {
   suggestedSkills: string[];
   relatedSkills: string[];
   badgeLabel?: string;
+  ageCategories?: AgeCategory[];
   isActive: boolean;
   isEditable: boolean;
   createdAt: string;

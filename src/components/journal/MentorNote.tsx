@@ -14,10 +14,14 @@ export function MentorNote({
 }: MentorNoteProps) {
   const { mentorNote } = config;
   const isActive = activeTarget?.page === 2 && activeTarget.block === 'mentorNote';
+  const isHandwriting = mentorNote.fontStyle === 'handwriting';
+  const resolvedFontSize = isHandwriting
+    ? Math.max(21, mentorNote.fontSize + 2)
+    : Math.max(14, mentorNote.fontSize - 3);
 
   return (
-    <section className="flex flex-col">
-      <h3 className="font-extrabold text-[17px] tracking-tight uppercase text-[#111827] mb-2.5">
+    <section style={{ width: '378px' }} className="flex flex-col shrink-0">
+      <h3 className="font-extrabold text-[17px] leading-[24px] tracking-tight uppercase text-[#111827] mb-[10px] shrink-0">
         СЛОВО НАСТАВНИКА
       </h3>
 
@@ -27,56 +31,54 @@ export function MentorNote({
           e.stopPropagation();
           onSelectTarget({ page: 2, block: 'mentorNote' });
         }}
-        style={{ transform: `rotate(${mentorNote.tiltDeg}deg)` }}
-        className={`relative mentor-notebook-paper rounded-md border border-zinc-300 shadow-[0_6px_18px_rgba(0,0,0,0.1)] pl-11 pr-5 pt-4 pb-4 min-h-[268px] flex flex-col justify-between ${
+        style={{
+          width: '378px',
+          minHeight: '306px',
+          transform: `rotate(${mentorNote.tiltDeg}deg)`,
+        }}
+        className={`relative mentor-notebook-paper rounded-md border border-zinc-300 shadow-[0_6px_18px_rgba(0,0,0,0.1)] pl-[44px] pr-[20px] pt-[18px] pb-[18px] flex flex-col justify-between shrink-0 ${
           onSelectTarget ? 'editable-block' : ''
         } ${isActive ? 'editable-block-active' : ''}`}
       >
         {/* Spiral Wire Binding on Left Edge matching reference */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -left-2 top-3 bottom-3 w-7 flex flex-col justify-between"
+          className="pointer-events-none absolute -left-[8px] top-[12px] bottom-[12px] w-[28px] flex flex-col justify-between"
         >
           {Array.from({ length: 11 }).map((_, idx) => (
             <div key={idx} className="flex items-center">
-              <span className="w-4 h-[4px] rounded-full bg-gradient-to-r from-zinc-500 via-zinc-300 to-zinc-600 shadow-xs block" />
-              <span className="w-2.5 h-2.5 rounded-full bg-[#D1D5DB] border border-zinc-500 -ml-1 block" />
+              <span className="w-[16px] h-[4px] rounded-full bg-gradient-to-r from-zinc-500 via-zinc-300 to-zinc-600 shadow-xs block" />
+              <span className="w-[10px] h-[10px] rounded-full bg-[#D1D5DB] border border-zinc-500 -ml-[4px] block" />
             </div>
           ))}
         </div>
 
-        {/* Letter Content */}
+        {/* Letter Content locked strictly to 28px notebook rules */}
         <div
           style={{
-            fontFamily:
-              mentorNote.fontStyle === 'handwriting'
-                ? 'var(--font-handwriting)'
-                : 'var(--font-journal)',
-            fontSize:
-              mentorNote.fontStyle === 'handwriting'
-                ? `${mentorNote.fontSize}px`
-                : `${Math.max(12, mentorNote.fontSize - 5)}px`,
+            fontFamily: isHandwriting
+              ? 'var(--font-handwriting)'
+              : 'var(--font-journal)',
+            fontSize: `${resolvedFontSize}px`,
+            lineHeight: '28px',
           }}
-          className="text-[#111827] leading-[1.32]"
+          className="text-[#111827]"
         >
           <div className="font-semibold">{mentorNote.greeting}</div>
-          <p className="mt-1">{mentorNote.body}</p>
+          <p className="m-0 font-medium">{mentorNote.body}</p>
         </div>
 
         {/* Signature + Optional Mentor Photo */}
-        <div className="mt-3 flex items-end justify-between gap-3">
+        <div className="mt-[28px] flex items-end justify-between gap-[12px]">
           <div
             style={{
-              fontFamily:
-                mentorNote.fontStyle === 'handwriting'
-                  ? 'var(--font-handwriting)'
-                  : 'var(--font-journal)',
-              fontSize:
-                mentorNote.fontStyle === 'handwriting'
-                  ? `${mentorNote.fontSize}px`
-                  : '13px',
+              fontFamily: isHandwriting
+                ? 'var(--font-handwriting)'
+                : 'var(--font-journal)',
+              fontSize: isHandwriting ? `${resolvedFontSize}px` : '14px',
+              lineHeight: '28px',
             }}
-            className="font-semibold text-[#111827] pb-2"
+            className="font-semibold text-[#111827]"
           >
             {mentorNote.signature}
           </div>

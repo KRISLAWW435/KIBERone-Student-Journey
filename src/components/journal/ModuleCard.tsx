@@ -25,10 +25,10 @@ export function ModuleCard({
     ageCategory === '14-15'
       ? 0
       : index % 3 === 0
-      ? -1.2
+      ? -1.1
       : index % 3 === 1
-      ? 1.0
-      : -1.0;
+      ? 0.9
+      : -0.9;
 
   const variant = module.layoutVariant ?? 'classic';
   const imgScale = module.imageScale ?? 1;
@@ -52,22 +52,20 @@ export function ModuleCard({
         onClick();
       }}
       style={{ transform: `rotate(${tiltDeg}deg)` }}
-      className={`bg-white border-[1.5px] border-[#18181B] rounded-xl ${
-        compact ? 'p-2' : 'p-2.5'
-      } shadow-[0_4px_10px_rgba(0,0,0,0.08)] flex flex-col ${
+      className={`bg-white border-[1.5px] border-[#18181B] rounded-xl p-[12px] shadow-[0_4px_10px_rgba(0,0,0,0.08)] flex flex-col self-stretch ${
         onClick ? 'editable-block' : ''
       } ${isActive ? 'editable-block-active' : ''}`}
     >
       {/* Badge-top variant header */}
       {variant === 'badge-top' && (
-        <div className="flex items-center justify-between px-1 mb-1.5">
+        <div className="flex items-center justify-between px-[4px] mb-[6px] shrink-0">
           <span
             style={{ backgroundColor: module.cardBgColor }}
-            className="text-[9.5px] font-bold px-2 py-0.5 rounded-full border border-black/15 text-[#111827]"
+            className="text-[10px] font-bold px-[8px] py-[2px] rounded-full border border-black/15 text-[#111827]"
           >
             {module.subtitle || 'Модуль'}
           </span>
-          <span className="font-mono text-[9px] text-zinc-400">
+          <span className="font-mono text-[9.5px] text-zinc-500">
             0{index + 1}
           </span>
         </div>
@@ -76,10 +74,11 @@ export function ModuleCard({
       {/* Colored Graphic Container */}
       {variant !== 'minimal' && (
         <div
-          style={{ backgroundColor: module.cardBgColor }}
-          className={`w-full ${
-            compact ? 'h-[68px]' : 'h-[84px]'
-          } rounded-lg border border-black/10 overflow-hidden flex items-center justify-center mb-2 shrink-0`}
+          style={{
+            backgroundColor: module.cardBgColor,
+            height: compact ? '70px' : '82px',
+          }}
+          className="self-stretch rounded-lg border border-black/10 overflow-hidden flex items-center justify-center mb-[10px] shrink-0 relative"
         >
           {effectiveMode === 'image' && resolvedImageUrl ? (
             <img
@@ -98,10 +97,10 @@ export function ModuleCard({
               }}
               className="flex items-center justify-center w-full h-full"
             >
-              <div className="w-14 h-14 rounded-2xl bg-white/85 border-[1.5px] border-[#18181B] shadow-[0_2px_0_rgba(24,24,27,0.18)] flex items-center justify-center">
+              <div className="w-[52px] h-[52px] rounded-2xl bg-white/85 border-[1.5px] border-[#18181B] shadow-[0_2px_0_rgba(24,24,27,0.18)] flex items-center justify-center">
                 <ModuleLucideIcon
                   iconKey={module.iconKey}
-                  className="w-8 h-8 text-[#18181B]"
+                  className="w-[30px] h-[30px] text-[#18181B]"
                 />
               </div>
             </div>
@@ -118,24 +117,24 @@ export function ModuleCard({
         </div>
       )}
 
-      {/* Text Content */}
-      <div className="text-center px-1 pb-0.5 flex-1 flex flex-col justify-start">
+      {/* Text Content (print-legible body copy, stretched card baseline) */}
+      <div className="text-center px-[4px] flex-1 flex flex-col justify-start">
         <h3
           className={`font-extrabold ${
-            compact ? 'text-[13.5px]' : 'text-[15px]'
-          } leading-[1.15] text-[#111827]`}
+            compact ? 'text-[14px]' : 'text-[15px]'
+          } leading-[1.18] text-[#111827]`}
         >
           {module.title}
         </h3>
         {variant !== 'badge-top' && module.subtitle && (
-          <div className="font-bold text-[12px] leading-tight text-[#111827]/90 mt-0.5">
+          <div className="font-bold text-[12px] leading-tight text-[#111827]/90 mt-[3px]">
             {module.subtitle}
           </div>
         )}
         <p
           className={`${
-            compact ? 'text-[10px]' : 'text-[11px]'
-          } leading-[1.3] text-[#374151] mt-1 line-clamp-3`}
+            compact ? 'text-[11.5px] leading-[1.34]' : 'text-[12px] leading-[1.38]'
+          } text-[#27272A] mt-[5px] line-clamp-3`}
         >
           {module.description}
         </p>

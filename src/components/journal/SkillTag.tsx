@@ -11,12 +11,11 @@ export function SkillTag({ skill, ageCategory }: SkillTagProps) {
 
   return (
     <div
-      style={{ backgroundColor: skill.bgColor }}
-      className={`border-[1.5px] border-[#18181B] px-4 py-2 text-center shadow-[0_2px_0_rgba(24,24,27,0.16)] flex items-center justify-center ${
+      className={`bg-[#E6FAF8] border-[1.5px] border-[#0D9488]/45 px-[14px] py-[7px] text-center shadow-[0_1px_0_rgba(13,148,136,0.14)] flex items-center justify-center ${
         isTeen ? 'rounded-xl' : 'rounded-full'
       }`}
     >
-      <span className="font-semibold text-[12px] leading-[1.18] text-[#111827]">
+      <span className="font-semibold text-[12px] leading-[1.2] text-[#0F172A]">
         {skill.label}
       </span>
     </div>

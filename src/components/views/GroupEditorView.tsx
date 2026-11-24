@@ -2,28 +2,45 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDown,
   ArrowLeft,
+  ArrowRight,
   ArrowUp,
   BookOpen,
+  Camera,
   Check,
+  CheckSquare,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Columns2,
   Eye,
+  EyeOff,
   FolderArchive,
+  Hand,
   Image as ImageIcon,
   Layers,
+  Lightbulb,
   Loader2,
   MapPin,
   Maximize2,
+  Paintbrush,
   Palette,
+  PenLine,
   Plus,
+  RotateCcw,
   Search,
+  SlidersHorizontal,
   Sparkles,
+  Square,
   Trash2,
+  Trophy,
   Upload,
+  User,
   UserPlus,
   Users,
   X,
 } from 'lucide-react';
 import {
+  getModuleAgeCategories,
   MODULE_CATEGORIES,
   UNIFIED_SKILLS_CATALOG,
 } from '../../data/curriculumCatalog';
@@ -46,6 +63,7 @@ import {
   MediaCategory,
   ModuleCategoryConfig,
   ModuleItem,
+  NextTopicIconKey,
   NextTopicItem,
   ProjectItem,
   ResidentRecord,
@@ -60,10 +78,26 @@ import {
   computeJournalProgress,
   formatGroupPeriod,
   getStudentStatusLabel,
+  getStudentStatusMeta,
+  normalizeStudentStatus,
 } from '../../utils/journalProgress';
 import { ExportMenu } from '../ExportMenu';
+import {
+  A4_PAGE_HEIGHT,
+  A4_PAGE_WIDTH,
+  A4_SPREAD_GAP,
+  A4PageSlot,
+} from '../journal/A4SpreadFrame';
+import { ModuleLucideIcon, ModuleSvgIllustration } from '../journal/JournalArtwork';
 import { JournalPageOne } from '../journal/JournalPageOne';
 import { JournalPageTwo } from '../journal/JournalPageTwo';
+
+const flatInputClass =
+  'w-full bg-transparent border-0 border-b border-zinc-200 rounded-none px-0.5 py-1.5 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-[#0D9488] transition-colors';
+const flatSelectClass =
+  'w-full bg-transparent border-0 border-b border-zinc-200 rounded-none px-0.5 py-1.5 text-xs text-zinc-900 focus:outline-none focus:border-[#0D9488] transition-colors cursor-pointer';
+const flatTextareaClass =
+  'w-full bg-transparent border-0 border-b border-zinc-200 rounded-none px-0.5 py-1.5 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-[#0D9488] transition-colors resize-none';
 
 interface GroupEditorViewProps {
   group: StudentGroup;
@@ -113,7 +147,14 @@ interface GroupEditorViewProps {
 
 type EditorTab = 'individual' | 'common';
 type PageFocus = 1 | 2 | 'spread';
-type IndividualSection = 'profile' | 'projects' | 'pride' | 'mentorNote';
+type IndividualSection =
+  | 'profile'
+  | 'curriculum'
+  | 'projects'
+  | 'pride'
+  | 'mentorNote';
+type InspectorMode = 'content' | 'design';
+type CommonStep = 1 | 2 | 3 | 4;
 
 export function GroupEditorView({
   group,
@@ -142,35 +183,105 @@ export function GroupEditorView({
   getExportPageElements,
   onOpenMediaPicker,
 }: GroupEditorViewProps) {
-  const [editorTab, setEditorTab] = useState<EditorTab>('individual');
+  const [editorTab, setEditorTab] = useState<EditorTab>('common');
   const [pageFocus, setPageFocus] = useState<PageFocus>(1);
   const [zoom, setZoom] = useState<'auto' | number>('auto');
-  const [autoScale, setAutoScale] = useState(0.75);
-  const [activeSection, setActiveSection] = useState<IndividualSection>('profile');
+  const [autoScale, setAutoScale] = useState(0.68);
 
-  // Student list filters & quick add / delete confirmation
-  const [showInactive, setShowInactive] = useState(false);
-  const [quickAddOpen, setQuickAddOpen] = useState(false);
-  const [quickName, setQuickName] = useState('');
-  const [quickAge, setQuickAge] = useState('');
-  const [confirmDeleteStudentId, setConfirmDeleteStudentId] = useState<
+  // Resizable & collapsible side panels (Figma-style)
+  const [leftWidth, setLeftWidth] = useState(284);
+  const [rightWidth, setRightWidth] = useState(364);
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [draggingSide, setDraggingSide] = useState<'left' | 'right' | null>(
+    null
+  );
+  const dragSessionRef = useRef<{
+    side: 'left' | 'right';
+    startX: number;
+    startWidth: number;
+  } | null>(null);
+
+  // Right Inspector state (Figma-style: Content vs Design tab + 5-step icon tab stepper)
+  const [inspectorMode, setInspectorMode] = useState<InspectorMode>('content');
+  const [activeInspectorStep, setActiveInspectorStep] =
+    useState<IndividualSection>('profile');
+  const [editingModuleImageId, setEditingModuleImageId] = useState<
     string | null
   >(null);
 
-  // Selected student in left panel
+  // Safe inline deletion confirmation states
+  const [confirmDeleteStudentId, setConfirmDeleteStudentId] = useState<
+    string | null
+  >(null);
+  const [confirmDeleteProjectId, setConfirmDeleteProjectId] = useState<
+    string | null
+  >(null);
+  const [confirmDeleteCommonModId, setConfirmDeleteCommonModId] = useState<
+    string | null
+  >(null);
+  const [confirmDeleteCommonSkillId, setConfirmDeleteCommonSkillId] = useState<
+    string | null
+  >(null);
+  const [confirmDeleteIndModId, setConfirmDeleteIndModId] = useState<
+    string | null
+  >(null);
+  const [confirmDeleteIndSkillId, setConfirmDeleteIndSkillId] = useState<
+    string | null
+  >(null);
+
+  // Per-student curriculum override UI state
+  const [individualModPickerOpen, setIndividualModPickerOpen] = useState(false);
+  const [individualModSearch, setIndividualModSearch] = useState('');
+  const [customIndividualModTitle, setCustomIndividualModTitle] = useState('');
+  const [customIndividualModSub, setCustomIndividualModSub] = useState('');
+  const [newIndividualSkill, setNewIndividualSkill] = useState('');
+
+  // Common Stepper state (1..4) & Quick Picker Modals
+  const [commonStep, setCommonStep] = useState<CommonStep>(1);
+  const [modulesModalOpen, setModulesModalOpen] = useState(false);
+  const [modalModSearch, setModalModSearch] = useState('');
+  const [modalModCategory, setModalModCategory] = useState<string>('all');
+  const [modalAgeFilter, setModalAgeFilter] = useState<'group' | 'all'>(
+    'group'
+  );
+  const [draftModalModuleIds, setDraftModalModuleIds] = useState<string[]>([]);
+
+  const [skillsModalOpen, setSkillsModalOpen] = useState(false);
+  const [modalSkillSearch, setModalSkillSearch] = useState('');
+  const [draftModalSkillIds, setDraftModalSkillIds] = useState<string[]>([]);
+
+  const [topicsModalOpen, setTopicsModalOpen] = useState(false);
+  const [modalTopicSearch, setModalTopicSearch] = useState('');
+  const [draftModalTopicTitles, setDraftModalTopicTitles] = useState<string[]>(
+    []
+  );
+
+  // Student list filters & quick add
+  const [onlyActive, setOnlyActive] = useState(true);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickName, setQuickName] = useState('');
+  const [quickAge, setQuickAge] = useState('');
+
+  const allGroupStudents = useMemo(
+    () => residents.filter((r) => r.groupId === group.id),
+    [residents, group.id]
+  );
+
   const groupStudents = useMemo(
     () =>
-      residents.filter(
-        (r) =>
-          r.groupId === group.id &&
-          (showInactive ? true : r.status === 'active')
+      allGroupStudents.filter((r) =>
+        onlyActive ? normalizeStudentStatus(r.status) === 'active' : true
       ),
-    [residents, group.id, showInactive]
+    [allGroupStudents, onlyActive]
   );
 
   const activeStudentsOnly = useMemo(
-    () => residents.filter((r) => r.groupId === group.id && r.status === 'active'),
-    [residents, group.id]
+    () =>
+      allGroupStudents.filter(
+        (r) => normalizeStudentStatus(r.status) === 'active'
+      ),
+    [allGroupStudents]
   );
 
   const findStudentJournal = useCallback(
@@ -184,20 +295,23 @@ export function GroupEditorView({
     [journals]
   );
 
-  const [selectedStudentId, setSelectedStudentId] = useState<string>(
-    () => groupStudents[0]?.id ?? ''
-  );
+  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
+  const [expandedStudentIds, setExpandedStudentIds] = useState<
+    Record<string, boolean>
+  >({});
 
   useEffect(() => {
-    if (!groupStudents.some((s) => s.id === selectedStudentId)) {
-      setSelectedStudentId(groupStudents[0]?.id ?? '');
+    if (
+      selectedStudentId &&
+      !allGroupStudents.some((s) => s.id === selectedStudentId)
+    ) {
+      setSelectedStudentId('');
     }
-  }, [groupStudents, selectedStudentId]);
+  }, [allGroupStudents, selectedStudentId]);
 
-  const selectedStudent =
-    groupStudents.find((s) => s.id === selectedStudentId) ??
-    groupStudents[0] ??
-    null;
+  const selectedStudent = selectedStudentId
+    ? allGroupStudents.find((s) => s.id === selectedStudentId) ?? null
+    : null;
 
   const activeDoc = selectedStudent
     ? findStudentJournal(selectedStudent) ?? null
@@ -217,47 +331,419 @@ export function GroupEditorView({
     buildDefaultCommonData(group)
   );
   const [commonSearch, setCommonSearch] = useState('');
-  const [commonCategory, setCommonCategory] = useState<string>('all');
   const [newCustomSkill, setNewCustomSkill] = useState('');
   const [newNextTopicTitle, setNewNextTopicTitle] = useState('');
   const [applyingCommon, setApplyingCommon] = useState(false);
 
-  // Sync draft when switching groups
+  const topicsCatalogOptions = useMemo(() => {
+    const mapCategoryToTopicIcon = (
+      cat: string,
+      title: string
+    ): NextTopicIconKey => {
+      const t = title.toLowerCase();
+      if (cat === 'ai' || t.includes('ии') || t.includes('нейро')) return 'ai';
+      if (cat === 'design-3d' || t.includes('3d') || t.includes('blender'))
+        return 'cube3d';
+      if (cat === 'web-mobile' && (t.includes('моб') || t.includes('android')))
+        return 'mobile';
+      if (cat === 'web-mobile' || t.includes('веб') || t.includes('html'))
+        return 'web';
+      if (cat === 'games' || t.includes('игр') || t.includes('roblox'))
+        return 'gamepad';
+      return 'python';
+    };
+
+    const items: Array<{
+      id: string;
+      title: string;
+      subtitle: string;
+      iconKey: NextTopicIconKey;
+    }> = NEXT_TOPIC_LIBRARY.map((item, i) => ({
+      id: `preset-topic-${i}`,
+      title: item.title,
+      subtitle: 'Рекомендуемое направление',
+      iconKey: item.iconKey,
+    }));
+
+    const seen = new Set(items.map((x) => x.title.toLowerCase()));
+    libraryModules.forEach((m) => {
+      if (m.isActive === false) return;
+      const title = (m.displayTitle || m.title).trim();
+      if (!title || seen.has(title.toLowerCase())) return;
+      seen.add(title.toLowerCase());
+      items.push({
+        id: m.id,
+        title,
+        subtitle: m.subtitle || 'Модуль из каталога',
+        iconKey: mapCategoryToTopicIcon(m.category, title),
+      });
+    });
+
+    return items;
+  }, [libraryModules]);
+
+  const openTopicsPickerModal = () => {
+    setDraftModalTopicTitles(commonDraft.nextChapterTopics.map((t) => t.title));
+    setModalTopicSearch('');
+    setTopicsModalOpen(true);
+  };
+
+  const confirmTopicsModal = () => {
+    const existingByTitle = new Map(
+      commonDraft.nextChapterTopics.map((t) => [t.title.toLowerCase(), t])
+    );
+    const catalogByTitle = new Map(
+      topicsCatalogOptions.map((o) => [o.title.toLowerCase(), o])
+    );
+    const nextTopics: NextTopicItem[] = draftModalTopicTitles.map(
+      (title, idx) => {
+        const key = title.toLowerCase();
+        const existing = existingByTitle.get(key);
+        if (existing) return existing;
+        const cat = catalogByTitle.get(key);
+        return {
+          id: `nt-${Date.now()}-${idx}`,
+          title,
+          iconKey: cat?.iconKey ?? 'ai',
+        };
+      }
+    );
+    setCommonDraft((prev) => ({
+      ...prev,
+      nextChapterTopics: nextTopics,
+    }));
+    setTopicsModalOpen(false);
+  };
+
+  const handleAddCustomNextTopic = () => {
+    const trimmed = newNextTopicTitle.trim();
+    if (!trimmed) return;
+    if (
+      commonDraft.nextChapterTopics.some(
+        (t) => t.title.toLowerCase() === trimmed.toLowerCase()
+      )
+    ) {
+      setNewNextTopicTitle('');
+      return;
+    }
+    const item: NextTopicItem = {
+      id: `nt-custom-${Date.now()}`,
+      title: trimmed,
+      iconKey: 'ai',
+    };
+    setCommonDraft((prev) => ({
+      ...prev,
+      nextChapterTopics: [...prev.nextChapterTopics, item],
+    }));
+    setNewNextTopicTitle('');
+  };
+
+  // When opening or switching groups, start on Group Common Data Step 1 with no student pre-selected
+  useEffect(() => {
+    setEditorTab('common');
+    setCommonStep(1);
+    setSelectedStudentId('');
+    setExpandedStudentIds({});
+    setActiveInspectorStep('profile');
+    setEditingModuleImageId(null);
+  }, [group.id]);
+
+  // Keep draft synced when group data updates
   useEffect(() => {
     setGroupDraft({ ...group });
     setCommonDraft(buildDefaultCommonData(group));
-  }, [group.id]);
+  }, [group.id, group.updatedAt]);
+
+  // Global mouse drag listeners for Figma-style panel resizing
+  const startResize = useCallback(
+    (side: 'left' | 'right', e: React.MouseEvent) => {
+      e.preventDefault();
+      dragSessionRef.current = {
+        side,
+        startX: e.clientX,
+        startWidth: side === 'left' ? leftWidth : rightWidth,
+      };
+      setDraggingSide(side);
+    },
+    [leftWidth, rightWidth]
+  );
+
+  useEffect(() => {
+    if (!draggingSide) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const session = dragSessionRef.current;
+      if (!session) return;
+      const delta = e.clientX - session.startX;
+      if (session.side === 'left') {
+        const clamped = Math.min(400, Math.max(220, session.startWidth + delta));
+        setLeftWidth(clamped);
+      } else {
+        const clamped = Math.min(540, Math.max(280, session.startWidth - delta));
+        setRightWidth(clamped);
+      }
+    };
+    const handleMouseUp = () => {
+      dragSessionRef.current = null;
+      setDraggingSide(null);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [draggingSide]);
 
   // AI Mentor Note state
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [newStrengthTitle, setNewStrengthTitle] = useState('');
 
-  // Canvas ResizeObserver for crisp auto-scaling without overlap
+  // Canvas ResizeObserver & Figma-style Pan + Cursor-anchored Zoom
   const canvasStageRef = useRef<HTMLDivElement | null>(null);
   const effectiveSpread = pageFocus === 'spread';
-  const logicalW = effectiveSpread ? 794 * 2 + 12 : 794;
+  const logicalW = effectiveSpread
+    ? A4_PAGE_WIDTH * 2 + A4_SPREAD_GAP
+    : A4_PAGE_WIDTH;
+
+  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({
+    x: 24,
+    y: 20,
+  });
+  const [spacePressed, setSpacePressed] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
+  const panOffsetRef = useRef(panOffset);
+  panOffsetRef.current = panOffset;
+  const panStartRef = useRef<{
+    clientX: number;
+    clientY: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
+
+  const computeCenteredPan = useCallback(
+    (scale: number, el: HTMLDivElement | null) => {
+      if (!el) return { x: 24, y: 20 };
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      const scaledW = logicalW * scale;
+      const scaledH = A4_PAGE_HEIGHT * scale;
+      return {
+        x: Math.round((w - scaledW) / 2),
+        y: Math.round(Math.max(16, (h - scaledH) / 2)),
+      };
+    },
+    [logicalW]
+  );
+
+  const fitAndCenterCanvas = useCallback(() => {
+    const el = canvasStageRef.current;
+    if (!el) {
+      setZoom('auto');
+      return;
+    }
+    const availableW = Math.max(220, el.clientWidth - 48);
+    const availableH = Math.max(320, el.clientHeight - 40);
+    const targetW = effectiveSpread
+      ? A4_PAGE_WIDTH * 2 + A4_SPREAD_GAP
+      : A4_PAGE_WIDTH;
+    const scaleW = availableW / targetW;
+    const scaleH = availableH / A4_PAGE_HEIGHT;
+    const fitted = Number(
+      Math.min(1, Math.max(0.28, Math.min(scaleW, scaleH * 1.02))).toFixed(3)
+    );
+    setAutoScale(fitted);
+    setZoom('auto');
+    setPanOffset(computeCenteredPan(fitted, el));
+  }, [computeCenteredPan, effectiveSpread]);
 
   useEffect(() => {
-    if (editorTab !== 'individual') return;
+    if (editorTab !== 'individual' || !selectedStudentId) return;
     const el = canvasStageRef.current;
     if (!el) return;
     const recalc = () => {
-      const availableW = Math.max(300, el.clientWidth - 40);
-      const availableH = Math.max(400, el.clientHeight - 56);
-      const targetW = effectiveSpread ? 794 * 2 + 16 : 794;
+      const availableW = Math.max(220, el.clientWidth - 48);
+      const availableH = Math.max(320, el.clientHeight - 40);
+      const targetW = effectiveSpread
+        ? A4_PAGE_WIDTH * 2 + A4_SPREAD_GAP
+        : A4_PAGE_WIDTH;
       const scaleW = availableW / targetW;
-      const scaleH = availableH / 1123;
-      const next = Math.min(1, Math.max(0.32, Math.min(scaleW, scaleH * 1.15)));
-      setAutoScale(Number(next.toFixed(3)));
+      const scaleH = availableH / A4_PAGE_HEIGHT;
+      const next = Number(
+        Math.min(1, Math.max(0.28, Math.min(scaleW, scaleH * 1.02))).toFixed(3)
+      );
+      setAutoScale(next);
+      if (zoom === 'auto') {
+        setPanOffset(computeCenteredPan(next, el));
+      }
     };
     recalc();
+    const raf = window.requestAnimationFrame(recalc);
     const obs = new ResizeObserver(recalc);
     obs.observe(el);
-    return () => obs.disconnect();
-  }, [editorTab, pageFocus, effectiveSpread, selectedStudentId]);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      obs.disconnect();
+    };
+  }, [
+    editorTab,
+    pageFocus,
+    effectiveSpread,
+    selectedStudentId,
+    leftWidth,
+    rightWidth,
+    leftCollapsed,
+    rightCollapsed,
+    zoom,
+    computeCenteredPan,
+  ]);
+
+  // Center canvas nicely when switching student or page mode
+  useEffect(() => {
+    if (editorTab !== 'individual' || !selectedStudentId) return;
+    const raf = window.requestAnimationFrame(() => {
+      fitAndCenterCanvas();
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [editorTab, selectedStudentId, pageFocus, fitAndCenterCanvas]);
 
   const effectiveScale = zoom === 'auto' ? autoScale : zoom;
+  const effectiveScaleRef = useRef(effectiveScale);
+  effectiveScaleRef.current = effectiveScale;
+
+  // Native non-passive wheel listener for smooth zoom toward cursor
+  useEffect(() => {
+    if (editorTab !== 'individual' || !selectedStudentId) return;
+    const el = canvasStageRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const prevScale = effectiveScaleRef.current;
+      const sensitivity = e.ctrlKey ? 0.01 : 0.0022;
+      const factor = Math.exp(-e.deltaY * sensitivity);
+      const nextScale = Number(
+        Math.min(2.2, Math.max(0.25, prevScale * factor)).toFixed(3)
+      );
+      if (nextScale === prevScale) return;
+
+      const curPan = panOffsetRef.current;
+      const contentX = (mouseX - curPan.x) / prevScale;
+      const contentY = (mouseY - curPan.y) / prevScale;
+
+      setZoom(nextScale);
+      setPanOffset({
+        x: Math.round(mouseX - contentX * nextScale),
+        y: Math.round(mouseY - contentY * nextScale),
+      });
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [editorTab, selectedStudentId]);
+
+  // Spacebar hand mode (ignores inputs/textareas/selects/contentEditable)
+  useEffect(() => {
+    if (editorTab !== 'individual' || !selectedStudentId) {
+      setSpacePressed(false);
+      return;
+    }
+    const isTypingTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+      const tag = target.tagName;
+      return (
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        target.isContentEditable
+      );
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return;
+      if (isTypingTarget(e.target) || isTypingTarget(document.activeElement)) {
+        return;
+      }
+      e.preventDefault();
+      if (!e.repeat) setSpacePressed(true);
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') setSpacePressed(false);
+    };
+    const onBlur = () => {
+      setSpacePressed(false);
+      setIsPanning(false);
+      panStartRef.current = null;
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, [editorTab, selectedStudentId]);
+
+  // Mouse drag pan when Space+LMB or Middle Mouse Button is held
+  useEffect(() => {
+    if (!isPanning) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const s = panStartRef.current;
+      if (!s) return;
+      setPanOffset({
+        x: Math.round(s.startX + (e.clientX - s.clientX)),
+        y: Math.round(s.startY + (e.clientY - s.clientY)),
+      });
+    };
+    const handleMouseUp = () => {
+      panStartRef.current = null;
+      setIsPanning(false);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isPanning]);
+
+  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button === 1 || (e.button === 0 && spacePressed)) {
+      e.preventDefault();
+      panStartRef.current = {
+        clientX: e.clientX,
+        clientY: e.clientY,
+        startX: panOffset.x,
+        startY: panOffset.y,
+      };
+      setIsPanning(true);
+    }
+  };
+
+  const applyPresetZoom = (preset: 'auto' | number) => {
+    if (preset === 'auto') {
+      fitAndCenterCanvas();
+      return;
+    }
+    const el = canvasStageRef.current;
+    if (el) {
+      const cx = el.clientWidth / 2;
+      const cy = el.clientHeight / 2;
+      const prev = effectiveScale;
+      const contentX = (cx - panOffset.x) / prev;
+      const contentY = (cy - panOffset.y) / prev;
+      setPanOffset({
+        x: Math.round(cx - contentX * preset),
+        y: Math.round(cy - contentY * preset),
+      });
+    }
+    setZoom(preset);
+  };
+
   const branch = branches.find((b) => b.id === group.branchId);
 
   const activeDocProgress = useMemo(
@@ -288,6 +774,14 @@ export function GroupEditorView({
     };
   }, [activeStudentsOnly, findStudentJournal]);
 
+  const focusSection = (sec: IndividualSection, page?: 1 | 2) => {
+    setInspectorMode('content');
+    setActiveInspectorStep(sec);
+    if (page && pageFocus !== 'spread') {
+      setPageFocus(page);
+    }
+  };
+
   const handleUploadImage = (
     file: File | undefined,
     cb: (url: string) => void
@@ -303,20 +797,36 @@ export function GroupEditorView({
   const handleSelectTargetOnA4 = (target: EditorSectionTarget) => {
     if (!target) return;
     if (target.page === 1) {
-      if (target.block === 'cover' || target.block === 'logo' || target.block === 'coverBear') {
-        setActiveSection('profile');
-      } else if (target.block === 'project' || target.block === 'projectsBlock') {
-        setActiveSection('projects');
-      } else if (target.block === 'modulesBlock' || target.block === 'module' || target.block === 'skills') {
-        setEditorTab('common');
+      if (
+        target.block === 'cover' ||
+        target.block === 'logo' ||
+        target.block === 'coverBear'
+      ) {
+        focusSection('profile', 1);
+      } else if (
+        target.block === 'project' ||
+        target.block === 'projectsBlock'
+      ) {
+        focusSection('projects', 1);
+      } else if (
+        target.block === 'modulesBlock' ||
+        target.block === 'module' ||
+        target.block === 'skills'
+      ) {
+        focusSection('curriculum', 1);
       }
     } else {
       if (target.block === 'mentorNote') {
-        setActiveSection('mentorNote');
-      } else if (target.block === 'pride' || target.block === 'prideBear' || target.block === 'strengths') {
-        setActiveSection('pride');
+        focusSection('mentorNote', 2);
+      } else if (
+        target.block === 'pride' ||
+        target.block === 'prideBear' ||
+        target.block === 'strengths'
+      ) {
+        focusSection('pride', 2);
       } else if (target.block === 'nextChapter' || target.block === 'nextBear') {
         setEditorTab('common');
+        setCommonStep(4);
       }
     }
   };
@@ -361,7 +871,8 @@ export function GroupEditorView({
             ...activeDoc.page2.mentorNote,
             greeting: payload.greeting || activeDoc.page2.mentorNote.greeting,
             body: payload.body || activeDoc.page2.mentorNote.body,
-            signature: payload.signature || activeDoc.page2.mentorNote.signature,
+            signature:
+              payload.signature || activeDoc.page2.mentorNote.signature,
           },
         },
       });
@@ -373,64 +884,6 @@ export function GroupEditorView({
   };
 
   // Common Group Tab Helpers
-  const filteredCatalogModules = useMemo(() => {
-    const q = commonSearch.trim().toLowerCase();
-    return libraryModules.filter((m) => {
-      if (m.isActive === false) return false;
-      const matchesCat =
-        commonCategory === 'all' ||
-        m.category === commonCategory ||
-        Boolean(m.filterCategories?.includes(commonCategory));
-      if (!matchesCat) return false;
-      if (!q) return true;
-      return (
-        m.displayTitle.toLowerCase().includes(q) ||
-        m.officialTitle.toLowerCase().includes(q) ||
-        (m.code || '').toLowerCase().includes(q) ||
-        m.subtitle.toLowerCase().includes(q)
-      );
-    });
-  }, [libraryModules, commonSearch, commonCategory]);
-
-  const toggleCommonModule = (lib: LibraryModule) => {
-    const exists = commonDraft.modules.some(
-      (m) => m.libraryModuleId === lib.id
-    );
-    if (exists) {
-      setCommonDraft((prev) => ({
-        ...prev,
-        modules: prev.modules
-          .filter((m) => m.libraryModuleId !== lib.id)
-          .map((m, idx) => ({ ...m, order: idx + 1 })),
-      }));
-    } else {
-      const nextMod: ModuleItem = {
-        id: `grp-mod-${lib.id}-${Date.now()}`,
-        libraryModuleId: lib.id,
-        code: lib.code,
-        officialTitle: lib.officialTitle || lib.title,
-        title: lib.displayTitle || lib.title,
-        subtitle: lib.subtitle,
-        description: lib.description,
-        category: lib.category,
-        illustrationKey: lib.illustrationKey,
-        iconKey: lib.iconKey,
-        visualMode:
-          lib.visualMode || (lib.customImageUrl ? 'image' : 'illustration'),
-        imageMediaId: lib.imageMediaId ?? null,
-        customImageUrl: lib.customImageUrl,
-        cardBgColor: lib.cardBgColor,
-        layoutVariant: 'classic',
-        size: 'normal',
-        order: commonDraft.modules.length + 1,
-        suggestedSkills: [...(lib.suggestedSkills ?? [])],
-      };
-      setCommonDraft((prev) => ({
-        ...prev,
-        modules: [...prev.modules, nextMod],
-      }));
-    }
-  };
 
   const moveCommonModule = (index: number, delta: -1 | 1) => {
     const targetIdx = index + delta;
@@ -517,11 +970,376 @@ export function GroupEditorView({
       .filter((s): s is SkillDefinition => Boolean(s));
   }, [commonDraft.modules, skillsCatalog]);
 
+  const handleApplyCommon = async () => {
+    setApplyingCommon(true);
+    try {
+      await onSaveGroupAndApplyCommon(groupDraft, commonDraft);
+      setEditorTab('individual');
+    } finally {
+      setApplyingCommon(false);
+    }
+  };
+
+  // Modal Picker Helpers (Step 2 Modules & Step 3 Skills)
+  const modalFilteredModules = useMemo(() => {
+    const q = modalModSearch.trim().toLowerCase();
+    return libraryModules.filter((m) => {
+      if (m.isActive === false) return false;
+      if (modalAgeFilter === 'group') {
+        const ages = getModuleAgeCategories(m);
+        if (!ages.includes(groupDraft.ageCategory)) return false;
+      }
+      const matchesCat =
+        modalModCategory === 'all' ||
+        m.category === modalModCategory ||
+        Boolean(m.filterCategories?.includes(modalModCategory));
+      if (!matchesCat) return false;
+      if (!q) return true;
+      return (
+        m.displayTitle.toLowerCase().includes(q) ||
+        m.officialTitle.toLowerCase().includes(q) ||
+        (m.code || '').toLowerCase().includes(q) ||
+        m.subtitle.toLowerCase().includes(q)
+      );
+    });
+  }, [
+    libraryModules,
+    modalAgeFilter,
+    groupDraft.ageCategory,
+    modalModCategory,
+    modalModSearch,
+  ]);
+
+  const openModulesPickerModal = () => {
+    const existingIds = commonDraft.modules
+      .map((m) => m.libraryModuleId)
+      .filter((id): id is string => Boolean(id));
+    setDraftModalModuleIds(existingIds);
+    setModalAgeFilter('group');
+    setModalModCategory('all');
+    setModalModSearch('');
+    setModulesModalOpen(true);
+  };
+
+  const confirmModulesModal = () => {
+    const existingByLibId = new Map(
+      commonDraft.modules
+        .filter((m) => m.libraryModuleId)
+        .map((m) => [m.libraryModuleId as string, m])
+    );
+    const customOnly = commonDraft.modules.filter((m) => !m.libraryModuleId);
+
+    const selectedFromLib: ModuleItem[] = [];
+    draftModalModuleIds.forEach((libId) => {
+      const existing = existingByLibId.get(libId);
+      if (existing) {
+        selectedFromLib.push(existing);
+        return;
+      }
+      const lib = libraryModules.find((m) => m.id === libId);
+      if (!lib) return;
+      selectedFromLib.push({
+        id: `grp-mod-${lib.id}-${Date.now()}-${selectedFromLib.length}`,
+        libraryModuleId: lib.id,
+        code: lib.code,
+        officialTitle: lib.officialTitle || lib.title,
+        title: lib.displayTitle || lib.title,
+        subtitle: lib.subtitle,
+        description: lib.description,
+        category: lib.category,
+        illustrationKey: lib.illustrationKey,
+        iconKey: lib.iconKey,
+        visualMode:
+          lib.visualMode || (lib.customImageUrl ? 'image' : 'illustration'),
+        imageMediaId: lib.imageMediaId ?? null,
+        customImageUrl: lib.customImageUrl,
+        cardBgColor: lib.cardBgColor,
+        layoutVariant: 'classic',
+        size: 'normal',
+        order: 1,
+        suggestedSkills: [...(lib.suggestedSkills ?? [])],
+      });
+    });
+
+    const combined = [...selectedFromLib, ...customOnly].map((m, idx) => ({
+      ...m,
+      order: idx + 1,
+    }));
+    setCommonDraft((prev) => ({ ...prev, modules: combined }));
+    setModulesModalOpen(false);
+  };
+
+  const openSkillsPickerModal = () => {
+    const selectedIds = skillsCatalog
+      .filter((def) =>
+        commonDraft.skills.some(
+          (s) =>
+            s.skillId === def.id ||
+            s.label.toLowerCase() === def.label.toLowerCase()
+        )
+      )
+      .map((def) => def.id);
+    setDraftModalSkillIds(selectedIds);
+    setModalSkillSearch('');
+    setSkillsModalOpen(true);
+  };
+
+  const confirmSkillsModal = () => {
+    const customSkills = commonDraft.skills.filter(
+      (s) =>
+        !s.skillId &&
+        !skillsCatalog.some(
+          (def) => def.label.toLowerCase() === s.label.toLowerCase()
+        )
+    );
+    const selectedCatalogSkills: SkillItem[] = [];
+    draftModalSkillIds.forEach((defId) => {
+      const def = skillsCatalog.find((s) => s.id === defId);
+      if (!def) return;
+      const existing = commonDraft.skills.find(
+        (s) =>
+          s.skillId === def.id ||
+          s.label.toLowerCase() === def.label.toLowerCase()
+      );
+      selectedCatalogSkills.push(
+        existing ?? {
+          id: `grp-sk-${def.id}-${Date.now()}-${selectedCatalogSkills.length}`,
+          skillId: def.id,
+          label: def.label,
+          bgColor: def.defaultColor,
+          status: 'independent',
+        }
+      );
+    });
+    setCommonDraft((prev) => ({
+      ...prev,
+      skills: [...selectedCatalogSkills, ...customSkills],
+    }));
+    setSkillsModalOpen(false);
+  };
+
+  const currentPalette =
+    DESIGN_PALETTES.find((p) => p.id === commonDraft.paletteId) ??
+    DESIGN_PALETTES[0];
+
+  const commonSteps: Array<{
+    step: CommonStep;
+    title: string;
+    count?: number;
+  }> = [
+    { step: 1, title: 'Параметры' },
+    { step: 2, title: 'Модули', count: commonDraft.modules.length },
+    { step: 3, title: 'Навыки', count: commonDraft.skills.length },
+    {
+      step: 4,
+      title: 'Что впереди',
+      count: commonDraft.nextChapterTopics.length,
+    },
+  ];
+
+  // Block completion indicators for collapsible right panel sections
+  const blockDoneMap = useMemo(() => {
+    const map: Record<IndividualSection, boolean> = {
+      profile: false,
+      curriculum: false,
+      projects: false,
+      pride: false,
+      mentorNote: false,
+    };
+    if (!activeDocProgress) return map;
+    activeDocProgress.blocks.forEach((b) => {
+      if (b.id === 'profile') map.profile = b.completed;
+      if (b.id === 'curriculum') map.curriculum = b.completed;
+      if (b.id === 'projects') map.projects = b.completed;
+      if (b.id === 'pride') map.pride = b.completed;
+      if (b.id === 'mentorNote') map.mentorNote = b.completed;
+    });
+    return map;
+  }, [activeDocProgress]);
+
+  const filteredIndividualCatalog = useMemo(() => {
+    const q = individualModSearch.trim().toLowerCase();
+    return libraryModules.filter((m) => {
+      if (m.isActive === false) return false;
+      if (!q) return true;
+      return (
+        (m.displayTitle || m.title).toLowerCase().includes(q) ||
+        m.subtitle.toLowerCase().includes(q) ||
+        (m.code || '').toLowerCase().includes(q)
+      );
+    });
+  }, [libraryModules, individualModSearch]);
+
+  const handleToggleStudentModule = (modId: string) => {
+    if (!activeDoc) return;
+    const nextModules = activeDoc.page1.modules.map((m) =>
+      m.id === modId ? { ...m, hidden: !m.hidden } : m
+    );
+    onChangeJournal({
+      ...activeDoc,
+      page1: {
+        ...activeDoc.page1,
+        showModules: nextModules.some((m) => !m.hidden)
+          ? true
+          : activeDoc.page1.showModules,
+        modules: nextModules,
+      },
+    });
+  };
+
+  const handleAddIndividualModuleFromLib = (lib: LibraryModule) => {
+    if (!activeDoc) return;
+    const nextMod: ModuleItem = {
+      id: `ind-mod-${lib.id}-${Date.now()}`,
+      libraryModuleId: lib.id,
+      code: lib.code,
+      officialTitle: lib.officialTitle || lib.title,
+      title: lib.displayTitle || lib.title,
+      subtitle: lib.subtitle,
+      description: lib.description,
+      category: lib.category,
+      illustrationKey: lib.illustrationKey,
+      iconKey: lib.iconKey,
+      visualMode:
+        lib.visualMode || (lib.customImageUrl ? 'image' : 'illustration'),
+      imageMediaId: lib.imageMediaId ?? null,
+      customImageUrl: lib.customImageUrl,
+      cardBgColor: lib.cardBgColor,
+      layoutVariant: 'classic',
+      size: 'normal',
+      order: activeDoc.page1.modules.length + 1,
+      hidden: false,
+      isIndividual: true,
+      suggestedSkills: [...(lib.suggestedSkills ?? [])],
+    };
+    onChangeJournal({
+      ...activeDoc,
+      page1: {
+        ...activeDoc.page1,
+        showModules: true,
+        modules: [...activeDoc.page1.modules, nextMod],
+      },
+    });
+    setIndividualModPickerOpen(false);
+    setIndividualModSearch('');
+  };
+
+  const handleAddCustomIndividualModule = () => {
+    if (!activeDoc || !customIndividualModTitle.trim()) return;
+    const nextMod: ModuleItem = {
+      id: `ind-mod-custom-${Date.now()}`,
+      title: customIndividualModTitle.trim(),
+      subtitle: customIndividualModSub.trim() || 'Индивидуальный модуль',
+      description: 'Освоен по индивидуальной программе.',
+      category: 'programming',
+      illustrationKey: 'python',
+      iconKey: 'code',
+      visualMode: 'illustration',
+      cardBgColor: '#F6E8BF',
+      layoutVariant: 'classic',
+      size: 'normal',
+      order: activeDoc.page1.modules.length + 1,
+      hidden: false,
+      isIndividual: true,
+    };
+    onChangeJournal({
+      ...activeDoc,
+      page1: {
+        ...activeDoc.page1,
+        showModules: true,
+        modules: [...activeDoc.page1.modules, nextMod],
+      },
+    });
+    setCustomIndividualModTitle('');
+    setCustomIndividualModSub('');
+    setIndividualModPickerOpen(false);
+  };
+
+  const handleRemoveIndividualModule = (modId: string) => {
+    if (!activeDoc) return;
+    const nextModules = activeDoc.page1.modules
+      .filter((m) => m.id !== modId)
+      .map((m, idx) => ({ ...m, order: idx + 1 }));
+    onChangeJournal({
+      ...activeDoc,
+      page1: {
+        ...activeDoc.page1,
+        modules: nextModules,
+      },
+    });
+  };
+
+  const syncConfirmedSkills = (skills: SkillItem[]) =>
+    skills
+      .filter((s) => !s.hidden)
+      .map((s) => ({
+        id: s.id,
+        skillId: s.skillId,
+        label: s.label,
+        bgColor: s.bgColor,
+        status: s.status ?? 'independent',
+        confirmedAt: new Date().toISOString(),
+      }));
+
+  const handleToggleStudentSkill = (skillId: string) => {
+    if (!activeDoc) return;
+    const nextSkills = activeDoc.page1.skills.map((s) =>
+      s.id === skillId ? { ...s, hidden: !s.hidden } : s
+    );
+    onChangeJournal({
+      ...activeDoc,
+      page1: {
+        ...activeDoc.page1,
+        showSkills: nextSkills.some((s) => !s.hidden)
+          ? true
+          : activeDoc.page1.showSkills,
+        skills: nextSkills,
+        confirmedSkills: syncConfirmedSkills(nextSkills),
+      },
+    });
+  };
+
+  const handleAddIndividualSkill = () => {
+    if (!activeDoc || !newIndividualSkill.trim()) return;
+    const nextSkill: SkillItem = {
+      id: `ind-sk-${Date.now()}`,
+      label: newIndividualSkill.trim(),
+      bgColor: '#48C9D8',
+      status: 'independent',
+      hidden: false,
+      isIndividual: true,
+    };
+    const nextSkills = [...activeDoc.page1.skills, nextSkill];
+    onChangeJournal({
+      ...activeDoc,
+      page1: {
+        ...activeDoc.page1,
+        showSkills: true,
+        skills: nextSkills,
+        confirmedSkills: syncConfirmedSkills(nextSkills),
+      },
+    });
+    setNewIndividualSkill('');
+  };
+
+  const handleRemoveIndividualSkill = (skillId: string) => {
+    if (!activeDoc) return;
+    const nextSkills = activeDoc.page1.skills.filter((s) => s.id !== skillId);
+    onChangeJournal({
+      ...activeDoc,
+      page1: {
+        ...activeDoc.page1,
+        skills: nextSkills,
+        confirmedSkills: syncConfirmedSkills(nextSkills),
+      },
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-[#F2F2EE] text-[#18181B] flex flex-col">
-      {/* TOP BAR */}
-      <header className="h-16 bg-white border-b border-zinc-200 px-5 flex items-center justify-between gap-4 sticky top-0 z-30">
-        <div className="flex items-center gap-3 min-w-0">
+    <div className="min-h-screen lg:h-screen bg-[#FAF9F6] text-[#18181B] flex flex-col lg:overflow-hidden">
+      {/* TOP BAR (FIGMA-STYLE WORKSPACE HEADER) */}
+      <header className="h-14 shrink-0 bg-white border-b border-zinc-200/80 px-4 flex items-center justify-between gap-4 z-30">
+        <div className="flex items-center gap-2.5 min-w-0">
           <img
             src={ASSETS.logo}
             alt="KIBERone"
@@ -537,64 +1355,74 @@ export function GroupEditorView({
             <span>К группам</span>
           </button>
 
-          <div className="h-5 w-px bg-zinc-200 hidden md:block" />
+          <div className="h-4 w-px bg-zinc-200 hidden md:block shrink-0" />
 
           <div className="min-w-0 hidden md:block">
-            <div className="text-sm font-bold text-zinc-900 truncate">
+            <div className="text-xs font-bold text-zinc-900 truncate">
               {group.name}
             </div>
             <div className="text-[11px] text-zinc-500 flex items-center gap-1.5 truncate">
               <MapPin className="w-3 h-3 text-[#0D9488] shrink-0" />
-              <span>{branch?.name || 'Локация'}</span>
+              <span className="truncate">{branch?.name || 'Локация'}</span>
               <span aria-hidden="true">·</span>
-              <span className="tabular-nums">
+              <span className="tabular-nums shrink-0">
                 {formatGroupPeriod(group.startDate, group.endDate)}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Center Switch: Individual vs Common Group Data */}
-        <div className="flex items-center gap-1 p-1 bg-[#F6F6F3] rounded-xl border border-zinc-200 shrink-0">
-          <button
-            type="button"
-            onClick={() => setEditorTab('individual')}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
-              editorTab === 'individual'
-                ? 'bg-white text-zinc-900 shadow-xs'
-                : 'text-zinc-600 hover:text-zinc-900'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5 text-[#0D9488]" />
-            <span>Ученики и листы А4</span>
-          </button>
+        {/* Center Switch: Group Common Stepper FIRST, Individual Editor SECOND (Flat Underline Tabs) */}
+        <div className="flex items-center gap-6 h-full shrink-0">
           <button
             type="button"
             onClick={() => setEditorTab('common')}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+            className={`h-full inline-flex items-center gap-1.5 px-1 border-b-2 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
               editorTab === 'common'
-                ? 'bg-white text-zinc-900 shadow-xs'
-                : 'text-zinc-600 hover:text-zinc-900'
+                ? 'border-[#0D9488] text-zinc-900'
+                : 'border-transparent text-zinc-500 hover:text-zinc-900'
             }`}
           >
-            <Layers className="w-3.5 h-3.5 text-[#0D9488]" />
+            <Layers
+              className={`w-3.5 h-3.5 ${
+                editorTab === 'common' ? 'text-[#0D9488]' : 'text-zinc-400'
+              }`}
+            />
             <span>Общие данные группы</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditorTab('individual')}
+            className={`h-full inline-flex items-center gap-1.5 px-1 border-b-2 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+              editorTab === 'individual'
+                ? 'border-[#0D9488] text-zinc-900'
+                : 'border-transparent text-zinc-500 hover:text-zinc-900'
+            }`}
+          >
+            <Users
+              className={`w-3.5 h-3.5 ${
+                editorTab === 'individual' ? 'text-[#0D9488]' : 'text-zinc-400'
+              }`}
+            />
+            <span>Редактор учеников</span>
           </button>
         </div>
 
         {/* Right Actions */}
         <div className="flex items-center gap-2 shrink-0">
-          <span className="hidden xl:inline-flex items-center gap-1 text-xs font-medium text-emerald-700 whitespace-nowrap mr-1">
-            <Check className="w-3.5 h-3.5" />
-            <span>{saveState === 'saving' ? 'Сохранение...' : 'Сохранено'}</span>
-          </span>
+          {saveState === 'saving' && editorTab === 'individual' && activeDoc && (
+            <span className="hidden xl:inline-flex items-center gap-1 text-[11px] font-medium text-zinc-500 whitespace-nowrap mr-1">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0D9488]" />
+              <span>Сохранение...</span>
+            </span>
+          )}
 
           {activeDoc && (
             <>
               <button
                 type="button"
                 onClick={() => onOpenPreview(activeDoc.id)}
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 text-xs font-medium text-zinc-700 whitespace-nowrap shrink-0"
+                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 text-xs font-medium text-zinc-700 whitespace-nowrap shrink-0"
               >
                 <Eye className="w-3.5 h-3.5" />
                 <span>Разворот</span>
@@ -632,1322 +1460,3111 @@ export function GroupEditorView({
         </div>
       </header>
 
-      {/* TWO-PANEL WORKSPACE */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        {/* LEFT PANEL: STUDENTS LIST & PROGRESS */}
-        <aside className="w-full lg:w-[280px] shrink-0 bg-white border-r border-zinc-200 flex flex-col lg:h-[calc(100vh-64px)]">
-          <div className="p-4 border-b border-zinc-200 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <h2 className="text-xs font-bold text-zinc-900">
-                  Ученики группы ({activeStudentsOnly.length})
-                </h2>
-                <p className="text-[11px] text-zinc-500 tabular-nums mt-0.5">
-                  Готово {groupReadyStats.ready} из {groupReadyStats.total} журналов
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setQuickAddOpen((v) => !v)}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[11px] font-semibold whitespace-nowrap shrink-0"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>Добавить</span>
-              </button>
-            </div>
+      {/* THREE-COLUMN FIGMA WORKSPACE BODY */}
+      <div
+        style={
+          {
+            '--left-panel-w': `${leftWidth}px`,
+            '--right-panel-w': `${rightWidth}px`,
+          } as React.CSSProperties
+        }
+        className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden relative"
+      >
+        {draggingSide && (
+          <div
+            aria-hidden="true"
+            className="fixed inset-0 z-50 cursor-col-resize select-none"
+          />
+        )}
 
-            {/* Overall Progress Bar */}
-            <div className="h-1.5 w-full rounded-full bg-zinc-100 overflow-hidden">
-              <div
-                style={{
-                  width: `${
-                    groupReadyStats.total > 0
-                      ? Math.round(
-                          (groupReadyStats.ready / groupReadyStats.total) * 100
-                        )
-                      : 0
-                  }%`,
-                }}
-                className="h-full bg-[#0D9488] rounded-full transition-all"
-              />
-            </div>
-
-            {/* Status Legend */}
-            <div className="flex items-center justify-between text-[10px] text-zinc-500">
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-red-500" />
-                <span>Не начат</span>
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-amber-400" />
-                <span>В процессе</span>
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span>Готов</span>
-              </span>
-            </div>
-
-            {/* Quick Add Student Form */}
-            {quickAddOpen && (
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (!quickName.trim()) return;
-                  const created = await onQuickAddStudent(
-                    group.id,
-                    quickName.trim(),
-                    quickAge.trim() || undefined
-                  );
-                  if (created) {
-                    setSelectedStudentId(created.id);
-                    setEditorTab('individual');
-                  }
-                  setQuickName('');
-                  setQuickAge('');
-                  setQuickAddOpen(false);
-                }}
-                className="p-2.5 rounded-xl bg-[#F0FDFA] border border-[#99F6E4] space-y-2 text-xs"
-              >
-                <input
-                  type="text"
-                  required
-                  autoFocus
-                  value={quickName}
-                  onChange={(e) => setQuickName(e.target.value)}
-                  placeholder="Имя и фамилия..."
-                  className="w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs"
-                />
-                <div className="flex gap-1.5">
-                  <input
-                    type="text"
-                    value={quickAge}
-                    onChange={(e) => setQuickAge(e.target.value)}
-                    placeholder="Возраст"
-                    className="w-20 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs"
-                  />
-                  <button
-                    type="submit"
-                    className="flex-1 px-2.5 py-1 rounded-lg bg-[#0D9488] text-white font-semibold"
-                  >
-                    Добавить
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuickAddOpen(false)}
-                    className="px-2 py-1 rounded-lg border border-zinc-200 bg-white text-zinc-600"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </form>
-            )}
+        {/* 1. LEFT COLUMN: STUDENTS + INLINE PROGRESS + EXPANDABLE STATS CHECKLIST */}
+        {leftCollapsed ? (
+          <div className="hidden lg:flex w-9 shrink-0 bg-white border-r border-zinc-200/70 flex-col items-center py-3 gap-3 relative">
+            <button
+              type="button"
+              onClick={() => setLeftCollapsed(false)}
+              className="w-6 h-6 rounded-full border border-zinc-200 bg-white hover:bg-[#F0FDFA] hover:border-[#0D9488] text-zinc-600 hover:text-[#0D9488] flex items-center justify-center shadow-xs transition-colors"
+              title="Развернуть список учеников"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-[10px] font-bold text-zinc-500 [writing-mode:vertical-rl] rotate-180 tracking-wide">
+              Ученики ({activeStudentsOnly.length})
+            </span>
           </div>
-
-          {/* Vertical Student List */}
-          <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
-            {groupStudents.length === 0 ? (
-              <div className="py-10 px-3 text-center text-xs text-zinc-500">
-                В группе нет учеников. Нажмите «Добавить» выше.
-              </div>
-            ) : (
-              groupStudents.map((st) => {
-                const j = findStudentJournal(st);
-                const prog = j ? computeJournalProgress(j) : null;
-                const isSelected = selectedStudent?.id === st.id;
-                const dotClass =
-                  prog?.statusLevel === 'ready'
-                    ? 'bg-emerald-500'
-                    : prog?.statusLevel === 'in_progress'
-                    ? 'bg-amber-400'
-                    : 'bg-red-500';
-                const statusTitle =
-                  prog?.statusLevel === 'ready'
-                    ? 'Готов к выгрузке'
-                    : prog?.statusLevel === 'in_progress'
-                    ? 'В процессе'
-                    : 'Не начат';
-
-                return (
-                  <div
-                    key={st.id}
-                    className={`rounded-xl border transition-colors ${
-                      isSelected
-                        ? 'border-[#0D9488] bg-[#F0FDFA]/80'
-                        : 'border-zinc-200 bg-white hover:border-zinc-300'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedStudentId(st.id);
-                        setEditorTab('individual');
-                      }}
-                      className="w-full text-left p-2.5 flex items-start justify-between gap-2"
-                    >
-                      <div className="flex items-start gap-2.5 min-w-0">
-                        <span
-                          title={statusTitle}
-                          className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 ${dotClass}`}
-                        />
-                        <div className="min-w-0">
-                          <div className="text-xs font-bold text-zinc-900 truncate">
-                            {st.fullName}
-                          </div>
-                          <div className="text-[11px] text-zinc-500 tabular-nums mt-0.5">
-                            {prog ? prog.label : 'Заполнено 0 из 5 блоков'}
-                          </div>
-                          {st.status !== 'active' && (
-                            <div className="text-[10px] font-medium text-amber-700 mt-0.5">
-                              Статус: {getStudentStatusLabel(st.status)}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* Delete confirmation inline if triggered */}
-                    {confirmDeleteStudentId === st.id && (
-                      <div className="px-2.5 pb-2.5 pt-1 border-t border-red-100 flex items-center justify-between gap-2 text-[11px]">
-                        <span className="font-semibold text-red-700">Удалить?</span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              await onDeleteStudent(st.id);
-                              setConfirmDeleteStudentId(null);
-                            }}
-                            className="px-2 py-0.5 rounded bg-red-600 text-white font-semibold"
-                          >
-                            Да
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setConfirmDeleteStudentId(null)}
-                            className="px-2 py-0.5 rounded border border-zinc-200 bg-white text-zinc-700"
-                          >
-                            Нет
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          <div className="p-3 border-t border-zinc-200 bg-[#F9F9F7] flex items-center justify-between text-[11px] text-zinc-600">
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showInactive}
-                onChange={(e) => setShowInactive(e.target.checked)}
-              />
-              <span>Показать выбывших/переведенных</span>
-            </label>
-          </div>
-        </aside>
-
-        {/* CENTRAL / RIGHT PANEL */}
-        <main className="flex-1 flex flex-col overflow-hidden">
-          {editorTab === 'common' ? (
-            /* COMMON GROUP DATA PANEL */
-            <div className="flex-1 overflow-y-auto p-6 bg-[#F6F6F3]">
-              <div className="max-w-4xl mx-auto space-y-6">
-                <div className="bg-white border border-zinc-200 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-lg font-bold text-zinc-900">
-                      Общие данные группы
+        ) : (
+          <>
+            <aside className="w-full lg:w-[var(--left-panel-w)] shrink-0 bg-white border-b lg:border-b-0 border-zinc-200 flex flex-col min-h-0 max-h-[360px] lg:max-h-none lg:h-full overflow-hidden">
+              {/* Sticky Top Summary */}
+              <div className="shrink-0 p-3.5 border-b border-zinc-200 space-y-2.5 bg-white">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <h2 className="text-xs font-bold text-zinc-900 truncate">
+                      Ученики ({activeStudentsOnly.length})
                     </h2>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      Модули, общие навыки и раздел «Что интересного впереди?» применяются ко всем активным ученикам группы ({activeStudentsOnly.length}). Личные тексты и скриншоты учеников сохраняются.
+                    <p className="text-[11px] text-zinc-500 tabular-nums">
+                      Готово {groupReadyStats.ready} из {groupReadyStats.total}
                     </p>
                   </div>
                   <button
                     type="button"
-                    disabled={applyingCommon}
-                    onClick={async () => {
-                      setApplyingCommon(true);
-                      try {
-                        await onSaveGroupAndApplyCommon(groupDraft, commonDraft);
-                        setEditorTab('individual');
-                      } finally {
-                        setApplyingCommon(false);
-                      }
-                    }}
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-semibold whitespace-nowrap shrink-0 disabled:opacity-60"
+                    onClick={() => setQuickAddOpen((v) => !v)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[11px] font-semibold whitespace-nowrap shrink-0"
+                    title="Добавить ученика"
                   >
-                    {applyingCommon ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Check className="w-4 h-4" />
-                    )}
-                    <span>Применить ко всем ученикам</span>
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>Добавить</span>
                   </button>
                 </div>
 
-                {/* 1. Group Metadata & Palette */}
-                <section className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4 text-xs">
-                  <h3 className="text-sm font-bold text-zinc-900">
-                    1. Параметры группы, локация и даты обучения
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label className="block">
-                      <span className="font-semibold text-zinc-700">Название группы</span>
-                      <input
-                        type="text"
-                        value={groupDraft.name}
-                        onChange={(e) =>
-                          setGroupDraft({ ...groupDraft, name: e.target.value })
-                        }
-                        className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 font-semibold"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="font-semibold text-zinc-700">Локация (Филиал)</span>
-                      <select
-                        value={groupDraft.branchId}
-                        onChange={(e) =>
-                          setGroupDraft({ ...groupDraft, branchId: e.target.value })
-                        }
-                        className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 bg-white"
-                      >
-                        {branches.map((b) => (
-                          <option key={b.id} value={b.id}>
-                            {b.name} ({b.address})
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="block">
-                      <span className="font-semibold text-zinc-700">Дата начала</span>
-                      <input
-                        type="date"
-                        value={groupDraft.startDate}
-                        onChange={(e) =>
-                          setGroupDraft({ ...groupDraft, startDate: e.target.value })
-                        }
-                        className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="font-semibold text-zinc-700">Дата окончания</span>
-                      <input
-                        type="date"
-                        value={groupDraft.endDate}
-                        onChange={(e) =>
-                          setGroupDraft({ ...groupDraft, endDate: e.target.value })
-                        }
-                        className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="font-semibold text-zinc-700">Наставник</span>
-                      <input
-                        type="text"
-                        value={groupDraft.mentorName}
-                        onChange={(e) =>
-                          setGroupDraft({ ...groupDraft, mentorName: e.target.value })
-                        }
-                        className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="font-semibold text-zinc-700">Возрастная категория</span>
-                      <select
-                        value={groupDraft.ageCategory}
-                        onChange={(e) =>
-                          setGroupDraft({
-                            ...groupDraft,
-                            ageCategory: e.target.value as AgeCategory,
-                          })
-                        }
-                        className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 bg-white"
-                      >
-                        <option value="8-10">8–10 лет</option>
-                        <option value="11-13">11–13 лет</option>
-                        <option value="14-15">14–15 лет</option>
-                      </select>
-                    </label>
-                  </div>
+                <div className="h-1.5 w-full rounded-full bg-zinc-100 overflow-hidden">
+                  <div
+                    style={{
+                      width: `${
+                        groupReadyStats.total > 0
+                          ? Math.round(
+                              (groupReadyStats.ready / groupReadyStats.total) *
+                                100
+                            )
+                          : 0
+                      }%`,
+                    }}
+                    className="h-full bg-[#0D9488] rounded-full transition-all"
+                  />
+                </div>
 
-                  {/* Palette */}
-                  <div className="pt-2 space-y-2">
-                    <div className="inline-flex items-center gap-1.5 font-semibold text-zinc-700">
-                      <Palette className="w-3.5 h-3.5 text-[#0D9488]" />
-                      <span>Палитра оформления листов А4</span>
+                {allGroupStudents.length > 0 && (
+                  <select
+                    value={selectedStudentId}
+                    onChange={(e) => {
+                      const nextId = e.target.value;
+                      if (!nextId) return;
+                      setSelectedStudentId(nextId);
+                      setExpandedStudentIds((prev) => ({
+                        ...prev,
+                        [nextId]: true,
+                      }));
+                      setEditorTab('individual');
+                    }}
+                    aria-label="Быстрый выбор ученика из всех статусов"
+                    className="w-full rounded-md border border-zinc-200 bg-[#FAFAFA] px-2 py-1.5 text-[11px] font-medium text-zinc-700 focus:outline-none focus:border-[#0D9488]"
+                  >
+                    <option value="">
+                      Перейти к ученику ({allGroupStudents.length})...
+                    </option>
+                    {allGroupStudents.map((st) => {
+                      const stMeta = getStudentStatusMeta(st.status);
+                      return (
+                        <option key={st.id} value={st.id}>
+                          {st.fullName}
+                          {stMeta.status !== 'active'
+                            ? ` (${stMeta.label})`
+                            : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
+
+                {quickAddOpen && (
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!quickName.trim()) return;
+                      const created = await onQuickAddStudent(
+                        group.id,
+                        quickName.trim(),
+                        quickAge.trim() || undefined
+                      );
+                      if (created) {
+                        setSelectedStudentId(created.id);
+                        setExpandedStudentIds((prev) => ({
+                          ...prev,
+                          [created.id]: true,
+                        }));
+                        setEditorTab('individual');
+                      }
+                      setQuickName('');
+                      setQuickAge('');
+                      setQuickAddOpen(false);
+                    }}
+                    className="pt-2 border-t border-zinc-200/70 space-y-2 text-xs"
+                  >
+                    <input
+                      type="text"
+                      required
+                      autoFocus
+                      value={quickName}
+                      onChange={(e) => setQuickName(e.target.value)}
+                      placeholder="Имя и фамилия..."
+                      className={flatInputClass}
+                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={quickAge}
+                        onChange={(e) => setQuickAge(e.target.value)}
+                        placeholder="Возраст"
+                        className="w-20 bg-transparent border-0 border-b border-zinc-200 rounded-none px-0.5 py-1 text-xs focus:outline-none focus:border-[#0D9488]"
+                      />
+                      <button
+                        type="submit"
+                        className="flex-1 px-2.5 py-1.5 rounded-md bg-[#0D9488] hover:bg-[#0F766E] text-white text-[11px] font-semibold"
+                      >
+                        Создать
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickAddOpen(false)}
+                        className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-800"
+                        title="Отмена"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                      {DESIGN_PALETTES.map((pal) => (
-                        <button
-                          key={pal.id}
-                          type="button"
-                          onClick={() =>
-                            setCommonDraft((prev) => ({
-                              ...prev,
-                              paletteId: pal.id,
-                            }))
-                          }
-                          className={`p-2.5 rounded-xl border text-left space-y-1.5 transition-colors ${
-                            commonDraft.paletteId === pal.id
-                              ? 'border-[#0D9488] bg-[#F0FDFA]'
-                              : 'border-zinc-200 bg-white hover:border-zinc-300'
-                          }`}
-                        >
-                          <div className="font-semibold text-zinc-900 truncate">
-                            {pal.name}
+                  </form>
+                )}
+              </div>
+
+              {/* Scrollable Student List with Flat Hairline Dividers & Expandable Checklist */}
+              <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-zinc-100">
+                {groupStudents.length === 0 ? (
+                  <div className="py-10 px-3 text-center text-xs text-zinc-500">
+                    В группе нет учеников.
+                  </div>
+                ) : (
+                  groupStudents.map((st) => {
+                    const j = findStudentJournal(st);
+                    const prog = j ? computeJournalProgress(j) : null;
+                    const filled = prog?.filledBlocks ?? 0;
+                    const total = prog?.totalBlocks ?? 5;
+                    const pct = Math.round((filled / total) * 100);
+                    const isSelected = selectedStudent?.id === st.id;
+                    const isExpanded = Boolean(expandedStudentIds[st.id]);
+
+                    const barColor =
+                      filled === total
+                        ? 'bg-emerald-500'
+                        : filled >= 2
+                        ? 'bg-[#0D9488]'
+                        : filled === 1
+                        ? 'bg-amber-400'
+                        : 'bg-zinc-300';
+
+                    const checklistBlocks = prog?.blocks ?? [
+                      {
+                        id: 'profile' as const,
+                        label: 'Имя и профиль',
+                        completed: false,
+                      },
+                      {
+                        id: 'curriculum' as const,
+                        label: 'Модули и навыки',
+                        completed: false,
+                      },
+                      {
+                        id: 'projects' as const,
+                        label: 'Проекты и скриншоты',
+                        completed: false,
+                      },
+                      {
+                        id: 'pride' as const,
+                        label: 'Момент гордости',
+                        completed: false,
+                      },
+                      {
+                        id: 'mentorNote' as const,
+                        label: 'Слово наставника',
+                        completed: false,
+                      },
+                    ];
+
+                    const shortLabels: Record<string, string> = {
+                      profile: 'Имя и профиль',
+                      curriculum: 'Модули и навыки',
+                      projects: 'Проекты и скриншоты',
+                      pride: 'Момент гордости',
+                      mentorNote: 'Слово наставника',
+                    };
+
+                    return (
+                      <div
+                        key={st.id}
+                        className={`group transition-colors border-l-2 ${
+                          isSelected
+                            ? 'border-l-[#0D9488] bg-[#F0FDFA]/60'
+                            : 'border-l-transparent hover:bg-zinc-50/70'
+                        }`}
+                      >
+                        <div className="flex items-start gap-1 px-3 py-2.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedStudentId(st.id);
+                              setExpandedStudentIds((prev) => ({
+                                ...prev,
+                                [st.id]: true,
+                              }));
+                              setEditorTab('individual');
+                            }}
+                            className="flex-1 min-w-0 text-left space-y-1.5"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="inline-flex items-center gap-1.5 min-w-0">
+                                <span
+                                  className={`w-2 h-2 rounded-full shrink-0 ${
+                                    getStudentStatusMeta(st.status).dotClass
+                                  }`}
+                                  title={getStudentStatusLabel(st.status)}
+                                />
+                                <span
+                                  className={`text-xs truncate ${
+                                    isSelected
+                                      ? 'font-bold text-[#0F766E]'
+                                      : 'font-semibold text-zinc-900'
+                                  }`}
+                                >
+                                  {st.fullName}
+                                </span>
+                              </span>
+                              {normalizeStudentStatus(st.status) !== 'active' && (
+                                <span
+                                  className={`text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${
+                                    getStudentStatusMeta(st.status).badgeClass
+                                  }`}
+                                >
+                                  {getStudentStatusLabel(st.status)}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Inline Progress Bar beside/under name */}
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-1 rounded-full bg-zinc-100 overflow-hidden">
+                                <div
+                                  style={{ width: `${pct}%` }}
+                                  className={`h-full rounded-full transition-all ${barColor}`}
+                                />
+                              </div>
+                              <span className="text-[11px] font-semibold text-zinc-500 tabular-nums shrink-0">
+                                {filled}/{total}
+                              </span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setConfirmDeleteStudentId(st.id);
+                            }}
+                            className="p-1 rounded-md text-zinc-400 hover:text-red-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shrink-0 mt-0.5"
+                            title="Удалить ученика"
+                            aria-label={`Удалить ученика ${st.fullName}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            aria-expanded={isExpanded}
+                            aria-label={
+                              isExpanded
+                                ? 'Скрыть чек-лист заполнения'
+                                : 'Показать чек-лист заполнения'
+                            }
+                            onClick={() =>
+                              setExpandedStudentIds((prev) => ({
+                                ...prev,
+                                [st.id]: !prev[st.id],
+                              }))
+                            }
+                            className="p-1 rounded-md text-zinc-400 hover:text-zinc-900 shrink-0 mt-0.5"
+                            title="Чек-лист заполнения"
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            ) : (
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+
+                        {confirmDeleteStudentId === st.id && (
+                          <div className="mx-3 mb-2.5 pt-2 border-t border-red-200 flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-semibold text-red-700">
+                              Удалить?
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await onDeleteStudent(st.id);
+                                  setConfirmDeleteStudentId(null);
+                                }}
+                                className="px-2 py-0.5 rounded bg-red-600 hover:bg-red-700 text-white text-[11px] font-semibold"
+                              >
+                                Да
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteStudentId(null)}
+                                className="px-2 py-0.5 rounded text-zinc-600 hover:text-zinc-900 text-[11px] font-medium"
+                              >
+                                Отмена
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex gap-1">
-                            {[
-                              pal.coverStart,
-                              pal.p2Yellow,
-                              pal.prideCoral,
-                              pal.nextBg,
-                            ].map((c, idx) => (
-                              <span
-                                key={idx}
-                                style={{ backgroundColor: c }}
-                                className="h-2.5 flex-1 rounded-full border border-black/10"
-                              />
+                        )}
+
+                        {isExpanded && (
+                          <div className="border-t border-zinc-100 px-3 py-1.5 space-y-0.5">
+                            {checklistBlocks.map((b) => (
+                              <button
+                                key={b.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedStudentId(st.id);
+                                  setEditorTab('individual');
+                                  const sectionMap: Record<
+                                    string,
+                                    IndividualSection
+                                  > = {
+                                    profile: 'profile',
+                                    curriculum: 'curriculum',
+                                    projects: 'projects',
+                                    pride: 'pride',
+                                    mentorNote: 'mentorNote',
+                                  };
+                                  const targetSec =
+                                    sectionMap[b.id] ?? 'profile';
+                                  const page =
+                                    targetSec === 'pride' ||
+                                    targetSec === 'mentorNote'
+                                      ? 2
+                                      : 1;
+                                  focusSection(targetSec, page);
+                                }}
+                                className="w-full flex items-center justify-between gap-2 px-1 py-1 rounded hover:bg-zinc-100/70 text-left transition-colors"
+                              >
+                                <span className="flex items-center gap-1.5 min-w-0">
+                                  {b.completed ? (
+                                    <CheckSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  ) : (
+                                    <Square className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
+                                  )}
+                                  <span
+                                    className={`text-[11px] truncate ${
+                                      b.completed
+                                        ? 'text-zinc-800 font-medium'
+                                        : 'text-zinc-500'
+                                    }`}
+                                  >
+                                    {shortLabels[b.id] || b.label}
+                                  </span>
+                                </span>
+                                <span
+                                  className={`text-[10px] font-semibold shrink-0 ${
+                                    b.completed
+                                      ? 'text-emerald-700'
+                                      : 'text-zinc-400'
+                                  }`}
+                                >
+                                  {b.completed ? 'Готово' : 'Пусто'}
+                                </span>
+                              </button>
                             ))}
                           </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </section>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
 
-                {/* 2. Modules */}
-                <section className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4 text-xs">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
+              {/* Sticky Bottom Footer (Always Visible, Never Clipped) */}
+              <div className="shrink-0 px-3.5 py-2.5 border-t border-zinc-200/80 bg-white flex items-center justify-between gap-2">
+                <label className="flex items-center gap-2 cursor-pointer text-[11px] text-zinc-600 select-none min-w-0">
+                  <input
+                    type="checkbox"
+                    checked={onlyActive}
+                    onChange={(e) => setOnlyActive(e.target.checked)}
+                    className="rounded border-zinc-300 text-[#0D9488]"
+                  />
+                  <span className="truncate font-medium">Только активные</span>
+                </label>
+                {allGroupStudents.length > activeStudentsOnly.length && (
+                  <span className="text-[10px] text-zinc-400 tabular-nums shrink-0">
+                    +{allGroupStudents.length - activeStudentsOnly.length} скрыто
+                  </span>
+                )}
+              </div>
+            </aside>
+
+            {/* LEFT INVISIBLE FIGMA RESIZER (2px TEAL LINE + CIRCLE COLLAPSE ON HOVER) */}
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Изменить ширину левой панели"
+              onMouseDown={(e) => startResize('left', e)}
+              className="hidden lg:flex w-2 -mx-1 shrink-0 cursor-col-resize items-center justify-center group select-none relative z-20"
+              title="Потяните, чтобы изменить ширину панели"
+            >
+              <div
+                className={`w-[2px] h-full transition-colors ${
+                  draggingSide === 'left'
+                    ? 'bg-[#0D9488]'
+                    : 'bg-transparent group-hover:bg-[#0D9488]'
+                }`}
+              />
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLeftCollapsed(true);
+                }}
+                className="absolute top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-white border border-zinc-200 hover:border-[#0D9488] hover:text-[#0D9488] text-zinc-500 flex items-center justify-center shadow-sm z-30 cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                title="Свернуть список учеников"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* WORKSPACE RIGHT OF STUDENT NAVIGATION */}
+        {editorTab === 'common' ? (
+          /* COMPACT SINGLE-ROW STEPPER VIEW FOR GROUP COMMON DATA */
+          <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-[#FAF9F6]">
+            {/* Compact Top Single-Row Stepper Header */}
+            <div className="shrink-0 bg-white border-b border-zinc-200/80 px-5 py-2.5">
+              <div className="w-full max-w-6xl mx-auto flex flex-wrap lg:flex-nowrap items-center justify-between gap-3">
+                <div className="min-w-0 shrink-0">
+                  <h2 className="text-sm font-bold text-zinc-900 truncate">
+                    {groupDraft.name || group.name}
+                  </h2>
+                </div>
+
+                {/* Single-Row Compact Horizontal Stepper */}
+                <nav
+                  aria-label="Шаги настройки общих данных"
+                  className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto py-0.5"
+                >
+                  {commonSteps.map((st, idx) => {
+                    const isActive = commonStep === st.step;
+                    const isDone = commonStep > st.step;
+                    return (
+                      <React.Fragment key={st.step}>
+                        <button
+                          type="button"
+                          onClick={() => setCommonStep(st.step)}
+                          className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+                            isActive
+                              ? 'bg-[#0F766E] text-white shadow-2xs'
+                              : isDone
+                              ? 'bg-[#F0FDFA] text-[#0F766E] hover:bg-[#CCFBF1]/60'
+                              : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
+                          }`}
+                        >
+                          <span
+                            className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold tabular-nums shrink-0 ${
+                              isActive
+                                ? 'bg-white text-[#0F766E]'
+                                : isDone
+                                ? 'bg-[#0D9488] text-white'
+                                : 'bg-zinc-200/80 text-zinc-700'
+                            }`}
+                          >
+                            {isDone ? (
+                              <Check className="w-3 h-3" />
+                            ) : (
+                              st.step
+                            )}
+                          </span>
+                          <span>{st.title}</span>
+                          {typeof st.count === 'number' && (
+                            <span
+                              className={`text-[11px] tabular-nums ${
+                                isActive ? 'text-teal-100' : 'text-zinc-400'
+                              }`}
+                            >
+                              ({st.count})
+                            </span>
+                          )}
+                        </button>
+                        {idx < commonSteps.length - 1 && (
+                          <div
+                            aria-hidden="true"
+                            className={`h-px flex-1 min-w-3 max-w-8 ${
+                              isDone ? 'bg-[#0D9488]/40' : 'bg-zinc-200'
+                            }`}
+                          />
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </nav>
+
+                <button
+                  type="button"
+                  disabled={applyingCommon}
+                  onClick={handleApplyCommon}
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#0F766E] hover:bg-[#0D9488] text-white text-xs font-semibold whitespace-nowrap shrink-0 disabled:opacity-60"
+                >
+                  {applyingCommon ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5" />
+                  )}
+                  <span>
+                    Применить ко всем ({activeStudentsOnly.length})
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable Active Step Panel */}
+            <div className="flex-1 min-h-0 overflow-y-auto bg-[#F8F8F6] px-6 lg:px-10 py-7">
+              <div className="max-w-5xl mx-auto">
+                {/* STEP 1: PARAMETERS (FLAT UI) */}
+                {commonStep === 1 && (
+                  <section className="space-y-7 text-xs">
+                    <div className="pb-4 border-b border-zinc-200/80">
                       <h3 className="text-sm font-bold text-zinc-900">
-                        2. Модули программы («Мои открытия», выбрано {commonDraft.modules.length})
+                        Шаг 1. Параметры группы, локация и даты обучения
                       </h3>
-                      <p className="text-zinc-500 mt-0.5">
-                        Выберите пройденные модули (Python, Kodu, Animaker и др.) или примените готовый набор.
+                      <p className="text-zinc-500 mt-1">
+                        Эти данные отображаются на обложке журнала каждого ученика группы.
                       </p>
                     </div>
-                    {groupTemplates.length > 0 && (
-                      <select
-                        defaultValue=""
-                        onChange={(e) => {
-                          if (e.target.value) applyCommonGroupTemplate(e.target.value);
-                        }}
-                        className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs"
-                      >
-                        <option value="">Загрузить набор модулей...</option>
-                        {groupTemplates.map((tpl) => (
-                          <option key={tpl.id} value={tpl.id}>
-                            {tpl.name} ({tpl.moduleIds.length})
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
 
-                  {/* Selected Modules Editable List */}
-                  {commonDraft.modules.length > 0 && (
-                    <div className="space-y-2">
-                      {commonDraft.modules.map((mod, idx) => (
-                        <div
-                          key={mod.id}
-                          className="p-3 rounded-xl border border-zinc-200 bg-[#F9F9F7] space-y-2"
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                      <label className="block">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                          Название группы
+                        </span>
+                        <input
+                          type="text"
+                          value={groupDraft.name}
+                          onChange={(e) =>
+                            setGroupDraft({
+                              ...groupDraft,
+                              name: e.target.value,
+                            })
+                          }
+                          className={`mt-1 ${flatInputClass} font-semibold text-sm`}
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                          Локация (Филиал)
+                        </span>
+                        <select
+                          value={groupDraft.branchId}
+                          onChange={(e) =>
+                            setGroupDraft({
+                              ...groupDraft,
+                              branchId: e.target.value,
+                            })
+                          }
+                          className={`mt-1 ${flatSelectClass}`}
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-mono text-[11px] font-bold text-zinc-500">
-                              #{idx + 1} · {mod.title}
-                            </span>
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                disabled={idx === 0}
-                                onClick={() => moveCommonModule(idx, -1)}
-                                className="p-1 rounded border border-zinc-200 bg-white disabled:opacity-40"
+                          {branches.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.name} ({b.address})
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="block">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                          Дата начала
+                        </span>
+                        <input
+                          type="date"
+                          value={groupDraft.startDate}
+                          onChange={(e) =>
+                            setGroupDraft({
+                              ...groupDraft,
+                              startDate: e.target.value,
+                            })
+                          }
+                          className={`mt-1 ${flatInputClass}`}
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                          Дата окончания
+                        </span>
+                        <input
+                          type="date"
+                          value={groupDraft.endDate}
+                          onChange={(e) =>
+                            setGroupDraft({
+                              ...groupDraft,
+                              endDate: e.target.value,
+                            })
+                          }
+                          className={`mt-1 ${flatInputClass}`}
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                          Наставник
+                        </span>
+                        <input
+                          type="text"
+                          value={groupDraft.mentorName}
+                          onChange={(e) =>
+                            setGroupDraft({
+                              ...groupDraft,
+                              mentorName: e.target.value,
+                            })
+                          }
+                          className={`mt-1 ${flatInputClass}`}
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                          Возрастная категория
+                        </span>
+                        <select
+                          value={groupDraft.ageCategory}
+                          onChange={(e) =>
+                            setGroupDraft({
+                              ...groupDraft,
+                              ageCategory: e.target.value as AgeCategory,
+                            })
+                          }
+                          className={`mt-1 ${flatSelectClass}`}
+                        >
+                          <option value="8-10">8–10 лет</option>
+                          <option value="11-13">11–13 лет</option>
+                          <option value="14-15">14–15 лет</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    <div className="pt-5 border-t border-zinc-200/80 space-y-3">
+                      <div className="inline-flex items-center gap-1.5 font-semibold text-zinc-700">
+                        <Palette className="w-3.5 h-3.5 text-[#0D9488]" />
+                        <span>Палитра оформления листов А4</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {DESIGN_PALETTES.map((pal) => (
+                          <button
+                            key={pal.id}
+                            type="button"
+                            onClick={() =>
+                              setCommonDraft((prev) => ({
+                                ...prev,
+                                paletteId: pal.id,
+                              }))
+                            }
+                            className={`py-2.5 px-3 rounded-lg border-b-2 text-left space-y-2 transition-colors ${
+                              commonDraft.paletteId === pal.id
+                                ? 'border-b-[#0D9488] bg-[#F0FDFA]/70'
+                                : 'border-b-zinc-200 hover:bg-zinc-50'
+                            }`}
+                          >
+                            <div className="font-semibold text-zinc-900 truncate">
+                              {pal.name}
+                            </div>
+                            <div className="flex gap-1">
+                              {[
+                                pal.coverStart,
+                                pal.p2Yellow,
+                                pal.prideCoral,
+                                pal.nextBg,
+                              ].map((c, idx) => (
+                                <span
+                                  key={idx}
+                                  style={{ backgroundColor: c }}
+                                  className="h-2 flex-1 rounded-full"
+                                />
+                              ))}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+                )}
+
+                {/* STEP 2: MODULES (2-COLUMN FLAT GRID + IMAGE THUMBNAIL & CROP/ZOOM) */}
+                {commonStep === 2 && (
+                  <section className="space-y-6 text-xs">
+                    <div className="pb-4 border-b border-zinc-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-bold text-zinc-900">
+                          Шаг 2. Модули программы («Мои открытия», выбрано{' '}
+                          {commonDraft.modules.length})
+                        </h3>
+                        <p className="text-zinc-500 mt-1">
+                          Возраст группы:{' '}
+                          <span className="font-semibold text-zinc-700">
+                            {groupDraft.ageCategory} лет
+                          </span>
+                          . Нажмите на миниатюру модуля, чтобы выбрать картинку и настроить кадрирование.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                        {groupTemplates.length > 0 && (
+                          <select
+                            defaultValue=""
+                            onChange={(e) => {
+                              if (e.target.value)
+                                applyCommonGroupTemplate(e.target.value);
+                            }}
+                            className="bg-white border border-zinc-200 hover:border-zinc-300 rounded-lg px-3 py-2 text-xs font-medium text-zinc-600 focus:outline-none focus:border-[#0D9488] transition-colors"
+                          >
+                            <option value="">Загрузить набор модулей...</option>
+                            {groupTemplates.map((tpl) => (
+                              <option key={tpl.id} value={tpl.id}>
+                                {tpl.name} ({tpl.moduleIds.length})
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        <button
+                          type="button"
+                          onClick={openModulesPickerModal}
+                          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-sm transition-colors whitespace-nowrap shrink-0"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Выбрать модули</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Search Selected Modules (Secondary) */}
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={commonSearch}
+                        onChange={(e) => setCommonSearch(e.target.value)}
+                        placeholder="Поиск по названию среди выбранных модулей..."
+                        className="w-full bg-white/80 border border-zinc-200 rounded-lg pl-8 pr-3 py-2 text-xs text-zinc-700 placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-[#0D9488] transition-colors"
+                      />
+                    </div>
+
+                    {/* Selected Modules in 2-Column Clean White Cards */}
+                    {commonDraft.modules.length === 0 ? (
+                      <div className="py-10 rounded-xl bg-white border border-dashed border-zinc-300 text-center space-y-2.5">
+                        <p className="text-xs font-medium text-zinc-600">
+                          Пока не выбрано ни одного модуля.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={openModulesPickerModal}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-semibold"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>
+                            Выбрать модули ({groupDraft.ageCategory} лет)
+                          </span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-1">
+                        {commonDraft.modules
+                          .filter((m) => {
+                            const q = commonSearch.trim().toLowerCase();
+                            if (!q) return true;
+                            return (
+                              m.title.toLowerCase().includes(q) ||
+                              m.subtitle.toLowerCase().includes(q) ||
+                              m.description.toLowerCase().includes(q)
+                            );
+                          })
+                          .map((mod) => {
+                            const idx = commonDraft.modules.findIndex(
+                              (x) => x.id === mod.id
+                            );
+                            const linkedMediaUrl =
+                              mod.imageMediaId && mediaAssets
+                                ? mediaAssets.find(
+                                    (a) => a.id === mod.imageMediaId
+                                  )?.url
+                                : undefined;
+                            const resolvedUrl =
+                              linkedMediaUrl || mod.customImageUrl;
+                            const effectiveMode =
+                              mod.visualMode ??
+                              (resolvedUrl ? 'image' : 'illustration');
+                            const imgScale = mod.imageScale ?? 1;
+                            const imgX = mod.imagePosX ?? 0;
+                            const imgY = mod.imagePosY ?? 0;
+
+                            return (
+                              <div
+                                key={mod.id}
+                                className="p-4 rounded-xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(24,24,27,0.04)] space-y-2.5"
                               >
-                                <ArrowUp className="w-3 h-3" />
-                              </button>
-                              <button
-                                type="button"
-                                disabled={idx === commonDraft.modules.length - 1}
-                                onClick={() => moveCommonModule(idx, 1)}
-                                className="p-1 rounded border border-zinc-200 bg-white disabled:opacity-40"
-                              >
-                                <ArrowDown className="w-3 h-3" />
-                              </button>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-mono text-[11px] font-bold text-zinc-400 truncate">
+                                    #{idx + 1} · {mod.officialTitle || mod.title}
+                                  </span>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                      type="button"
+                                      disabled={idx === 0}
+                                      onClick={() => moveCommonModule(idx, -1)}
+                                      className="p-1 rounded text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 disabled:opacity-30"
+                                      title="Поднять выше"
+                                    >
+                                      <ArrowUp className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={
+                                        idx === commonDraft.modules.length - 1
+                                      }
+                                      onClick={() => moveCommonModule(idx, 1)}
+                                      className="p-1 rounded text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 disabled:opacity-30"
+                                      title="Опустить ниже"
+                                    >
+                                      <ArrowDown className="w-3 h-3" />
+                                    </button>
+                                    {confirmDeleteCommonModId === mod.id ? (
+                                      <div className="inline-flex items-center gap-1 pl-1">
+                                        <span className="text-[10px] font-semibold text-red-700">
+                                          Удалить?
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setCommonDraft((prev) => ({
+                                              ...prev,
+                                              modules: prev.modules
+                                                .filter((m) => m.id !== mod.id)
+                                                .map((m, i) => ({
+                                                  ...m,
+                                                  order: i + 1,
+                                                })),
+                                            }));
+                                            setConfirmDeleteCommonModId(null);
+                                          }}
+                                          className="px-1.5 py-0.5 rounded bg-red-600 text-white text-[10px] font-semibold"
+                                        >
+                                          Да
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setConfirmDeleteCommonModId(null)
+                                          }
+                                          className="px-1.5 py-0.5 rounded text-zinc-600 hover:text-zinc-900 text-[10px]"
+                                        >
+                                          Отмена
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setConfirmDeleteCommonModId(mod.id)
+                                        }
+                                        className="p-1 rounded text-zinc-400 hover:text-red-600"
+                                        title="Удалить модуль"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-start gap-3.5">
+                                  {/* Clickable Square Thumbnail (56x56px) */}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setEditingModuleImageId(mod.id)
+                                    }
+                                    style={{
+                                      backgroundColor: mod.cardBgColor,
+                                    }}
+                                    className="w-14 h-14 shrink-0 rounded-lg border border-zinc-200 overflow-hidden relative group flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
+                                    title="Настроить картинку и кадрирование модуля"
+                                  >
+                                    {effectiveMode === 'image' && resolvedUrl ? (
+                                      <img
+                                        src={resolvedUrl}
+                                        alt={mod.title}
+                                        referrerPolicy="no-referrer"
+                                        style={{
+                                          transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
+                                        }}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    ) : effectiveMode === 'icon' ? (
+                                      <div
+                                        style={{
+                                          transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
+                                        }}
+                                        className="flex items-center justify-center w-full h-full"
+                                      >
+                                        <ModuleLucideIcon
+                                          iconKey={mod.iconKey}
+                                          className="w-7 h-7 text-[#18181B]"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div
+                                        style={{
+                                          transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
+                                        }}
+                                        className="w-full h-full"
+                                      >
+                                        <ModuleSvgIllustration
+                                          type={mod.illustrationKey}
+                                        />
+                                      </div>
+                                    )}
+                                    <span className="absolute inset-0 bg-zinc-900/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                      <Camera className="w-4 h-4 text-white" />
+                                    </span>
+                                  </button>
+
+                                  {/* Compact Underlined Title / Category + Multiline Description */}
+                                  <div className="flex-1 min-w-0 space-y-2">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                      <input
+                                        type="text"
+                                        value={mod.title}
+                                        placeholder="Название модуля"
+                                        onChange={(e) =>
+                                          setCommonDraft((prev) => ({
+                                            ...prev,
+                                            modules: prev.modules.map((m) =>
+                                              m.id === mod.id
+                                                ? { ...m, title: e.target.value }
+                                                : m
+                                            ),
+                                          }))
+                                        }
+                                        className={`${flatInputClass} font-semibold`}
+                                      />
+                                      <input
+                                        type="text"
+                                        value={mod.subtitle}
+                                        placeholder="Категория / подзаголовок"
+                                        onChange={(e) =>
+                                          setCommonDraft((prev) => ({
+                                            ...prev,
+                                            modules: prev.modules.map((m) =>
+                                              m.id === mod.id
+                                                ? {
+                                                    ...m,
+                                                    subtitle: e.target.value,
+                                                  }
+                                                : m
+                                            ),
+                                          }))
+                                        }
+                                        className={`${flatInputClass} text-zinc-600`}
+                                      />
+                                    </div>
+                                    <textarea
+                                      rows={2}
+                                      value={mod.description}
+                                      placeholder="Описание модуля для листа А4..."
+                                      onChange={(e) =>
+                                        setCommonDraft((prev) => ({
+                                          ...prev,
+                                          modules: prev.modules.map((m) =>
+                                            m.id === mod.id
+                                              ? {
+                                                  ...m,
+                                                  description: e.target.value,
+                                                }
+                                              : m
+                                          ),
+                                        }))
+                                      }
+                                      className={`${flatTextareaClass} leading-relaxed text-zinc-600`}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </section>
+                )}
+
+                {/* STEP 3: COMMON SKILLS (FLAT UI) */}
+                {commonStep === 3 && (
+                  <section className="space-y-6 text-xs">
+                    <div className="pb-4 border-b border-zinc-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-bold text-zinc-900">
+                          Шаг 3. Общие навыки группы («Чему я научился», выбрано{' '}
+                          {commonDraft.skills.length})
+                        </h3>
+                        <p className="text-zinc-500 mt-1">
+                          Отметьте ключевые навыки через каталог или добавьте свои.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={openSkillsPickerModal}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-sm transition-colors whitespace-nowrap shrink-0"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Выбрать навыки</span>
+                      </button>
+                    </div>
+
+                    {/* 3-State Chip Hierarchy: Selected / Recommended / Catalog Available */}
+                    {(() => {
+                      const recommendedIds = new Set(
+                        recommendedSkillDefs.map((d) => d.id)
+                      );
+                      const isSkillSelected = (def: SkillDefinition) =>
+                        commonDraft.skills.some(
+                          (s) =>
+                            s.skillId === def.id ||
+                            s.label.toLowerCase() === def.label.toLowerCase()
+                        );
+                      const remainingCatalogDefs = skillsCatalog.filter(
+                        (def) =>
+                          !recommendedIds.has(def.id) && !isSkillSelected(def)
+                      );
+
+                      return (
+                        <div className="space-y-4">
+                          {/* 1. Selected Skills (Teal fill, white text) */}
+                          <div className="p-4 rounded-xl bg-white border border-zinc-200/80 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-zinc-800">
+                                Выбранные навыки ({commonDraft.skills.length})
+                              </span>
+                              <span className="text-[11px] text-zinc-400">
+                                Появятся в листе А4
+                              </span>
+                            </div>
+
+                            {commonDraft.skills.length === 0 ? (
+                              <div className="py-5 rounded-lg bg-[#F4F4F5]/70 border border-dashed border-zinc-300 text-center text-zinc-500">
+                                Навыки ещё не выбраны. Отметьте рекомендованные или добавьте ниже.
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap gap-2">
+                                {commonDraft.skills.map((sk) => (
+                                  <div
+                                    key={sk.id}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#0D9488] text-white border border-[#0D9488] shadow-[0_1px_2px_rgba(13,148,136,0.18)] text-xs font-medium"
+                                  >
+                                    <Check className="w-3 h-3 shrink-0" />
+                                    <span>{sk.label}</span>
+                                    {confirmDeleteCommonSkillId === sk.id ? (
+                                      <span className="inline-flex items-center gap-1 pl-1 ml-1 border-l border-white/30">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setCommonDraft((prev) => ({
+                                              ...prev,
+                                              skills: prev.skills.filter(
+                                                (s) => s.id !== sk.id
+                                              ),
+                                            }));
+                                            setConfirmDeleteCommonSkillId(null);
+                                          }}
+                                          className="px-1.5 py-0.5 rounded bg-red-600 text-white text-[10px] font-bold hover:bg-red-700"
+                                        >
+                                          Удалить
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setConfirmDeleteCommonSkillId(null)
+                                          }
+                                          className="px-1 py-0.5 text-[10px] text-white/85 hover:text-white"
+                                        >
+                                          Отмена
+                                        </button>
+                                      </span>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setConfirmDeleteCommonSkillId(sk.id)
+                                        }
+                                        className="ml-0.5 p-0.5 rounded text-white/75 hover:text-white hover:bg-white/15 transition-colors"
+                                        title="Убрать навык"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 2. Recommended by Modules (White bg + Teal border + Dark text when unselected) */}
+                          {recommendedSkillDefs.length > 0 && (
+                            <div className="p-4 rounded-xl bg-white border border-zinc-200/80 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-2.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-bold text-[#0F766E]">
+                                  Рекомендованы выбранными модулями
+                                </span>
+                                <span className="text-[11px] text-zinc-400">
+                                  Нажмите для быстрого выбора
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {recommendedSkillDefs.map((def) => {
+                                  const active = isSkillSelected(def);
+                                  return (
+                                    <button
+                                      key={def.id}
+                                      type="button"
+                                      onClick={() => toggleCommonSkill(def)}
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border font-medium transition-colors ${
+                                        active
+                                          ? 'bg-[#0D9488] text-white border-[#0D9488]'
+                                          : 'bg-white text-zinc-900 border-[#0D9488] hover:bg-[#F0FDFA]'
+                                      }`}
+                                    >
+                                      {active ? (
+                                        <Check className="w-3 h-3 shrink-0" />
+                                      ) : (
+                                        <Plus className="w-3 h-3 text-[#0D9488] shrink-0" />
+                                      )}
+                                      <span>{def.label}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 3. Available from Catalog (Muted gray #F4F4F5 bg + gray text) */}
+                          {remainingCatalogDefs.length > 0 && (
+                            <div className="p-4 rounded-xl bg-white border border-zinc-200/80 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-2.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-semibold text-zinc-600">
+                                  Доступные из каталога (
+                                  {remainingCatalogDefs.length})
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {remainingCatalogDefs.map((def) => (
+                                  <button
+                                    key={def.id}
+                                    type="button"
+                                    onClick={() => toggleCommonSkill(def)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-[#F4F4F5] border border-transparent text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 font-medium transition-colors"
+                                  >
+                                    <Plus className="w-3 h-3 text-zinc-400 shrink-0" />
+                                    <span>{def.label}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Accented Add Custom Skill Zone */}
+                    <div className="p-3 rounded-lg bg-[#F4F4F5] border border-dashed border-zinc-300 flex flex-col sm:flex-row sm:items-center gap-2.5">
+                      <div className="relative flex-1 flex items-center">
+                        <Plus className="w-4 h-4 text-[#0D9488] absolute left-3 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={newCustomSkill}
+                          onChange={(e) => setNewCustomSkill(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (!newCustomSkill.trim()) return;
+                              setCommonDraft((prev) => ({
+                                ...prev,
+                                skills: [
+                                  ...prev.skills,
+                                  {
+                                    id: `sk-custom-${Date.now()}`,
+                                    label: newCustomSkill.trim(),
+                                    bgColor: '#48C9D8',
+                                    status: 'independent',
+                                  },
+                                ],
+                              }));
+                              setNewCustomSkill('');
+                            }
+                          }}
+                          placeholder="Добавить свой уникальный навык..."
+                          className="w-full bg-white border border-zinc-200 rounded-lg pl-9 pr-3 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/15"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newCustomSkill.trim()) return;
+                          setCommonDraft((prev) => ({
+                            ...prev,
+                            skills: [
+                              ...prev.skills,
+                              {
+                                id: `sk-custom-${Date.now()}`,
+                                label: newCustomSkill.trim(),
+                                bgColor: '#48C9D8',
+                                status: 'independent',
+                              },
+                            ],
+                          }));
+                          setNewCustomSkill('');
+                        }}
+                        disabled={!newCustomSkill.trim()}
+                        className="px-4 py-2 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] disabled:opacity-45 text-white font-semibold shrink-0 transition-colors"
+                      >
+                        Добавить навык
+                      </button>
+                    </div>
+                  </section>
+                )}
+
+                {/* STEP 4: NEXT CHAPTER (INTERACTIVE CHIPS + CATALOG MODAL) */}
+                {commonStep === 4 && (
+                  <section className="space-y-6 text-xs">
+                    <div className="pb-4 border-b border-zinc-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-bold text-zinc-900">
+                          Шаг 4. «Что интересного впереди?» (Следующая глава)
+                        </h3>
+                        <p className="text-zinc-500 mt-1">
+                          Этот блок размещается в нижней части второй страницы журнала А4.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={openTopicsPickerModal}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-sm transition-colors whitespace-nowrap shrink-0"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Выбрать из каталога</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5 p-4 rounded-xl bg-white border border-zinc-200/80 shadow-[0_1px_2px_rgba(24,24,27,0.03)]">
+                      <label className="block">
+                        <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
+                          Заголовок блока
+                        </span>
+                        <input
+                          type="text"
+                          value={commonDraft.nextChapterTitle}
+                          onChange={(e) =>
+                            setCommonDraft((prev) => ({
+                              ...prev,
+                              nextChapterTitle: e.target.value,
+                            }))
+                          }
+                          className="w-full px-3 py-2 rounded-md border border-zinc-200 bg-white text-xs font-semibold text-zinc-900 focus:outline-none focus:border-[#0D9488]"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
+                          Вводный текст
+                        </span>
+                        <input
+                          type="text"
+                          value={commonDraft.nextChapterDescription}
+                          onChange={(e) =>
+                            setCommonDraft((prev) => ({
+                              ...prev,
+                              nextChapterDescription: e.target.value,
+                            }))
+                          }
+                          className="w-full px-3 py-2 rounded-md border border-zinc-200 bg-white text-xs text-zinc-900 focus:outline-none focus:border-[#0D9488]"
+                        />
+                      </label>
+                    </div>
+
+                    {/* Selected Interactive Topic Chips with (x) Delete */}
+                    <div className="p-4 rounded-xl bg-white border border-zinc-200/80 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-zinc-800">
+                          Выбранные темы следующих модулей (
+                          {commonDraft.nextChapterTopics.length})
+                        </span>
+                        {commonDraft.nextChapterTopics.length > 3 && (
+                          <span className="text-[11px] text-amber-700 font-medium">
+                            На листе А4 отображаются первые 3 темы
+                          </span>
+                        )}
+                      </div>
+
+                      {commonDraft.nextChapterTopics.length === 0 ? (
+                        <div className="py-5 rounded-lg bg-[#F4F4F5]/70 border border-dashed border-zinc-300 text-center text-zinc-500">
+                          Темы ещё не выбраны. Добавьте свою тему ниже или выберите из каталога.
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {commonDraft.nextChapterTopics.map((topic) => (
+                            <div
+                              key={topic.id}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#0D9488] text-white border border-[#0D9488] shadow-[0_1px_2px_rgba(13,148,136,0.18)] text-xs font-medium"
+                            >
+                              <span>{topic.title}</span>
                               <button
                                 type="button"
                                 onClick={() =>
                                   setCommonDraft((prev) => ({
                                     ...prev,
-                                    modules: prev.modules
-                                      .filter((m) => m.id !== mod.id)
-                                      .map((m, i) => ({ ...m, order: i + 1 })),
+                                    nextChapterTopics:
+                                      prev.nextChapterTopics.filter(
+                                        (t) => t.id !== topic.id
+                                      ),
                                   }))
                                 }
-                                className="p-1 rounded text-zinc-400 hover:text-red-600"
+                                className="ml-0.5 p-0.5 rounded text-white/80 hover:text-white hover:bg-white/15 transition-colors"
+                                title={`Удалить тему «${topic.title}»`}
+                                aria-label={`Удалить тему ${topic.title}`}
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <X className="w-3 h-3" />
                               </button>
                             </div>
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            <input
-                              type="text"
-                              value={mod.title}
-                              onChange={(e) =>
-                                setCommonDraft((prev) => ({
-                                  ...prev,
-                                  modules: prev.modules.map((m) =>
-                                    m.id === mod.id ? { ...m, title: e.target.value } : m
-                                  ),
-                                }))
-                              }
-                              className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 font-semibold"
-                            />
-                            <input
-                              type="text"
-                              value={mod.subtitle}
-                              onChange={(e) =>
-                                setCommonDraft((prev) => ({
-                                  ...prev,
-                                  modules: prev.modules.map((m) =>
-                                    m.id === mod.id ? { ...m, subtitle: e.target.value } : m
-                                  ),
-                                }))
-                              }
-                              className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5"
-                            />
-                          </div>
-                          <input
-                            type="text"
-                            value={mod.description}
-                            onChange={(e) =>
-                              setCommonDraft((prev) => ({
-                                ...prev,
-                                modules: prev.modules.map((m) =>
-                                  m.id === mod.id
-                                    ? { ...m, description: e.target.value }
-                                    : m
-                                ),
-                              }))
-                            }
-                            className="w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5"
-                          />
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      )}
 
-                  {/* Library Picker */}
-                  <div className="pt-2 border-t border-zinc-100 space-y-2.5">
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <div className="relative flex-1">
-                        <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      {/* Quick Suggestions (Unselected Presets) */}
+                      {NEXT_TOPIC_LIBRARY.some(
+                        (item) =>
+                          !commonDraft.nextChapterTopics.some(
+                            (t) =>
+                              t.title.toLowerCase() === item.title.toLowerCase()
+                          )
+                      ) && (
+                        <div className="pt-3 border-t border-zinc-100 space-y-2">
+                          <span className="text-[11px] font-medium text-zinc-500 block">
+                            Быстрые подсказки:
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {NEXT_TOPIC_LIBRARY.filter(
+                              (item) =>
+                                !commonDraft.nextChapterTopics.some(
+                                  (t) =>
+                                    t.title.toLowerCase() ===
+                                    item.title.toLowerCase()
+                                )
+                            ).map((item) => (
+                              <button
+                                key={item.title}
+                                type="button"
+                                onClick={() =>
+                                  setCommonDraft((prev) => ({
+                                    ...prev,
+                                    nextChapterTopics: [
+                                      ...prev.nextChapterTopics,
+                                      {
+                                        id: `nt-${Date.now()}-${item.iconKey}`,
+                                        title: item.title,
+                                        iconKey: item.iconKey,
+                                      },
+                                    ],
+                                  }))
+                                }
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-[#0D9488]/60 bg-white text-zinc-800 hover:bg-[#F0FDFA] font-medium transition-colors"
+                              >
+                                <Plus className="w-3 h-3 text-[#0D9488] shrink-0" />
+                                <span>{item.title}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Accented Custom Topic Input with (+) Button */}
+                    <div className="p-3 rounded-lg bg-[#F4F4F5] border border-dashed border-zinc-300 flex items-center gap-2.5">
+                      <div className="relative flex-1 flex items-center">
                         <input
                           type="text"
-                          value={commonSearch}
-                          onChange={(e) => setCommonSearch(e.target.value)}
-                          placeholder="Поиск модуля (Python, Kodu, Roblox...)"
-                          className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-zinc-200 bg-white"
+                          value={newNextTopicTitle}
+                          onChange={(e) => setNewNextTopicTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddCustomNextTopic();
+                            }
+                          }}
+                          placeholder="Своя тема..."
+                          className="w-full bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/15"
                         />
                       </div>
-                      <select
-                        value={commonCategory}
-                        onChange={(e) => setCommonCategory(e.target.value)}
-                        className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5"
-                      >
-                        <option value="all">Все категории</option>
-                        {categories.map((cat) => (
-                          <option key={cat.id} value={cat.id}>
-                            {cat.shortName}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-60 overflow-y-auto pr-1">
-                      {filteredCatalogModules.map((lib) => {
-                        const selected = commonDraft.modules.some(
-                          (m) => m.libraryModuleId === lib.id
-                        );
-                        return (
-                          <button
-                            key={lib.id}
-                            type="button"
-                            onClick={() => toggleCommonModule(lib)}
-                            className={`text-left p-2.5 rounded-xl border flex items-start justify-between gap-2 transition-colors ${
-                              selected
-                                ? 'border-[#0D9488] bg-[#F0FDFA]'
-                                : 'border-zinc-200 bg-white hover:border-zinc-300'
-                            }`}
-                          >
-                            <div className="min-w-0">
-                              <div className="font-bold text-zinc-900 truncate">
-                                {lib.displayTitle || lib.title}
-                              </div>
-                              <div className="text-[11px] text-zinc-500 truncate">
-                                {lib.subtitle}
-                              </div>
-                            </div>
-                            {selected && (
-                              <Check className="w-4 h-4 text-[#0D9488] shrink-0" />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </section>
-
-                {/* 3. Common Skills */}
-                <section className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-3 text-xs">
-                  <h3 className="text-sm font-bold text-zinc-900">
-                    3. Общие навыки группы («Чему я научился», выбрано {commonDraft.skills.length})
-                  </h3>
-
-                  {recommendedSkillDefs.length > 0 && (
-                    <div className="p-3 rounded-xl bg-[#F0FDFA] border border-[#99F6E4] space-y-2">
-                      <div className="font-semibold text-[#0F766E]">
-                        Рекомендованы выбранными модулями:
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {recommendedSkillDefs.map((def) => {
-                          const active = commonDraft.skills.some(
-                            (s) =>
-                              s.skillId === def.id ||
-                              s.label.toLowerCase() === def.label.toLowerCase()
-                          );
-                          return (
-                            <button
-                              key={def.id}
-                              type="button"
-                              onClick={() => toggleCommonSkill(def)}
-                              className={`px-2.5 py-1 rounded-lg border font-medium transition-colors ${
-                                active
-                                  ? 'bg-[#0D9488] text-white border-[#0D9488]'
-                                  : 'bg-white text-zinc-800 border-zinc-200 hover:border-[#0D9488]'
-                              }`}
-                            >
-                              {def.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
-                    {skillsCatalog.map((def) => {
-                      const active = commonDraft.skills.some(
-                        (s) =>
-                          s.skillId === def.id ||
-                          s.label.toLowerCase() === def.label.toLowerCase()
-                      );
-                      return (
-                        <button
-                          key={def.id}
-                          type="button"
-                          onClick={() => toggleCommonSkill(def)}
-                          className={`px-2.5 py-1 rounded-lg border font-medium transition-colors ${
-                            active
-                              ? 'bg-zinc-900 text-white border-zinc-900'
-                              : 'bg-white text-zinc-700 border-zinc-200 hover:border-zinc-300'
-                          }`}
-                        >
-                          {def.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="flex gap-2 pt-1">
-                    <input
-                      type="text"
-                      value={newCustomSkill}
-                      onChange={(e) => setNewCustomSkill(e.target.value)}
-                      placeholder="Добавить свой навык..."
-                      className="flex-1 rounded-lg border border-zinc-200 px-3 py-1.5"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!newCustomSkill.trim()) return;
-                        setCommonDraft((prev) => ({
-                          ...prev,
-                          skills: [
-                            ...prev.skills,
-                            {
-                              id: `sk-custom-${Date.now()}`,
-                              label: newCustomSkill.trim(),
-                              bgColor: '#48C9D8',
-                              status: 'independent',
-                            },
-                          ],
-                        }));
-                        setNewCustomSkill('');
-                      }}
-                      className="px-3.5 py-1.5 rounded-lg bg-zinc-900 text-white font-semibold"
-                    >
-                      Добавить
-                    </button>
-                  </div>
-                </section>
-
-                {/* 4. Next Chapter */}
-                <section className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-3 text-xs">
-                  <h3 className="text-sm font-bold text-zinc-900">
-                    4. «Что интересного впереди?» (Стр. 2)
-                  </h3>
-                  <label className="block">
-                    <span className="font-semibold text-zinc-700">Вводный текст</span>
-                    <input
-                      type="text"
-                      value={commonDraft.nextChapterDescription}
-                      onChange={(e) =>
-                        setCommonDraft((prev) => ({
-                          ...prev,
-                          nextChapterDescription: e.target.value,
-                        }))
-                      }
-                      className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2"
-                    />
-                  </label>
-
-                  <div className="space-y-1.5">
-                    <span className="font-semibold text-zinc-700 block">
-                      Темы следующих модулей
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {NEXT_TOPIC_LIBRARY.map((item) => {
-                        const active = commonDraft.nextChapterTopics.some(
-                          (t) => t.title === item.title
-                        );
-                        return (
-                          <button
-                            key={item.title}
-                            type="button"
-                            onClick={() => {
-                              setCommonDraft((prev) => {
-                                const exists = prev.nextChapterTopics.some(
-                                  (t) => t.title === item.title
-                                );
-                                return {
-                                  ...prev,
-                                  nextChapterTopics: exists
-                                    ? prev.nextChapterTopics.filter(
-                                        (t) => t.title !== item.title
-                                      )
-                                    : [
-                                        ...prev.nextChapterTopics,
-                                        {
-                                          id: `nt-${Date.now()}-${item.iconKey}`,
-                                          title: item.title,
-                                          iconKey: item.iconKey,
-                                        },
-                                      ],
-                                };
-                              });
-                            }}
-                            className={`px-2.5 py-1 rounded-lg border font-medium transition-colors ${
-                              active
-                                ? 'bg-[#0D9488] text-white border-[#0D9488]'
-                                : 'bg-white text-zinc-700 border-zinc-200 hover:border-zinc-300'
-                            }`}
-                          >
-                            {item.title}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="flex gap-2 pt-1">
-                      <input
-                        type="text"
-                        value={newNextTopicTitle}
-                        onChange={(e) => setNewNextTopicTitle(e.target.value)}
-                        placeholder="Своя тема следующего модуля..."
-                        className="flex-1 rounded-lg border border-zinc-200 px-3 py-1.5"
-                      />
                       <button
                         type="button"
-                        onClick={() => {
-                          if (!newNextTopicTitle.trim()) return;
-                          const item: NextTopicItem = {
-                            id: `nt-custom-${Date.now()}`,
-                            title: newNextTopicTitle.trim(),
-                            iconKey: 'ai',
-                          };
-                          setCommonDraft((prev) => ({
-                            ...prev,
-                            nextChapterTopics: [...prev.nextChapterTopics, item],
-                          }));
-                          setNewNextTopicTitle('');
-                        }}
-                        className="px-3.5 py-1.5 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 font-semibold"
+                        onClick={handleAddCustomNextTopic}
+                        disabled={!newNextTopicTitle.trim()}
+                        className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] disabled:opacity-45 text-white text-xs font-bold shrink-0 transition-colors"
+                        title="Добавить тему"
                       >
-                        Добавить тему
+                        <Plus className="w-4 h-4" />
+                        <span>Добавить</span>
                       </button>
                     </div>
-                  </div>
-                </section>
+                  </section>
+                )}
               </div>
             </div>
-          ) : (
-            /* INDIVIDUAL FILL + LIVE A4 PREVIEW */
-            <>
-              {/* Sub-toolbar above Individual workspace */}
-              <div className="bg-white border-b border-zinc-200 px-5 py-2 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Page Switcher */}
+
+            {/* Sticky Bottom Step Navigation */}
+            <div className="shrink-0 bg-white border-t border-zinc-200 px-6 py-3 flex items-center justify-between gap-4">
+              <button
+                type="button"
+                disabled={commonStep === 1}
+                onClick={() =>
+                  setCommonStep((s) => Math.max(1, s - 1) as CommonStep)
+                }
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 disabled:opacity-45 text-xs font-semibold text-zinc-700"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Назад</span>
+              </button>
+
+              <span className="text-xs font-medium text-zinc-500 tabular-nums">
+                Шаг {commonStep} из 4
+              </span>
+
+              <div className="flex items-center gap-2">
+                {commonStep < 4 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCommonStep((s) => Math.min(4, s + 1) as CommonStep)
+                    }
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-zinc-200 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold"
+                  >
+                    <span>Далее</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setEditorTab('individual')}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[#0D9488]/40 bg-[#F0FDFA] hover:bg-[#CCFBF1]/60 text-[#0F766E] text-xs font-semibold whitespace-nowrap"
+                >
+                  <span>Перейти в Редактор учеников</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </main>
+        ) : !selectedStudent || !activeDoc ? (
+          <main className="flex-1 flex items-center justify-center p-8 bg-[#FAF9F6]">
+            <div className="bg-white border border-zinc-200/80 rounded-2xl p-8 text-center max-w-md space-y-4 shadow-2xs">
+              {groupStudents.length > 0 ? (
+                <>
+                  <div className="w-11 h-11 rounded-2xl bg-[#F0FDFA] border border-[#99F6E4] text-[#0F766E] flex items-center justify-center mx-auto">
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-sm font-bold text-zinc-900">
+                      Выберите ученика слева, чтобы начать редактирование его журнала
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      Нажмите на имя ученика в списке слева — откроются страницы А4 и индивидуальные настройки справа.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditorTab('common')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 text-xs font-semibold text-zinc-700"
+                  >
+                    <Layers className="w-3.5 h-3.5 text-[#0D9488]" />
+                    <span>Вернуться к общим данным группы</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-bold text-zinc-900">
+                    Добавьте первого ученика в группу
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    Для каждого ученика автоматически создаётся персональный журнал с общими данными группы.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setQuickAddOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0D9488] text-white text-xs font-semibold"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Добавить ученика</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </main>
+        ) : (
+          /* CENTER FIGMA PAN/ZOOM CANVAS + RIGHT FIGMA INSPECTOR */
+          <>
+            {/* 2. CENTER COLUMN: FIGMA-STYLE PAN & ZOOM CANVAS (NO SCROLLBARS) */}
+            <main className="flex-1 min-w-0 min-h-0 flex flex-col bg-[#FAF9F6] overflow-hidden">
+              {/* Slim Canvas Controls Bar */}
+              <div className="h-11 shrink-0 bg-white/95 border-b border-zinc-200/80 px-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
                       onClick={() => setPageFocus(1)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap ${
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium transition-colors whitespace-nowrap ${
                         pageFocus === 1
                           ? 'border-[#0D9488] bg-[#F0FDFA] text-[#0F766E]'
                           : 'border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900'
                       }`}
                     >
-                      <span className="w-3 h-4 rounded-xs border border-current bg-[#6CE3E2]/45 block" />
-                      <span>Стр. 1: Мой путь</span>
+                      <span className="w-2.5 h-3.5 rounded-xs border border-current bg-[#6CE3E2]/45 block" />
+                      <span>Стр. 1</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setPageFocus(2)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap ${
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium transition-colors whitespace-nowrap ${
                         pageFocus === 2
                           ? 'border-[#0D9488] bg-[#F0FDFA] text-[#0F766E]'
                           : 'border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900'
                       }`}
                     >
-                      <span className="w-3 h-4 rounded-xs border border-current bg-[#FFE14D]/55 block" />
-                      <span>Стр. 2: Достижения</span>
+                      <span className="w-2.5 h-3.5 rounded-xs border border-current bg-[#FFE14D]/55 block" />
+                      <span>Стр. 2</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setPageFocus('spread')}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap ${
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md border text-xs font-medium transition-colors whitespace-nowrap ${
                         pageFocus === 'spread'
                           ? 'border-[#0D9488] bg-[#F0FDFA] text-[#0F766E]'
                           : 'border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900'
                       }`}
                     >
                       <Columns2 className="w-3.5 h-3.5" />
-                      <span className="hidden xl:inline">Обе страницы</span>
+                      <span className="hidden xl:inline">Обе</span>
                     </button>
                   </div>
 
                   {activeDocProgress && (
-                    <span className="text-xs font-medium text-zinc-600 tabular-nums pl-2 border-l border-zinc-200">
-                      {activeDocProgress.label}
+                    <span className="hidden sm:inline text-xs font-medium text-zinc-500 tabular-nums pl-2 border-l border-zinc-200 truncate">
+                      {activeDoc.resident.fullName} · {activeDocProgress.label}
                     </span>
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => setEditorTab('common')}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#0D9488]/40 bg-[#F0FDFA] hover:bg-[#CCFBF1]/60 text-xs font-semibold text-[#0F766E] whitespace-nowrap"
+                    className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-[#0D9488]/40 bg-[#F0FDFA] hover:bg-[#CCFBF1]/60 text-[11px] font-semibold text-[#0F766E] whitespace-nowrap"
                   >
-                    <BookOpen className="w-3.5 h-3.5" />
-                    <span>Настроить общие данные группы</span>
+                    <BookOpen className="w-3 h-3" />
+                    <span>Программа группы</span>
                   </button>
 
-                  {/* Zoom */}
-                  <div className="flex items-center gap-1 p-0.5 bg-zinc-100 rounded-lg">
-                    {(
-                      [
-                        { v: 'auto', label: 'Авто' },
-                        { v: 0.75, label: '75%' },
-                        { v: 1, label: '100%' },
-                      ] as const
-                    ).map((z) => (
+                  <div className="flex items-center gap-0.5 p-0.5 bg-[#F6F5F0] rounded-md border border-zinc-200/70">
+                    <button
+                      type="button"
+                      onClick={() => applyPresetZoom('auto')}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono tabular-nums whitespace-nowrap ${
+                        zoom === 'auto'
+                          ? 'bg-white text-zinc-900 shadow-2xs font-semibold'
+                          : 'text-zinc-600 hover:text-zinc-900'
+                      }`}
+                      title="Вписать лист в окно и центрировать"
+                    >
+                      <RotateCcw className="w-2.5 h-2.5" />
+                      <span>
+                        {zoom === 'auto'
+                          ? `Авто ${Math.round(effectiveScale * 100)}%`
+                          : `${Math.round(effectiveScale * 100)}%`}
+                      </span>
+                    </button>
+                    {([0.75, 1] as const).map((preset) => (
                       <button
-                        key={String(z.v)}
+                        key={preset}
                         type="button"
-                        onClick={() => setZoom(z.v)}
-                        className={`px-2 py-1 rounded text-[11px] font-mono ${
-                          zoom === z.v
-                            ? 'bg-white text-zinc-900 shadow-xs font-semibold'
+                        onClick={() => applyPresetZoom(preset)}
+                        className={`px-2 py-0.5 rounded text-[11px] font-mono tabular-nums whitespace-nowrap ${
+                          zoom === preset
+                            ? 'bg-white text-zinc-900 shadow-2xs font-semibold'
                             : 'text-zinc-500 hover:text-zinc-900'
                         }`}
                       >
-                        {z.label}
+                        {Math.round(preset * 100)}%
                       </button>
                     ))}
                   </div>
                 </div>
               </div>
 
-              {!selectedStudent || !activeDoc ? (
-                <div className="flex-1 flex items-center justify-center p-8">
-                  <div className="bg-white border border-zinc-200 rounded-2xl p-8 text-center max-w-md space-y-3">
-                    <p className="text-sm font-bold text-zinc-900">
-                      Выберите ученика слева или добавьте первого ученика
-                    </p>
-                    <p className="text-xs text-zinc-500">
-                      Для каждого ученика автоматически создаётся персональный журнал с общими данными группы.
-                    </p>
+              {/* Infinite Figma-like Stage (Zero Scrollbars, Wheel Zoom to Cursor, Space/MMB Pan, Subtle Grid) */}
+              <div
+                ref={canvasStageRef}
+                onMouseDown={handleCanvasMouseDown}
+                onAuxClick={(e) => {
+                  if (e.button === 1) e.preventDefault();
+                }}
+                style={{
+                  backgroundColor: '#EDEDED',
+                  backgroundImage:
+                    'linear-gradient(to right, rgba(0, 0, 0, 0.035) 1px, transparent 1px), linear-gradient(to bottom, rgba(0, 0, 0, 0.035) 1px, transparent 1px)',
+                  backgroundSize: '24px 24px',
+                }}
+                className={`flex-1 min-h-0 overflow-hidden relative select-none ${
+                  isPanning
+                    ? 'cursor-grabbing'
+                    : spacePressed
+                    ? 'cursor-grab'
+                    : 'cursor-default'
+                }`}
+              >
+                <div
+                  style={{
+                    width: `${logicalW}px`,
+                    height: `${A4_PAGE_HEIGHT}px`,
+                    gap: effectiveSpread ? `${A4_SPREAD_GAP}px` : '0px',
+                    transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${effectiveScale})`,
+                    transformOrigin: '0 0',
+                  }}
+                  className={`absolute top-0 left-0 flex items-start ${
+                    spacePressed || isPanning ? 'pointer-events-none' : ''
+                  }`}
+                >
+                  {(effectiveSpread || pageFocus === 1) && (
+                    <A4PageSlot className="shadow-[0_12px_36px_rgba(24,24,27,0.09)] rounded-xs">
+                      <JournalPageOne
+                        doc={activeDoc}
+                        mediaAssets={mediaAssets}
+                        scaleFactor={effectiveScale}
+                        onSelectTarget={handleSelectTargetOnA4}
+                      />
+                    </A4PageSlot>
+                  )}
+
+                  {(effectiveSpread || pageFocus === 2) && (
+                    <A4PageSlot className="shadow-[0_12px_36px_rgba(24,24,27,0.09)] rounded-xs">
+                      <JournalPageTwo
+                        doc={activeDoc}
+                        scaleFactor={effectiveScale}
+                        onSelectTarget={handleSelectTargetOnA4}
+                      />
+                    </A4PageSlot>
+                  )}
+                </div>
+
+                {/* Subtle Bottom Navigation Pill */}
+                <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 z-10">
+                  <div className="pointer-events-auto inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 border border-zinc-200/90 shadow-xs text-[11px] text-zinc-500">
+                    <Hand className="w-3 h-3 text-[#0D9488]" />
+                    <span className="hidden sm:inline">
+                      Space + ЛКМ / Колесо — рука и зум
+                    </span>
+                    <span className="text-zinc-300 hidden sm:inline">·</span>
                     <button
                       type="button"
-                      onClick={() => setQuickAddOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0D9488] text-white text-xs font-semibold"
+                      onClick={() => fitAndCenterCanvas()}
+                      className="font-semibold text-[#0F766E] hover:underline"
                     >
-                      <Plus className="w-4 h-4" />
-                      <span>Добавить ученика</span>
+                      Вписать
+                    </button>
+                    <span className="text-zinc-300">·</span>
+                    <button
+                      type="button"
+                      onClick={() => onOpenPreview(activeDoc.id)}
+                      className="inline-flex items-center gap-1 font-medium text-zinc-700 hover:text-zinc-900"
+                    >
+                      <Maximize2 className="w-3 h-3" />
+                      <span>Разворот</span>
                     </button>
                   </div>
                 </div>
-              ) : (
-                <div className="flex-1 flex flex-col xl:flex-row overflow-hidden">
-                  {/* NON-OVERLAPPING INDIVIDUAL FIELDS COLUMN */}
-                  <section className="w-full xl:w-[356px] shrink-0 bg-white border-r border-zinc-200 flex flex-col xl:h-[calc(100vh-110px)] overflow-hidden">
-                    <div className="px-4 py-3 border-b border-zinc-200 bg-[#F9F9F7] flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-zinc-900 truncate">
-                          {selectedStudent.fullName}
+              </div>
+            </main>
+
+            {/* 3. RIGHT COLUMN: FIGMA-STYLE RESIZABLE INSPECTOR PANEL */}
+            {rightCollapsed ? (
+              <div className="hidden lg:flex w-9 shrink-0 bg-white border-l border-zinc-200/70 flex-col items-center py-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setRightCollapsed(false)}
+                  className="w-6 h-6 rounded-full border border-zinc-200 bg-white hover:bg-[#F0FDFA] hover:border-[#0D9488] text-zinc-600 hover:text-[#0D9488] flex items-center justify-center shadow-xs transition-colors"
+                  title="Развернуть панель настроек"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-[10px] font-bold text-zinc-500 [writing-mode:vertical-rl] tracking-wide">
+                  Инспектор
+                </span>
+              </div>
+            ) : (
+              <>
+                {/* RIGHT INVISIBLE FIGMA RESIZER (2px TEAL LINE + CIRCLE COLLAPSE ON HOVER) */}
+                <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Изменить ширину правой панели"
+                  onMouseDown={(e) => startResize('right', e)}
+                  className="hidden lg:flex w-2 -mx-1 shrink-0 cursor-col-resize items-center justify-center group select-none relative z-20"
+                  title="Потяните, чтобы изменить ширину панели"
+                >
+                  <div
+                    className={`w-[2px] h-full transition-colors ${
+                      draggingSide === 'right'
+                        ? 'bg-[#0D9488]'
+                        : 'bg-transparent group-hover:bg-[#0D9488]'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRightCollapsed(true);
+                    }}
+                    className="absolute top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-white border border-zinc-200 hover:border-[#0D9488] hover:text-[#0D9488] text-zinc-500 flex items-center justify-center shadow-sm z-30 cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                    title="Свернуть правую панель"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <aside className="w-full lg:w-[var(--right-panel-w)] shrink-0 bg-white border-t lg:border-t-0 border-zinc-200 flex flex-col min-h-0 lg:h-full overflow-hidden">
+                  {/* Inspector Mode Tabs Only: Контент | Дизайн */}
+                  <div className="shrink-0 px-4 pt-1 border-b border-zinc-200/80 bg-white">
+                    <div className="flex items-center gap-5">
+                      <button
+                        type="button"
+                        onClick={() => setInspectorMode('content')}
+                        className={`inline-flex items-center gap-1.5 py-2 border-b-2 text-xs font-semibold transition-colors whitespace-nowrap ${
+                          inspectorMode === 'content'
+                            ? 'border-[#0D9488] text-zinc-900'
+                            : 'border-transparent text-zinc-400 hover:text-zinc-800'
+                        }`}
+                      >
+                        <SlidersHorizontal
+                          className={`w-3.5 h-3.5 ${
+                            inspectorMode === 'content'
+                              ? 'text-[#0D9488]'
+                              : 'text-zinc-400'
+                          }`}
+                        />
+                        <span>Контент</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInspectorMode('design')}
+                        className={`inline-flex items-center gap-1.5 py-2 border-b-2 text-xs font-semibold transition-colors whitespace-nowrap ${
+                          inspectorMode === 'design'
+                            ? 'border-[#0D9488] text-zinc-900'
+                            : 'border-transparent text-zinc-400 hover:text-zinc-800'
+                        }`}
+                      >
+                        <Paintbrush
+                          className={`w-3.5 h-3.5 ${
+                            inspectorMode === 'design'
+                              ? 'text-[#0D9488]'
+                              : 'text-zinc-400'
+                          }`}
+                        />
+                        <span>Дизайн</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Inspector Body */}
+                  {inspectorMode === 'design' ? (
+                    <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5 text-xs">
+                      <div className="pb-4 border-b border-zinc-100 space-y-2">
+                        <div className="flex items-center gap-2 font-bold text-zinc-900">
+                          <Palette className="w-4 h-4 text-[#0D9488]" />
+                          <span>Режим дизайна (в разработке)</span>
                         </div>
-                        <div className="text-[11px] text-zinc-500">
-                          Индивидуальные блоки журнала
+                        <p className="text-[11px] text-zinc-600 leading-relaxed">
+                          Здесь появятся персональные настройки оформления журнала: цвета обложки и секций, типографика заголовков, сетка и декоративные стикеры. Навигация по холсту (Space + рука и колесо зума) уже работает и в этом режиме.
+                        </p>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                          Текущая палитра группы
+                        </div>
+                        <div className="space-y-2.5">
+                          <div className="font-semibold text-zinc-900">
+                            {currentPalette.name}
+                          </div>
+                          <div className="flex gap-1.5">
+                            {[
+                              currentPalette.coverStart,
+                              currentPalette.p2Teal,
+                              currentPalette.p2Yellow,
+                              currentPalette.prideCoral,
+                              currentPalette.nextBg,
+                            ].map((hex, i) => (
+                              <span
+                                key={i}
+                                style={{ backgroundColor: hex }}
+                                className="h-4 flex-1 rounded-sm"
+                                title={hex}
+                              />
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditorTab('common');
+                              setCommonStep(1);
+                            }}
+                            className="text-[11px] font-semibold text-[#0D9488] hover:underline"
+                          >
+                            Сменить палитру в параметрах группы →
+                          </button>
                         </div>
                       </div>
-                      <select
-                        value={activeDoc.status}
-                        onChange={(e) =>
-                          onChangeJournal({
-                            ...activeDoc,
-                            status: e.target.value as JournalDocument['status'],
-                          })
-                        }
-                        className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700"
-                      >
-                        <option value="not_started">Не начат</option>
-                        <option value="draft">Черновик</option>
-                        <option value="in_progress">В процессе</option>
-                        <option value="ready">Готов к выгрузке</option>
-                        <option value="exported">Экспортирован</option>
-                      </select>
                     </div>
+                  ) : (
+                    (() => {
+                      const inspectorSteps: Array<{
+                        id: IndividualSection;
+                        num: number;
+                        shortLabel: string;
+                        title: string;
+                        page: 1 | 2;
+                        Icon: React.ComponentType<{ className?: string }>;
+                      }> = [
+                        {
+                          id: 'profile',
+                          num: 1,
+                          shortLabel: 'Профиль',
+                          title: '1. Профиль ученика',
+                          page: 1,
+                          Icon: User,
+                        },
+                        {
+                          id: 'curriculum',
+                          num: 2,
+                          shortLabel: 'Модули',
+                          title: '2. Модули и навыки',
+                          page: 1,
+                          Icon: Lightbulb,
+                        },
+                        {
+                          id: 'projects',
+                          num: 3,
+                          shortLabel: 'Проекты',
+                          title: '3. Проекты',
+                          page: 1,
+                          Icon: ImageIcon,
+                        },
+                        {
+                          id: 'pride',
+                          num: 4,
+                          shortLabel: 'Успехи',
+                          title: '4. Достижения',
+                          page: 2,
+                          Icon: Trophy,
+                        },
+                        {
+                          id: 'mentorNote',
+                          num: 5,
+                          shortLabel: 'Письмо',
+                          title: '5. Слово наставника',
+                          page: 2,
+                          Icon: PenLine,
+                        },
+                      ];
+                      const activeStepIdx = inspectorSteps.findIndex(
+                        (s) => s.id === activeInspectorStep
+                      );
+                      const activeStepMeta =
+                        inspectorSteps[
+                          activeStepIdx >= 0 ? activeStepIdx : 0
+                        ];
 
-                    {/* Section Switch Pills (Interactive Tabs) */}
-                    <div className="p-2 border-b border-zinc-200 grid grid-cols-2 gap-1 bg-zinc-50 text-[11px]">
-                      {(
-                        [
-                          { id: 'profile', label: '1. Имя и статус', page: 1 as const },
-                          { id: 'projects', label: '2. Проекты', page: 1 as const },
-                          { id: 'pride', label: '3. Гордость', page: 2 as const },
-                          { id: 'mentorNote', label: '4. Наставник', page: 2 as const },
-                        ] as const
-                      ).map((sec) => (
-                        <button
-                          key={sec.id}
-                          type="button"
-                          onClick={() => {
-                            setActiveSection(sec.id);
-                            if (pageFocus !== 'spread') setPageFocus(sec.page);
-                          }}
-                          className={`px-2.5 py-1.5 rounded-lg font-semibold text-left transition-colors truncate ${
-                            activeSection === sec.id
-                              ? 'bg-white text-[#0F766E] border border-[#0D9488]/40 shadow-2xs'
-                              : 'text-zinc-600 hover:bg-white/70'
-                          }`}
-                        >
-                          {sec.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Active Individual Block Form */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
-                      {activeSection === 'profile' && (
-                        <div className="space-y-3">
-                          <label className="block">
-                            <span className="font-semibold text-zinc-700">
-                              Имя и фамилия ученика
-                            </span>
-                            <input
-                              type="text"
-                              value={activeDoc.resident.fullName}
-                              onChange={(e) => {
-                                const fullName = e.target.value;
-                                onChangeJournal({
-                                  ...activeDoc,
-                                  resident: { ...activeDoc.resident, fullName },
-                                });
-                                onUpdateStudent({
-                                  ...selectedStudent,
-                                  fullName,
-                                  updatedAt: new Date().toISOString(),
-                                });
-                              }}
-                              className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 font-semibold focus:outline-none focus:border-[#0D9488]"
-                            />
-                          </label>
-
-                          <div className="grid grid-cols-2 gap-2.5">
-                            <label className="block">
-                              <span className="font-semibold text-zinc-700">Возраст</span>
-                              <input
-                                type="text"
-                                value={activeDoc.resident.age}
-                                onChange={(e) => {
-                                  const age = e.target.value;
-                                  onChangeJournal({
-                                    ...activeDoc,
-                                    resident: { ...activeDoc.resident, age },
-                                  });
-                                  onUpdateStudent({
-                                    ...selectedStudent,
-                                    age,
-                                    updatedAt: new Date().toISOString(),
-                                  });
-                                }}
-                                className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-1.5"
-                              />
-                            </label>
-                            <label className="block">
-                              <span className="font-semibold text-zinc-700">
-                                Статус ученика
-                              </span>
-                              <select
-                                value={selectedStudent.status}
-                                onChange={(e) =>
-                                  onUpdateStudent({
-                                    ...selectedStudent,
-                                    status: e.target.value as StudentStatus,
-                                    archived: e.target.value === 'dropped',
-                                    updatedAt: new Date().toISOString(),
-                                  })
-                                }
-                                className="mt-1 w-full rounded-lg border border-zinc-200 px-2.5 py-1.5 bg-white"
-                              >
-                                <option value="active">Активен</option>
-                                <option value="dropped">Выбыл</option>
-                                <option value="transferred">Переведен</option>
-                              </select>
-                            </label>
-                          </div>
-
-                          {/* Checklist of 5 blocks */}
-                          {activeDocProgress && (
-                            <div className="pt-3 border-t border-zinc-100 space-y-2">
-                              <div className="font-semibold text-zinc-700">
-                                Прогресс заполнения ({activeDocProgress.label})
-                              </div>
-                              <div className="space-y-1.5">
-                                {activeDocProgress.blocks.map((b) => (
-                                  <div
-                                    key={b.id}
-                                    className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-[#F9F9F7] border border-zinc-200/70"
-                                  >
-                                    <span className="text-zinc-700">{b.label}</span>
-                                    <span
-                                      className={`text-[11px] font-semibold ${
-                                        b.completed
-                                          ? 'text-emerald-700'
-                                          : 'text-zinc-400'
-                                      }`}
-                                    >
-                                      {b.completed ? 'Готово' : 'Пусто'}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="pt-2 border-t border-zinc-100 flex justify-between items-center">
-                            {confirmDeleteStudentId === selectedStudent.id ? (
-                              <div className="w-full flex items-center justify-between gap-2 p-2.5 rounded-xl bg-red-50 border border-red-200">
-                                <span className="font-semibold text-red-800">
-                                  Удалить ученика?
-                                </span>
-                                <div className="flex gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      await onDeleteStudent(selectedStudent.id);
-                                      setConfirmDeleteStudentId(null);
-                                    }}
-                                    className="px-3 py-1 rounded-md bg-red-600 text-white font-semibold"
-                                  >
-                                    Да
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setConfirmDeleteStudentId(null)}
-                                    className="px-3 py-1 rounded-md bg-white border border-zinc-200 text-zinc-700"
-                                  >
-                                    Нет
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setConfirmDeleteStudentId(selectedStudent.id)
-                                }
-                                className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 font-medium"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                <span>Удалить ученика из группы</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {activeSection === 'projects' && (
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-zinc-700">
-                              Проекты и скриншоты ({activeDoc.page1.projects.length})
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const nextProj: ProjectItem = {
-                                  id: `proj-${Date.now()}`,
-                                  title: 'Новый проект',
-                                  caption: 'Подпись проекта',
-                                  description: 'Что было реализовано на занятии.',
-                                  fallbackTheme: 'python',
-                                  isRealScreenshot: false,
-                                };
-                                onChangeJournal({
-                                  ...activeDoc,
-                                  page1: {
-                                    ...activeDoc.page1,
-                                    showProjects: true,
-                                    projects: [
-                                      ...activeDoc.page1.projects,
-                                      nextProj,
-                                    ],
-                                  },
-                                });
-                              }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 text-white text-[11px] font-semibold"
-                            >
-                              <Plus className="w-3 h-3" />
-                              <span>Добавить</span>
-                            </button>
-                          </div>
-
-                          {activeDoc.page1.projects.map((proj, idx) => (
-                            <div
-                              key={proj.id}
-                              className="p-3 rounded-xl border border-zinc-200 bg-[#F9F9F7] space-y-2"
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="font-mono text-[11px] font-bold text-zinc-500">
-                                  Проект #{idx + 1}
-                                </span>
+                      return (
+                        <>
+                          {/* 5-STEP HORIZONTAL ICON TAB STEPPER */}
+                          <nav
+                            aria-label="Разделы журнала ученика"
+                            className="shrink-0 grid grid-cols-5 border-b border-zinc-200 bg-white"
+                          >
+                            {inspectorSteps.map((step) => {
+                              const isActive =
+                                activeInspectorStep === step.id;
+                              const isDone = blockDoneMap[step.id];
+                              const StepIcon = step.Icon;
+                              return (
                                 <button
+                                  key={step.id}
                                   type="button"
                                   onClick={() =>
+                                    focusSection(step.id, step.page)
+                                  }
+                                  title={`${step.title}${
+                                    isDone ? ' — Готово' : ''
+                                  }`}
+                                  className={`relative py-2 px-1 flex flex-col items-center justify-center gap-1 border-b-2 transition-colors ${
+                                    isActive
+                                      ? 'border-[#0D9488] text-[#0F766E] bg-[#F0FDFA]/50'
+                                      : 'border-transparent text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50/70'
+                                  }`}
+                                >
+                                  <div className="relative">
+                                    <StepIcon className="w-4 h-4" />
+                                    {isDone && (
+                                      <span
+                                        aria-label="Готово"
+                                        className="absolute -top-1 -right-2 w-3 h-3 rounded-full bg-emerald-500 text-white flex items-center justify-center"
+                                      >
+                                        <Check className="w-2 h-2 stroke-[3]" />
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[10px] font-semibold leading-none truncate max-w-full">
+                                    {step.num}. {step.shortLabel}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </nav>
+
+                          {/* Active Step Title & Quick Stepper Controls */}
+                          <div className="shrink-0 px-4 py-2 border-b border-zinc-100 flex items-center justify-between gap-2 bg-white">
+                            <div className="min-w-0 flex items-center gap-2">
+                              <span className="text-xs font-bold text-zinc-900 truncate">
+                                {activeStepMeta.title}
+                              </span>
+                              <span
+                                className={`text-[10px] font-semibold shrink-0 ${
+                                  blockDoneMap[activeStepMeta.id]
+                                    ? 'text-emerald-600'
+                                    : 'text-zinc-400'
+                                }`}
+                              >
+                                {blockDoneMap[activeStepMeta.id]
+                                  ? '· Готово'
+                                  : '· Пусто'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              {activeInspectorStep === 'projects' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const nextProj: ProjectItem = {
+                                      id: `proj-${Date.now()}`,
+                                      title: 'Новый проект',
+                                      caption: 'Подпись проекта',
+                                      description:
+                                        'Что было реализовано на занятии.',
+                                      fallbackTheme: 'python',
+                                      isRealScreenshot: false,
+                                    };
                                     onChangeJournal({
                                       ...activeDoc,
                                       page1: {
                                         ...activeDoc.page1,
-                                        projects: activeDoc.page1.projects.filter(
-                                          (p) => p.id !== proj.id
-                                        ),
+                                        showProjects: true,
+                                        projects: [
+                                          ...activeDoc.page1.projects,
+                                          nextProj,
+                                        ],
                                       },
-                                    })
-                                  }
-                                  className="text-zinc-400 hover:text-red-600"
+                                    });
+                                    focusSection('projects', 1);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#0D9488] hover:bg-[#0F766E] text-white text-[10px] font-semibold mr-1"
+                                  title="Добавить проект"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Plus className="w-3 h-3" />
+                                  <span>Проект</span>
                                 </button>
-                              </div>
-
-                              <input
-                                type="text"
-                                value={proj.title}
-                                onChange={(e) =>
-                                  onChangeJournal({
-                                    ...activeDoc,
-                                    page1: {
-                                      ...activeDoc.page1,
-                                      projects: activeDoc.page1.projects.map((p) =>
-                                        p.id === proj.id
-                                          ? { ...p, title: e.target.value }
-                                          : p
-                                      ),
-                                    },
-                                  })
+                              )}
+                              <button
+                                type="button"
+                                disabled={activeStepIdx <= 0}
+                                onClick={() => {
+                                  const prevStep =
+                                    inspectorSteps[activeStepIdx - 1];
+                                  if (prevStep)
+                                    focusSection(prevStep.id, prevStep.page);
+                                }}
+                                className="p-1 rounded text-zinc-400 hover:text-zinc-900 disabled:opacity-30"
+                                title="Предыдущий шаг"
+                              >
+                                <ChevronLeft className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={
+                                  activeStepIdx >= inspectorSteps.length - 1
                                 }
-                                placeholder="Название проекта"
-                                className="w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 font-semibold"
-                              />
+                                onClick={() => {
+                                  const nextStep =
+                                    inspectorSteps[activeStepIdx + 1];
+                                  if (nextStep)
+                                    focusSection(nextStep.id, nextStep.page);
+                                }}
+                                className="p-1 rounded text-zinc-400 hover:text-zinc-900 disabled:opacity-30"
+                                title="Следующий шаг"
+                              >
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
 
-                              <input
-                                type="text"
-                                value={proj.caption}
-                                onChange={(e) =>
-                                  onChangeJournal({
-                                    ...activeDoc,
-                                    page1: {
-                                      ...activeDoc.page1,
-                                      projects: activeDoc.page1.projects.map((p) =>
-                                        p.id === proj.id
-                                          ? { ...p, caption: e.target.value }
-                                          : p
-                                      ),
-                                    },
-                                  })
-                                }
-                                placeholder="Подпись (например: Игра в Kodu)"
-                                className="w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5"
-                              />
+                          {/* SINGLE ACTIVE STEP CONTENT (STRUCTURED SEMANTIC CARDS) */}
+                          <div className="flex-1 min-h-0 overflow-y-auto bg-[#F8F8F6] px-3.5 py-3.5 text-xs">
+                            {/* STEP 1: ПРОФИЛЬ */}
+                            {activeInspectorStep === 'profile' && (
+                              <div className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3.5">
+                                <div className="pb-2 border-b border-zinc-100">
+                                  <span className="text-[11px] font-bold text-zinc-800">
+                                    Основные данные ученика
+                                  </span>
+                                </div>
 
-                              <textarea
-                                rows={2}
-                                value={proj.description}
-                                onChange={(e) =>
-                                  onChangeJournal({
-                                    ...activeDoc,
-                                    page1: {
-                                      ...activeDoc.page1,
-                                      projects: activeDoc.page1.projects.map((p) =>
-                                        p.id === proj.id
-                                          ? { ...p, description: e.target.value }
-                                          : p
-                                      ),
-                                    },
-                                  })
-                                }
-                                placeholder="Короткое описание..."
-                                className="w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5"
-                              />
-
-                              <div className="flex items-center gap-1.5">
-                                <label className="flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white font-semibold cursor-pointer">
-                                  <Upload className="w-3 h-3" />
-                                  <span>Загрузить скриншот</span>
+                                <label className="block">
+                                  <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
+                                    Имя и фамилия
+                                  </span>
                                   <input
-                                    type="file"
-                                    accept="image/png,image/jpeg,image/webp"
-                                    className="hidden"
-                                    onChange={(e) =>
-                                      handleUploadImage(
-                                        e.target.files?.[0],
-                                        (url) =>
-                                          onChangeJournal({
-                                            ...activeDoc,
-                                            page1: {
-                                              ...activeDoc.page1,
-                                              projects: activeDoc.page1.projects.map(
-                                                (p) =>
-                                                  p.id === proj.id
-                                                    ? {
-                                                        ...p,
-                                                        imageUrl: url,
-                                                        isRealScreenshot: true,
-                                                      }
-                                                    : p
-                                              ),
-                                            },
-                                          })
-                                      )
-                                    }
-                                  />
-                                </label>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    onOpenMediaPicker('projects', (url) =>
+                                    type="text"
+                                    value={activeDoc.resident.fullName}
+                                    onChange={(e) => {
+                                      const fullName = e.target.value;
                                       onChangeJournal({
                                         ...activeDoc,
-                                        page1: {
-                                          ...activeDoc.page1,
-                                          projects: activeDoc.page1.projects.map(
-                                            (p) =>
-                                              p.id === proj.id
-                                                ? {
-                                                    ...p,
-                                                    imageUrl: url,
-                                                    isRealScreenshot: true,
-                                                  }
-                                                : p
-                                          ),
+                                        resident: {
+                                          ...activeDoc.resident,
+                                          fullName,
                                         },
-                                      })
-                                    )
-                                  }
-                                  className="px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50"
-                                  title="Выбрать из медиатеки"
-                                >
-                                  <ImageIcon className="w-3.5 h-3.5 text-zinc-700" />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                                      });
+                                      onUpdateStudent({
+                                        ...selectedStudent,
+                                        fullName,
+                                        updatedAt: new Date().toISOString(),
+                                      });
+                                    }}
+                                    className="w-full px-3 py-2 rounded-md border border-zinc-200 bg-white text-sm font-semibold text-zinc-900 focus:outline-none focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/15 transition-colors"
+                                  />
+                                </label>
 
-                      {activeSection === 'pride' && (
-                        <div className="space-y-4">
-                          <label className="block">
-                            <span className="font-semibold text-zinc-700">
-                              Момент гордости ученика
-                            </span>
-                            <textarea
-                              rows={4}
-                              value={activeDoc.page2.prideText}
-                              onChange={(e) =>
-                                onChangeJournal({
-                                  ...activeDoc,
-                                  page2: {
-                                    ...activeDoc.page2,
-                                    showPride: true,
-                                    prideText: e.target.value,
-                                  },
-                                })
-                              }
-                              placeholder="Чем ученик может гордиться по итогам периода?"
-                              className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2"
-                            />
-                          </label>
-
-                          <div className="pt-2 border-t border-zinc-100 space-y-2.5">
-                            <span className="font-semibold text-zinc-700 block">
-                              Сильные стороны ({activeDoc.page2.strengths.length})
-                            </span>
-
-                            <div className="flex flex-wrap gap-1.5">
-                              {STRENGTH_LIBRARY.map((preset) => {
-                                const exists = activeDoc.page2.strengths.some(
-                                  (s) => s.title === preset.title
-                                );
-                                return (
-                                  <button
-                                    key={preset.title}
-                                    type="button"
-                                    onClick={() => {
-                                      if (exists) {
+                                <div className="grid grid-cols-2 gap-3">
+                                  <label className="block">
+                                    <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
+                                      Возраст
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={activeDoc.resident.age}
+                                      onChange={(e) => {
+                                        const age = e.target.value;
                                         onChangeJournal({
                                           ...activeDoc,
-                                          page2: {
-                                            ...activeDoc.page2,
-                                            strengths:
-                                              activeDoc.page2.strengths.filter(
-                                                (s) => s.title !== preset.title
-                                              ),
+                                          resident: {
+                                            ...activeDoc.resident,
+                                            age,
                                           },
                                         });
-                                      } else {
+                                        onUpdateStudent({
+                                          ...selectedStudent,
+                                          age,
+                                          updatedAt: new Date().toISOString(),
+                                        });
+                                      }}
+                                      className="w-full px-3 py-2 rounded-md border border-zinc-200 bg-white text-xs font-medium text-zinc-900 focus:outline-none focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/15 transition-colors"
+                                    />
+                                  </label>
+                                  <label className="block">
+                                    <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
+                                      Статус
+                                    </span>
+                                    <div className="relative flex items-center">
+                                      <span
+                                        className={`w-2.5 h-2.5 rounded-full absolute left-2.5 pointer-events-none ${
+                                          getStudentStatusMeta(
+                                            selectedStudent.status
+                                          ).dotClass
+                                        }`}
+                                      />
+                                      <select
+                                        value={normalizeStudentStatus(
+                                          selectedStudent.status
+                                        )}
+                                        onChange={(e) => {
+                                          const nextStatus = e.target
+                                            .value as StudentStatus;
+                                          onUpdateStudent({
+                                            ...selectedStudent,
+                                            status: nextStatus,
+                                            archived: nextStatus !== 'active',
+                                            updatedAt: new Date().toISOString(),
+                                          });
+                                        }}
+                                        className="w-full pl-7 pr-2.5 py-2 rounded-md border border-zinc-200 bg-white text-xs font-medium text-zinc-900 focus:outline-none focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/15 transition-colors cursor-pointer"
+                                      >
+                                        <option value="active">Активен</option>
+                                        <option value="paused">На паузе</option>
+                                        <option value="completed">
+                                          Завершил курс
+                                        </option>
+                                      </select>
+                                    </div>
+                                  </label>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* STEP 2: МОДУЛИ И НАВЫКИ */}
+                            {activeInspectorStep === 'curriculum' && (
+                              <div className="space-y-4">
+                                {/* Modules Section Container */}
+                                <div className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3">
+                                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-zinc-100">
+                                    <div>
+                                      <span className="text-[11px] font-bold text-zinc-800 block">
+                                        Модули (Мои открытия)
+                                      </span>
+                                      <span className="text-[10px] text-zinc-400 tabular-nums">
+                                        Активно{' '}
+                                        {
+                                          activeDoc.page1.modules.filter(
+                                            (m) => !m.hidden
+                                          ).length
+                                        }{' '}
+                                        из {activeDoc.page1.modules.length}
+                                      </span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditorTab('common');
+                                        setCommonStep(2);
+                                      }}
+                                      className="text-[11px] font-semibold text-[#0D9488] hover:underline whitespace-nowrap shrink-0"
+                                    >
+                                      К группе →
+                                    </button>
+                                  </div>
+
+                                  {activeDoc.page1.modules.length === 0 ? (
+                                    <div className="py-3 text-[11px] text-zinc-500">
+                                      В журнале пока нет модулей. Выберите их в{' '}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditorTab('common');
+                                          setCommonStep(2);
+                                        }}
+                                        className="font-semibold text-[#0D9488] hover:underline"
+                                      >
+                                        «Общих данных группы»
+                                      </button>{' '}
+                                      или добавьте индивидуально ниже.
+                                    </div>
+                                  ) : (
+                                    <div className="divide-y divide-zinc-100">
+                                      {activeDoc.page1.modules.map((mod) => {
+                                        const visible = !mod.hidden;
+                                        return (
+                                          <div
+                                            key={mod.id}
+                                            className={`group py-2 px-1.5 -mx-1.5 rounded-md hover:bg-zinc-50 transition-colors ${
+                                              visible ? '' : 'opacity-60'
+                                            }`}
+                                          >
+                                            <div className="flex items-start justify-between gap-2">
+                                              <label className="flex items-start gap-2 cursor-pointer min-w-0 flex-1">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={visible}
+                                                  onChange={() =>
+                                                    handleToggleStudentModule(
+                                                      mod.id
+                                                    )
+                                                  }
+                                                  className="mt-0.5 rounded border-zinc-300 text-[#0D9488] shrink-0"
+                                                />
+                                                <div className="min-w-0">
+                                                  <div
+                                                    className={`text-[11px] font-semibold leading-tight truncate ${
+                                                      visible
+                                                        ? 'text-zinc-900'
+                                                        : 'line-through text-zinc-500'
+                                                    }`}
+                                                  >
+                                                    {mod.title}
+                                                  </div>
+                                                  <div className="text-[10px] text-zinc-500 flex items-center gap-1.5 mt-0.5">
+                                                    <span
+                                                      className={
+                                                        mod.isIndividual
+                                                          ? 'text-[#0F766E] font-semibold'
+                                                          : 'text-zinc-400'
+                                                      }
+                                                    >
+                                                      {mod.isIndividual
+                                                        ? 'Индивидуальный'
+                                                        : 'Из группы'}
+                                                    </span>
+                                                    {mod.subtitle && (
+                                                      <>
+                                                        <span aria-hidden="true">
+                                                          ·
+                                                        </span>
+                                                        <span className="truncate">
+                                                          {mod.subtitle}
+                                                        </span>
+                                                      </>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              </label>
+
+                                              {/* Hover-revealed Detach / Delete Control */}
+                                              <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                                {mod.isIndividual ? (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                      setConfirmDeleteIndModId(
+                                                        mod.id
+                                                      )
+                                                    }
+                                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-50 text-red-600 hover:bg-red-100 text-[10px] font-medium"
+                                                    title="Удалить индивидуальный модуль"
+                                                  >
+                                                    <Trash2 className="w-3 h-3" />
+                                                    <span>Открепить</span>
+                                                  </button>
+                                                ) : (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                      handleToggleStudentModule(
+                                                        mod.id
+                                                      )
+                                                    }
+                                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                                      visible
+                                                        ? 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900'
+                                                        : 'bg-[#F0FDFA] text-[#0F766E] hover:bg-[#CCFBF1]'
+                                                    }`}
+                                                    title={
+                                                      visible
+                                                        ? 'Открепить модуль от этого ученика'
+                                                        : 'Вернуть модуль в лист ученика'
+                                                    }
+                                                  >
+                                                    {visible ? (
+                                                      <>
+                                                        <EyeOff className="w-3 h-3" />
+                                                        <span>Открепить</span>
+                                                      </>
+                                                    ) : (
+                                                      <>
+                                                        <Eye className="w-3 h-3" />
+                                                        <span>Вернуть</span>
+                                                      </>
+                                                    )}
+                                                  </button>
+                                                )}
+                                              </div>
+                                            </div>
+                                            {confirmDeleteIndModId ===
+                                              mod.id && (
+                                              <div className="mt-1.5 pt-1.5 border-t border-red-200/70 flex items-center justify-between gap-2">
+                                                <span className="text-[10px] font-semibold text-red-700">
+                                                  Удалить?
+                                                </span>
+                                                <div className="flex gap-1.5">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      handleRemoveIndividualModule(
+                                                        mod.id
+                                                      );
+                                                      setConfirmDeleteIndModId(
+                                                        null
+                                                      );
+                                                    }}
+                                                    className="px-1.5 py-0.5 rounded bg-red-600 text-white text-[10px] font-semibold"
+                                                  >
+                                                    Да
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                      setConfirmDeleteIndModId(
+                                                        null
+                                                      )
+                                                    }
+                                                    className="px-1.5 py-0.5 text-zinc-600 text-[10px]"
+                                                  >
+                                                    Отмена
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+
+                                  {/* Add Individual Module Button & Inline Picker */}
+                                  {!individualModPickerOpen ? (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setIndividualModPickerOpen(true)
+                                      }
+                                      className="w-full inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-md bg-[#F4F4F5] border border-dashed border-zinc-300 hover:border-[#0D9488] hover:bg-[#F0FDFA] text-[#0F766E] text-[11px] font-semibold transition-colors"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      <span>
+                                        Добавить индивидуальный модуль
+                                      </span>
+                                    </button>
+                                  ) : (
+                                    <div className="pt-3 border-t border-[#0D9488]/30 space-y-2.5">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-[11px] font-bold text-[#0F766E]">
+                                          Добавить только этому ученику
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setIndividualModPickerOpen(false)
+                                          }
+                                          className="text-zinc-400 hover:text-zinc-900"
+                                        >
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+
+                                      <div className="relative">
+                                        <Search className="w-3 h-3 text-zinc-400 absolute left-2 top-1/2 -translate-y-1/2" />
+                                        <input
+                                          type="text"
+                                          value={individualModSearch}
+                                          onChange={(e) =>
+                                            setIndividualModSearch(
+                                              e.target.value
+                                            )
+                                          }
+                                          placeholder="Найти в библиотеке..."
+                                          className="w-full bg-zinc-50 border border-zinc-200 rounded-md pl-7 pr-2 py-1.5 text-[11px] focus:outline-none focus:bg-white focus:border-[#0D9488]"
+                                        />
+                                      </div>
+
+                                      <div className="max-h-32 overflow-y-auto divide-y divide-zinc-100 pr-0.5">
+                                        {filteredIndividualCatalog
+                                          .slice(0, 12)
+                                          .map((lib) => (
+                                            <button
+                                              key={lib.id}
+                                              type="button"
+                                              onClick={() =>
+                                                handleAddIndividualModuleFromLib(
+                                                  lib
+                                                )
+                                              }
+                                              className="w-full text-left py-1.5 px-1 hover:bg-[#F0FDFA] flex items-center justify-between gap-2"
+                                            >
+                                              <span className="text-[11px] font-semibold text-zinc-900 truncate">
+                                                {lib.displayTitle || lib.title}
+                                              </span>
+                                              <Plus className="w-3 h-3 text-[#0D9488] shrink-0" />
+                                            </button>
+                                          ))}
+                                      </div>
+
+                                      <div className="pt-2 border-t border-zinc-100 space-y-2">
+                                        <input
+                                          type="text"
+                                          value={customIndividualModTitle}
+                                          onChange={(e) =>
+                                            setCustomIndividualModTitle(
+                                              e.target.value
+                                            )
+                                          }
+                                          placeholder="Или свой модуль (название)..."
+                                          className="w-full bg-zinc-50 border border-zinc-200 rounded-md px-2.5 py-1.5 text-[11px] focus:outline-none focus:bg-white focus:border-[#0D9488]"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                          <input
+                                            type="text"
+                                            value={customIndividualModSub}
+                                            onChange={(e) =>
+                                              setCustomIndividualModSub(
+                                                e.target.value
+                                              )
+                                            }
+                                            placeholder="Подзаголовок..."
+                                            className="flex-1 bg-zinc-50 border border-zinc-200 rounded-md px-2.5 py-1.5 text-[11px] focus:outline-none focus:bg-white focus:border-[#0D9488]"
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={
+                                              handleAddCustomIndividualModule
+                                            }
+                                            disabled={
+                                              !customIndividualModTitle.trim()
+                                            }
+                                            className="px-2.5 py-1.5 rounded-md bg-[#0D9488] text-white text-[11px] font-semibold disabled:opacity-45"
+                                          >
+                                            Ок
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Skills Section Container */}
+                                <div className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3">
+                                  <div className="flex items-center justify-between pb-2 border-b border-zinc-100">
+                                    <span className="text-[11px] font-bold text-zinc-800">
+                                      Навыки (Чему я научился)
+                                    </span>
+                                    <span className="text-[10px] text-zinc-400 tabular-nums">
+                                      {
+                                        activeDoc.page1.skills.filter(
+                                          (s) => !s.hidden
+                                        ).length
+                                      }{' '}
+                                      из {activeDoc.page1.skills.length}
+                                    </span>
+                                  </div>
+
+                                  {activeDoc.page1.skills.length > 0 && (
+                                    <div className="divide-y divide-zinc-100 max-h-44 overflow-y-auto pr-0.5">
+                                      {activeDoc.page1.skills.map((sk) => {
+                                        const visible = !sk.hidden;
+                                        return (
+                                          <div key={sk.id} className="py-1.5">
+                                            <div className="flex items-center justify-between gap-2">
+                                              <label className="flex items-center gap-2 cursor-pointer min-w-0 flex-1">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={visible}
+                                                  onChange={() =>
+                                                    handleToggleStudentSkill(
+                                                      sk.id
+                                                    )
+                                                  }
+                                                  className="rounded border-zinc-300 text-[#0D9488] shrink-0"
+                                                />
+                                                <span
+                                                  className={`text-[11px] truncate ${
+                                                    visible
+                                                      ? 'text-zinc-800 font-medium'
+                                                      : 'line-through text-zinc-400'
+                                                  }`}
+                                                >
+                                                  {sk.label}
+                                                </span>
+                                              </label>
+                                              {sk.isIndividual && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    setConfirmDeleteIndSkillId(
+                                                      sk.id
+                                                    )
+                                                  }
+                                                  className="text-zinc-400 hover:text-red-600 shrink-0"
+                                                  title="Удалить индивидуальный навык"
+                                                >
+                                                  <Trash2 className="w-3 h-3" />
+                                                </button>
+                                              )}
+                                            </div>
+                                            {confirmDeleteIndSkillId ===
+                                              sk.id && (
+                                              <div className="mt-1 pt-1 border-t border-red-200/70 flex items-center justify-between gap-2">
+                                                <span className="text-[10px] font-semibold text-red-700">
+                                                  Удалить?
+                                                </span>
+                                                <div className="flex gap-1.5">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      handleRemoveIndividualSkill(
+                                                        sk.id
+                                                      );
+                                                      setConfirmDeleteIndSkillId(
+                                                        null
+                                                      );
+                                                    }}
+                                                    className="px-1.5 py-0.5 rounded bg-red-600 text-white text-[10px] font-semibold"
+                                                  >
+                                                    Да
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                      setConfirmDeleteIndSkillId(
+                                                        null
+                                                      )
+                                                    }
+                                                    className="px-1.5 py-0.5 text-zinc-600 text-[10px]"
+                                                  >
+                                                    Отмена
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+
+                                  <div className="p-2 rounded-md bg-[#F4F4F5] border border-dashed border-zinc-300 flex items-center gap-2">
+                                    <div className="relative flex-1 flex items-center">
+                                      <Plus className="w-3.5 h-3.5 text-[#0D9488] absolute left-2 pointer-events-none" />
+                                      <input
+                                        type="text"
+                                        value={newIndividualSkill}
+                                        onChange={(e) =>
+                                          setNewIndividualSkill(e.target.value)
+                                        }
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleAddIndividualSkill();
+                                          }
+                                        }}
+                                        placeholder="Индивидуальный навык..."
+                                        className="w-full bg-white border border-zinc-200 rounded pl-7 pr-2 py-1 text-[11px] focus:outline-none focus:border-[#0D9488]"
+                                      />
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={handleAddIndividualSkill}
+                                      disabled={!newIndividualSkill.trim()}
+                                      className="px-2.5 py-1 rounded bg-[#0D9488] hover:bg-[#0F766E] text-white text-[11px] font-semibold disabled:opacity-45 shrink-0"
+                                    >
+                                      Добавить
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* STEP 3: ПРОЕКТЫ */}
+                            {activeInspectorStep === 'projects' && (
+                              <div className="space-y-3">
+                                {activeDoc.page1.projects.length === 0 ? (
+                                  <div className="bg-white border border-dashed border-zinc-300 rounded-lg py-6 px-4 text-center space-y-2.5">
+                                    <p className="text-[11px] text-zinc-500">
+                                      Проекты ещё не добавлены.
+                                    </p>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nextProj: ProjectItem = {
+                                          id: `proj-${Date.now()}`,
+                                          title: 'Новый проект',
+                                          caption: 'Подпись проекта',
+                                          description:
+                                            'Что было реализовано на занятии.',
+                                          fallbackTheme: 'python',
+                                          isRealScreenshot: false,
+                                        };
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page1: {
+                                            ...activeDoc.page1,
+                                            showProjects: true,
+                                            projects: [
+                                              ...activeDoc.page1.projects,
+                                              nextProj,
+                                            ],
+                                          },
+                                        });
+                                      }}
+                                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[11px] font-semibold"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      <span>Добавить первый проект</span>
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-3">
+                                    {activeDoc.page1.projects.map(
+                                      (proj, idx) => (
+                                        <div
+                                          key={proj.id}
+                                          className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-2.5"
+                                        >
+                                          <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-zinc-100">
+                                            <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                                              Проект #{idx + 1}
+                                            </span>
+                                            {confirmDeleteProjectId ===
+                                            proj.id ? (
+                                              <div className="inline-flex items-center gap-1.5">
+                                                <span className="text-[10px] font-semibold text-red-700">
+                                                  Удалить?
+                                                </span>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    onChangeJournal({
+                                                      ...activeDoc,
+                                                      page1: {
+                                                        ...activeDoc.page1,
+                                                        projects:
+                                                          activeDoc.page1.projects.filter(
+                                                            (p) =>
+                                                              p.id !== proj.id
+                                                          ),
+                                                      },
+                                                    });
+                                                    setConfirmDeleteProjectId(
+                                                      null
+                                                    );
+                                                  }}
+                                                  className="px-1.5 py-0.5 rounded bg-red-600 text-white text-[10px] font-semibold"
+                                                >
+                                                  Да
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    setConfirmDeleteProjectId(
+                                                      null
+                                                    )
+                                                  }
+                                                  className="px-1.5 py-0.5 text-zinc-600 text-[10px]"
+                                                >
+                                                  Отмена
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  setConfirmDeleteProjectId(
+                                                    proj.id
+                                                  )
+                                                }
+                                                className="text-zinc-400 hover:text-red-600 transition-colors"
+                                                title="Удалить проект"
+                                              >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                              </button>
+                                            )}
+                                          </div>
+
+                                          {/* Clear Typographic Hierarchy: Title -> Caption -> Description */}
+                                          <div className="space-y-2">
+                                            <input
+                                              type="text"
+                                              value={proj.title}
+                                              onChange={(e) =>
+                                                onChangeJournal({
+                                                  ...activeDoc,
+                                                  page1: {
+                                                    ...activeDoc.page1,
+                                                    projects:
+                                                      activeDoc.page1.projects.map(
+                                                        (p) =>
+                                                          p.id === proj.id
+                                                            ? {
+                                                                ...p,
+                                                                title:
+                                                                  e.target
+                                                                    .value,
+                                                              }
+                                                            : p
+                                                      ),
+                                                  },
+                                                })
+                                              }
+                                              placeholder="Название проекта"
+                                              className="w-full bg-transparent border-0 border-b border-zinc-200 px-0 py-1 text-sm font-bold text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-[#0D9488]"
+                                            />
+
+                                            <input
+                                              type="text"
+                                              value={proj.caption}
+                                              onChange={(e) =>
+                                                onChangeJournal({
+                                                  ...activeDoc,
+                                                  page1: {
+                                                    ...activeDoc.page1,
+                                                    projects:
+                                                      activeDoc.page1.projects.map(
+                                                        (p) =>
+                                                          p.id === proj.id
+                                                            ? {
+                                                                ...p,
+                                                                caption:
+                                                                  e.target
+                                                                    .value,
+                                                              }
+                                                            : p
+                                                      ),
+                                                  },
+                                                })
+                                              }
+                                              placeholder="Подпись (например: Игра в Kodu)"
+                                              className="w-full bg-transparent border-0 border-b border-zinc-100 px-0 py-0.5 text-[11px] font-medium text-zinc-500 placeholder:text-zinc-400 focus:outline-none focus:border-[#0D9488]"
+                                            />
+
+                                            <textarea
+                                              rows={2}
+                                              value={proj.description}
+                                              onChange={(e) =>
+                                                onChangeJournal({
+                                                  ...activeDoc,
+                                                  page1: {
+                                                    ...activeDoc.page1,
+                                                    projects:
+                                                      activeDoc.page1.projects.map(
+                                                        (p) =>
+                                                          p.id === proj.id
+                                                            ? {
+                                                                ...p,
+                                                                description:
+                                                                  e.target
+                                                                    .value,
+                                                              }
+                                                            : p
+                                                      ),
+                                                  },
+                                                })
+                                              }
+                                              placeholder="Короткое описание..."
+                                              className="w-full bg-zinc-50/70 border border-zinc-200/80 rounded-md px-2.5 py-1.5 text-xs text-zinc-700 leading-relaxed placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-[#0D9488] resize-none"
+                                            />
+                                          </div>
+
+                                          {/* Unified Bottom Screenshot Upload Zone */}
+                                          <div className="pt-2 border-t border-zinc-100 space-y-2">
+                                            {proj.imageUrl && (
+                                              <div className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-[#F0FDFA] border border-[#CCFBF1] text-[10px] text-[#0F766E]">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                  <img
+                                                    src={proj.imageUrl}
+                                                    alt={proj.title}
+                                                    className="w-5 h-5 rounded object-cover border border-teal-200 shrink-0"
+                                                  />
+                                                  <span className="font-medium truncate">
+                                                    Скриншот загружен
+                                                  </span>
+                                                </div>
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    onChangeJournal({
+                                                      ...activeDoc,
+                                                      page1: {
+                                                        ...activeDoc.page1,
+                                                        projects:
+                                                          activeDoc.page1.projects.map(
+                                                            (p) =>
+                                                              p.id === proj.id
+                                                                ? {
+                                                                    ...p,
+                                                                    imageUrl:
+                                                                      undefined,
+                                                                    isRealScreenshot:
+                                                                      false,
+                                                                  }
+                                                                : p
+                                                          ),
+                                                      },
+                                                    })
+                                                  }
+                                                  className="text-zinc-400 hover:text-red-600 shrink-0"
+                                                  title="Убрать скриншот"
+                                                >
+                                                  <X className="w-3 h-3" />
+                                                </button>
+                                              </div>
+                                            )}
+
+                                            <div className="flex items-stretch rounded-lg border border-zinc-200 overflow-hidden divide-x divide-zinc-200">
+                                              <label className="flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-2 bg-[#0D9488] hover:bg-[#0F766E] text-white text-[11px] font-semibold cursor-pointer transition-colors whitespace-nowrap">
+                                                <Upload className="w-3 h-3 shrink-0" />
+                                                <span>Загрузить скриншот</span>
+                                                <input
+                                                  type="file"
+                                                  accept="image/png,image/jpeg,image/webp"
+                                                  className="hidden"
+                                                  onChange={(e) =>
+                                                    handleUploadImage(
+                                                      e.target.files?.[0],
+                                                      (url) =>
+                                                        onChangeJournal({
+                                                          ...activeDoc,
+                                                          page1: {
+                                                            ...activeDoc.page1,
+                                                            projects:
+                                                              activeDoc.page1.projects.map(
+                                                                (p) =>
+                                                                  p.id ===
+                                                                  proj.id
+                                                                    ? {
+                                                                        ...p,
+                                                                        imageUrl:
+                                                                          url,
+                                                                        isRealScreenshot:
+                                                                          true,
+                                                                      }
+                                                                    : p
+                                                              ),
+                                                          },
+                                                        })
+                                                    )
+                                                  }
+                                                />
+                                              </label>
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  onOpenMediaPicker(
+                                                    'projects',
+                                                    (url) =>
+                                                      onChangeJournal({
+                                                        ...activeDoc,
+                                                        page1: {
+                                                          ...activeDoc.page1,
+                                                          projects:
+                                                            activeDoc.page1.projects.map(
+                                                              (p) =>
+                                                                p.id === proj.id
+                                                                  ? {
+                                                                      ...p,
+                                                                      imageUrl:
+                                                                        url,
+                                                                      isRealScreenshot:
+                                                                        true,
+                                                                    }
+                                                                  : p
+                                                            ),
+                                                        },
+                                                      })
+                                                  )
+                                                }
+                                                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-zinc-50 text-zinc-700 text-[11px] font-medium transition-colors whitespace-nowrap shrink-0"
+                                                title="Выбрать из медиатеки"
+                                              >
+                                                <ImageIcon className="w-3.5 h-3.5 text-zinc-500" />
+                                                <span>Медиатека</span>
+                                              </button>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* STEP 4: ДОСТИЖЕНИЯ */}
+                            {activeInspectorStep === 'pride' && (
+                              <div className="space-y-4">
+                                {/* Pride Moment Card */}
+                                <div className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-2.5">
+                                  <div className="pb-1.5 border-b border-zinc-100">
+                                    <span className="text-[11px] font-bold text-zinc-800 block">
+                                      Момент гордости ученика
+                                    </span>
+                                  </div>
+                                  <textarea
+                                    rows={3}
+                                    value={activeDoc.page2.prideText}
+                                    onChange={(e) =>
+                                      onChangeJournal({
+                                        ...activeDoc,
+                                        page2: {
+                                          ...activeDoc.page2,
+                                          showPride: true,
+                                          prideText: e.target.value,
+                                        },
+                                      })
+                                    }
+                                    placeholder="Чем ученик может гордиться по итогам периода?"
+                                    className="w-full p-3 rounded-lg border border-zinc-200 bg-zinc-50/60 text-xs text-zinc-800 leading-relaxed placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/15 resize-none transition-colors"
+                                  />
+                                </div>
+
+                                {/* Strengths Card */}
+                                <div className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3">
+                                  <div className="flex items-center justify-between pb-1.5 border-b border-zinc-100">
+                                    <span className="text-[11px] font-bold text-zinc-800">
+                                      Сильные стороны
+                                    </span>
+                                    <span className="text-[10px] font-semibold text-[#0F766E] tabular-nums">
+                                      Выбрано:{' '}
+                                      {activeDoc.page2.strengths.length}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {STRENGTH_LIBRARY.map((preset) => {
+                                      const exists =
+                                        activeDoc.page2.strengths.some(
+                                          (s) => s.title === preset.title
+                                        );
+                                      return (
+                                        <button
+                                          key={preset.title}
+                                          type="button"
+                                          onClick={() => {
+                                            if (exists) {
+                                              onChangeJournal({
+                                                ...activeDoc,
+                                                page2: {
+                                                  ...activeDoc.page2,
+                                                  strengths:
+                                                    activeDoc.page2.strengths.filter(
+                                                      (s) =>
+                                                        s.title !== preset.title
+                                                    ),
+                                                },
+                                              });
+                                            } else {
+                                              const nextStr: StrengthItem = {
+                                                id: `str-${Date.now()}`,
+                                                title: preset.title,
+                                                example: preset.defaultExample,
+                                                iconKey: preset.iconKey,
+                                                bgColor: preset.bgColor,
+                                              };
+                                              onChangeJournal({
+                                                ...activeDoc,
+                                                page2: {
+                                                  ...activeDoc.page2,
+                                                  showStrengths: true,
+                                                  strengths: [
+                                                    ...activeDoc.page2
+                                                      .strengths,
+                                                    nextStr,
+                                                  ],
+                                                },
+                                              });
+                                            }
+                                          }}
+                                          className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border text-[11px] font-medium transition-colors ${
+                                            exists
+                                              ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-[0_1px_2px_rgba(13,148,136,0.18)]'
+                                              : 'bg-white text-zinc-700 border-zinc-200 hover:border-[#0D9488] hover:text-zinc-900'
+                                          }`}
+                                        >
+                                          {exists && (
+                                            <Check className="w-3 h-3 shrink-0" />
+                                          )}
+                                          <span>{preset.title}</span>
+                                        </button>
+                                      );
+                                    })}
+                                    {activeDoc.page2.strengths
+                                      .filter(
+                                        (s) =>
+                                          !STRENGTH_LIBRARY.some(
+                                            (p) => p.title === s.title
+                                          )
+                                      )
+                                      .map((customStr) => (
+                                        <button
+                                          key={customStr.id}
+                                          type="button"
+                                          onClick={() =>
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page2: {
+                                                ...activeDoc.page2,
+                                                strengths:
+                                                  activeDoc.page2.strengths.filter(
+                                                    (s) => s.id !== customStr.id
+                                                  ),
+                                              },
+                                            })
+                                          }
+                                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border bg-[#0D9488] text-white border-[#0D9488] shadow-[0_1px_2px_rgba(13,148,136,0.18)] text-[11px] font-medium"
+                                          title="Нажмите, чтобы убрать"
+                                        >
+                                          <Check className="w-3 h-3 shrink-0" />
+                                          <span>{customStr.title}</span>
+                                        </button>
+                                      ))}
+                                  </div>
+
+                                  <div className="p-2 rounded-md bg-[#F4F4F5] border border-dashed border-zinc-300 flex items-center gap-2">
+                                    <div className="relative flex-1 flex items-center">
+                                      <Plus className="w-3.5 h-3.5 text-[#0D9488] absolute left-2 pointer-events-none" />
+                                      <input
+                                        type="text"
+                                        value={newStrengthTitle}
+                                        onChange={(e) =>
+                                          setNewStrengthTitle(e.target.value)
+                                        }
+                                        onKeyDown={(e) => {
+                                          if (
+                                            e.key === 'Enter' &&
+                                            newStrengthTitle.trim()
+                                          ) {
+                                            e.preventDefault();
+                                            const nextStr: StrengthItem = {
+                                              id: `str-custom-${Date.now()}`,
+                                              title: newStrengthTitle.trim(),
+                                              example:
+                                                'Ярко проявил себя на практических заданиях.',
+                                              iconKey: 'creativity',
+                                              bgColor: '#B8F2F5',
+                                            };
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page2: {
+                                                ...activeDoc.page2,
+                                                showStrengths: true,
+                                                strengths: [
+                                                  ...activeDoc.page2.strengths,
+                                                  nextStr,
+                                                ],
+                                              },
+                                            });
+                                            setNewStrengthTitle('');
+                                          }
+                                        }}
+                                        placeholder="Своя сильная сторона..."
+                                        className="w-full bg-white border border-zinc-200 rounded pl-7 pr-2 py-1 text-[11px] focus:outline-none focus:border-[#0D9488]"
+                                      />
+                                    </div>
+                                    <button
+                                      type="button"
+                                      disabled={!newStrengthTitle.trim()}
+                                      onClick={() => {
+                                        if (!newStrengthTitle.trim()) return;
                                         const nextStr: StrengthItem = {
-                                          id: `str-${Date.now()}`,
-                                          title: preset.title,
-                                          example: preset.defaultExample,
-                                          iconKey: preset.iconKey,
-                                          bgColor: preset.bgColor,
+                                          id: `str-custom-${Date.now()}`,
+                                          title: newStrengthTitle.trim(),
+                                          example:
+                                            'Ярко проявил себя на практических заданиях.',
+                                          iconKey: 'creativity',
+                                          bgColor: '#B8F2F5',
                                         };
                                         onChangeJournal({
                                           ...activeDoc,
@@ -1960,286 +4577,886 @@ export function GroupEditorView({
                                             ],
                                           },
                                         });
-                                      }
-                                    }}
-                                    className={`px-2 py-1 rounded-lg border text-[11px] font-medium transition-colors ${
-                                      exists
-                                        ? 'bg-[#0D9488] text-white border-[#0D9488]'
-                                        : 'bg-white text-zinc-700 border-zinc-200'
-                                    }`}
-                                  >
-                                    {preset.title}
-                                  </button>
-                                );
-                              })}
-                            </div>
-
-                            <div className="flex gap-1.5">
-                              <input
-                                type="text"
-                                value={newStrengthTitle}
-                                onChange={(e) => setNewStrengthTitle(e.target.value)}
-                                placeholder="Своя сильная сторона..."
-                                className="flex-1 rounded-lg border border-zinc-200 px-2.5 py-1.5"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (!newStrengthTitle.trim()) return;
-                                  const nextStr: StrengthItem = {
-                                    id: `str-custom-${Date.now()}`,
-                                    title: newStrengthTitle.trim(),
-                                    example: 'Ярко проявил себя на практических заданиях.',
-                                    iconKey: 'creativity',
-                                    bgColor: '#B8F2F5',
-                                  };
-                                  onChangeJournal({
-                                    ...activeDoc,
-                                    page2: {
-                                      ...activeDoc.page2,
-                                      showStrengths: true,
-                                      strengths: [
-                                        ...activeDoc.page2.strengths,
-                                        nextStr,
-                                      ],
-                                    },
-                                  });
-                                  setNewStrengthTitle('');
-                                }}
-                                className="px-3 py-1.5 rounded-lg bg-zinc-900 text-white font-semibold"
-                              >
-                                +
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {activeSection === 'mentorNote' && (
-                        <div className="space-y-3">
-                          <label className="block">
-                            <span className="font-semibold text-zinc-700">
-                              Заметки/наблюдения наставника (для AI)
-                            </span>
-                            <textarea
-                              rows={2}
-                              value={activeDoc.page2.mentorNote.observationsDraft}
-                              onChange={(e) =>
-                                onChangeJournal({
-                                  ...activeDoc,
-                                  page2: {
-                                    ...activeDoc.page2,
-                                    mentorNote: {
-                                      ...activeDoc.page2.mentorNote,
-                                      observationsDraft: e.target.value,
-                                    },
-                                  },
-                                })
-                              }
-                              placeholder="Короткие факты: помог группе, разобрался в циклах..."
-                              className="mt-1 w-full rounded-lg border border-zinc-200 px-2.5 py-1.5"
-                            />
-                          </label>
-
-                          <button
-                            type="button"
-                            disabled={aiBusy}
-                            onClick={handleGenerateAiMentorNote}
-                            className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white font-semibold disabled:opacity-60"
-                          >
-                            {aiBusy ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Sparkles className="w-3.5 h-3.5" />
+                                        setNewStrengthTitle('');
+                                      }}
+                                      className="px-2.5 py-1 rounded bg-[#0D9488] hover:bg-[#0F766E] text-white text-[11px] font-semibold disabled:opacity-45 shrink-0"
+                                    >
+                                      Добавить
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
                             )}
-                            <span>
-                              {aiBusy
-                                ? 'Формулируем обращение...'
-                                : 'Сгенерировать тёплое письмо (AI)'}
-                            </span>
-                          </button>
 
-                          {aiError && (
-                            <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
-                              {aiError}
-                            </div>
-                          )}
+                            {/* STEP 5: СЛОВО НАСТАВНИКА */}
+                            {activeInspectorStep === 'mentorNote' && (
+                              <div className="space-y-4">
+                                {/* Card 1: AI Generation Zone */}
+                                <div className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3">
+                                  <div className="flex items-center gap-1.5 pb-1.5 border-b border-zinc-100">
+                                    <Sparkles className="w-3.5 h-3.5 text-[#0D9488]" />
+                                    <span className="text-[11px] font-bold text-zinc-800">
+                                      AI-генерация письма
+                                    </span>
+                                  </div>
 
-                          <div className="flex flex-wrap gap-1">
-                            {MENTOR_NOTE_TEMPLATES.map((tpl) => (
-                              <button
-                                key={tpl.id}
-                                type="button"
-                                onClick={() =>
-                                  onChangeJournal({
-                                    ...activeDoc,
-                                    page2: {
-                                      ...activeDoc.page2,
-                                      mentorNote: {
-                                        ...activeDoc.page2.mentorNote,
-                                        greeting: `${
-                                          activeDoc.resident.fullName.split(' ')[0]
-                                        }, ${tpl.greeting.toLowerCase()}`,
-                                        body: tpl.body,
-                                        signature: `Твой наставник, ${
-                                          activeDoc.resident.mentorName.split(' ')[0]
-                                        }`,
-                                      },
-                                    },
-                                  })
-                                }
-                                className="px-2 py-1 rounded border border-zinc-200 bg-[#F9F9F7] hover:bg-zinc-100 text-[10px] font-medium"
-                              >
-                                {tpl.title}
-                              </button>
-                            ))}
+                                  <label className="block">
+                                    <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
+                                      Наблюдения наставника
+                                    </span>
+                                    <textarea
+                                      rows={2}
+                                      value={
+                                        activeDoc.page2.mentorNote
+                                          .observationsDraft
+                                      }
+                                      onChange={(e) =>
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page2: {
+                                            ...activeDoc.page2,
+                                            mentorNote: {
+                                              ...activeDoc.page2.mentorNote,
+                                              observationsDraft: e.target.value,
+                                            },
+                                          },
+                                        })
+                                      }
+                                      placeholder="Факты: помог группе, разобрался в циклах..."
+                                      className="w-full p-2.5 rounded-md border border-zinc-200 bg-zinc-50/60 text-xs text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/15 resize-none"
+                                    />
+                                  </label>
+
+                                  <button
+                                    type="button"
+                                    disabled={aiBusy}
+                                    onClick={handleGenerateAiMentorNote}
+                                    className="w-full inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg bg-gradient-to-r from-[#0D9488] to-[#0F766E] hover:from-[#0F766E] hover:to-[#115E59] text-white text-xs font-bold shadow-sm transition-all disabled:opacity-60"
+                                  >
+                                    {aiBusy ? (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                      <Sparkles className="w-3.5 h-3.5" />
+                                    )}
+                                    <span>
+                                      {aiBusy
+                                        ? 'Формулируем письмо...'
+                                        : 'Сгенерировать тёплое письмо (AI)'}
+                                    </span>
+                                  </button>
+
+                                  {aiError && (
+                                    <div className="p-2 rounded bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
+                                      {aiError}
+                                    </div>
+                                  )}
+
+                                  <div className="pt-1 space-y-1.5">
+                                    <span className="text-[10px] font-medium text-zinc-400 block">
+                                      Быстрые шаблоны:
+                                    </span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {MENTOR_NOTE_TEMPLATES.map((tpl) => (
+                                        <button
+                                          key={tpl.id}
+                                          type="button"
+                                          onClick={() =>
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page2: {
+                                                ...activeDoc.page2,
+                                                mentorNote: {
+                                                  ...activeDoc.page2.mentorNote,
+                                                  greeting: `${
+                                                    activeDoc.resident.fullName.split(
+                                                      ' '
+                                                    )[0]
+                                                  }, ${tpl.greeting.toLowerCase()}`,
+                                                  body: tpl.body,
+                                                  signature: `Твой наставник, ${
+                                                    activeDoc.resident.mentorName.split(
+                                                      ' '
+                                                    )[0]
+                                                  }`,
+                                                },
+                                              },
+                                            })
+                                          }
+                                          className="px-2 py-1 rounded border border-zinc-200 bg-white hover:border-[#0D9488] hover:text-[#0F766E] text-[10px] font-medium text-zinc-700 transition-colors"
+                                        >
+                                          {tpl.title}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Card 2: Unified Letter Container */}
+                                <div className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3">
+                                  <div className="pb-1.5 border-b border-zinc-100">
+                                    <span className="text-[11px] font-bold text-zinc-800">
+                                      Письмо ученику
+                                    </span>
+                                  </div>
+
+                                  <label className="block">
+                                    <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
+                                      Приветствие
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={
+                                        activeDoc.page2.mentorNote.greeting
+                                      }
+                                      onChange={(e) =>
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page2: {
+                                            ...activeDoc.page2,
+                                            mentorNote: {
+                                              ...activeDoc.page2.mentorNote,
+                                              greeting: e.target.value,
+                                            },
+                                          },
+                                        })
+                                      }
+                                      placeholder="Саша, ты отлично поработал!"
+                                      className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs font-semibold text-zinc-900 focus:outline-none focus:bg-white focus:border-[#0D9488]"
+                                    />
+                                  </label>
+
+                                  <label className="block">
+                                    <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
+                                      Основной текст
+                                    </span>
+                                    <textarea
+                                      rows={4}
+                                      value={activeDoc.page2.mentorNote.body}
+                                      onChange={(e) =>
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page2: {
+                                            ...activeDoc.page2,
+                                            mentorNote: {
+                                              ...activeDoc.page2.mentorNote,
+                                              body: e.target.value,
+                                            },
+                                          },
+                                        })
+                                      }
+                                      placeholder="Личный отзыв наставника..."
+                                      className="w-full p-2.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-800 leading-relaxed focus:outline-none focus:bg-white focus:border-[#0D9488] resize-none"
+                                    />
+                                  </label>
+
+                                  <label className="block">
+                                    <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
+                                      Подпись
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={
+                                        activeDoc.page2.mentorNote.signature
+                                      }
+                                      onChange={(e) =>
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page2: {
+                                            ...activeDoc.page2,
+                                            mentorNote: {
+                                              ...activeDoc.page2.mentorNote,
+                                              signature: e.target.value,
+                                            },
+                                          },
+                                        })
+                                      }
+                                      className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-700 focus:outline-none focus:bg-white focus:border-[#0D9488]"
+                                    />
+                                  </label>
+                                </div>
+                              </div>
+                            )}
                           </div>
+                        </>
+                      );
+                    })()
+                  )}
+                </aside>
+            </>
+            )}
+          </>
+        )}
+      </div>
 
-                          <label className="block">
-                            <span className="font-semibold text-zinc-700">
-                              Приветствие
-                            </span>
-                            <input
-                              type="text"
-                              value={activeDoc.page2.mentorNote.greeting}
-                              onChange={(e) =>
-                                onChangeJournal({
-                                  ...activeDoc,
-                                  page2: {
-                                    ...activeDoc.page2,
-                                    mentorNote: {
-                                      ...activeDoc.page2.mentorNote,
-                                      greeting: e.target.value,
-                                    },
-                                  },
-                                })
-                              }
-                              placeholder="Саша, ты отлично поработал!"
-                              className="mt-1 w-full rounded-lg border border-zinc-200 px-2.5 py-1.5"
-                            />
-                          </label>
+      {/* QUICK PICKER MODAL: AGE-FILTERED MODULES */}
+      {modulesModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-zinc-900/40 backdrop-blur-[1px] flex items-center justify-center p-4"
+          onClick={() => setModulesModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-3xl max-h-[85vh] bg-white rounded-2xl border border-zinc-200 shadow-xl flex flex-col overflow-hidden text-xs"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="shrink-0 px-5 py-3.5 border-b border-zinc-200 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-zinc-900">
+                  Выбор модулей программы
+                </h3>
+                <p className="text-[11px] text-zinc-500">
+                  По умолчанию показаны модули для возраста группы ({groupDraft.ageCategory} лет)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModulesModalOpen(false)}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-                          <label className="block">
-                            <span className="font-semibold text-zinc-700">
-                              Основной текст
-                            </span>
-                            <textarea
-                              rows={4}
-                              value={activeDoc.page2.mentorNote.body}
-                              onChange={(e) =>
-                                onChangeJournal({
-                                  ...activeDoc,
-                                  page2: {
-                                    ...activeDoc.page2,
-                                    mentorNote: {
-                                      ...activeDoc.page2.mentorNote,
-                                      body: e.target.value,
-                                    },
-                                  },
-                                })
-                              }
-                              placeholder="Личный отзыв наставника..."
-                              className="mt-1 w-full rounded-lg border border-zinc-200 px-2.5 py-1.5"
-                            />
-                          </label>
+            <div className="shrink-0 px-5 py-3 border-b border-zinc-100 bg-[#FCFCFA] flex flex-col sm:flex-row gap-2">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={modalModSearch}
+                  onChange={(e) => setModalModSearch(e.target.value)}
+                  placeholder="Поиск модуля (Python, Kodu, Roblox...)"
+                  className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-zinc-200 bg-white focus:outline-none focus:border-[#0D9488]"
+                />
+              </div>
 
-                          <label className="block">
-                            <span className="font-semibold text-zinc-700">
-                              Подпись
-                            </span>
-                            <input
-                              type="text"
-                              value={activeDoc.page2.mentorNote.signature}
-                              onChange={(e) =>
-                                onChangeJournal({
-                                  ...activeDoc,
-                                  page2: {
-                                    ...activeDoc.page2,
-                                    mentorNote: {
-                                      ...activeDoc.page2.mentorNote,
-                                      signature: e.target.value,
-                                    },
-                                  },
-                                })
-                              }
-                              className="mt-1 w-full rounded-lg border border-zinc-200 px-2.5 py-1.5"
-                            />
-                          </label>
-                        </div>
-                      )}
-                    </div>
-                  </section>
+              <select
+                value={modalModCategory}
+                onChange={(e) => setModalModCategory(e.target.value)}
+                className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5"
+              >
+                <option value="all">Все категории</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.shortName}
+                  </option>
+                ))}
+              </select>
 
-                  {/* LIVE A4 PREVIEW STAGE */}
-                  <section
-                    ref={canvasStageRef}
-                    className="flex-1 overflow-auto px-6 py-5 flex flex-col items-center justify-start bg-[#F2F2EE]"
-                  >
-                    <div className="mb-3 flex items-center gap-3 text-xs text-zinc-500">
-                      <span>
-                        Живой предпросмотр А4 · {activeDoc.resident.fullName}
-                      </span>
-                      <span className="font-mono text-[11px] text-zinc-400 tabular-nums">
-                        {Math.round(effectiveScale * 100)}%
-                      </span>
-                    </div>
+              <div className="flex items-center p-0.5 rounded-lg border border-zinc-200 bg-white shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setModalAgeFilter('group')}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                    modalAgeFilter === 'group'
+                      ? 'bg-[#0D9488] text-white'
+                      : 'text-zinc-600 hover:text-zinc-900'
+                  }`}
+                >
+                  {groupDraft.ageCategory} лет
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalAgeFilter('all')}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                    modalAgeFilter === 'all'
+                      ? 'bg-zinc-900 text-white'
+                      : 'text-zinc-600 hover:text-zinc-900'
+                  }`}
+                >
+                  Все возрасты
+                </button>
+              </div>
+            </div>
 
-                    <div
-                      style={{
-                        width: `${logicalW * effectiveScale}px`,
-                        height: `${1123 * effectiveScale}px`,
-                      }}
-                      className="relative shrink-0"
+            <div className="flex-1 min-h-0 overflow-y-auto p-5">
+              {modalFilteredModules.length === 0 ? (
+                <div className="py-12 text-center text-zinc-500 space-y-2">
+                  <p>Модули по текущему фильтру не найдены.</p>
+                  {modalAgeFilter === 'group' && (
+                    <button
+                      type="button"
+                      onClick={() => setModalAgeFilter('all')}
+                      className="text-[#0D9488] font-semibold hover:underline"
                     >
-                      <div
-                        style={{
-                          width: `${logicalW}px`,
-                          height: '1123px',
-                          transform: `scale(${effectiveScale})`,
-                          transformOrigin: 'top left',
-                        }}
-                        className={`flex items-start ${
-                          effectiveSpread ? 'gap-3' : ''
+                      Показать все возрасты
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {modalFilteredModules.map((lib) => {
+                    const checked = draftModalModuleIds.includes(lib.id);
+                    const ages = getModuleAgeCategories(lib);
+                    return (
+                      <label
+                        key={lib.id}
+                        className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
+                          checked
+                            ? 'border-[#0D9488] bg-[#F0FDFA]'
+                            : 'border-zinc-200 bg-white hover:border-zinc-300'
                         }`}
                       >
-                        {(effectiveSpread || pageFocus === 1) && (
-                          <div className="shadow-[0_18px_45px_rgba(0,0,0,0.16)] rounded-xs overflow-hidden">
-                            <JournalPageOne
-                              doc={activeDoc}
-                              mediaAssets={mediaAssets}
-                              scaleFactor={effectiveScale}
-                              onSelectTarget={handleSelectTargetOnA4}
-                            />
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() =>
+                            setDraftModalModuleIds((prev) =>
+                              prev.includes(lib.id)
+                                ? prev.filter((id) => id !== lib.id)
+                                : [...prev, lib.id]
+                            )
+                          }
+                          className="mt-0.5 rounded border-zinc-300 text-[#0D9488] shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span
+                              className={`font-bold truncate ${
+                                checked ? 'text-[#0F766E]' : 'text-zinc-900'
+                              }`}
+                            >
+                              {lib.displayTitle || lib.title}
+                            </span>
+                            {lib.code && (
+                              <span className="text-[10px] font-mono text-zinc-400 shrink-0">
+                                {lib.code}
+                              </span>
+                            )}
                           </div>
-                        )}
+                          <div className="text-[11px] text-zinc-500 truncate mt-0.5">
+                            {lib.subtitle}
+                          </div>
+                          <div className="text-[10px] text-zinc-400 mt-1">
+                            Возраст: {ages.join(', ')} лет
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
-                        {(effectiveSpread || pageFocus === 2) && (
-                          <div className="shadow-[0_18px_45px_rgba(0,0,0,0.16)] rounded-xs overflow-hidden">
-                            <JournalPageTwo
-                              doc={activeDoc}
-                              scaleFactor={effectiveScale}
-                              onSelectTarget={handleSelectTargetOnA4}
-                            />
-                          </div>
-                        )}
+            <div className="shrink-0 px-5 py-3 border-t border-zinc-200 bg-[#FCFCFA] flex items-center justify-between gap-3">
+              <span className="text-[11px] font-semibold text-zinc-600 tabular-nums">
+                Выбрано: {draftModalModuleIds.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setModulesModalOpen(false)}
+                  className="px-3.5 py-2 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 font-semibold text-zinc-700"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmModulesModal}
+                  className="px-4 py-2 rounded-lg bg-[#0F766E] hover:bg-[#0D9488] text-white font-semibold"
+                >
+                  Добавить ({draftModalModuleIds.length})
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QUICK PICKER MODAL: GROUP SKILLS */}
+      {skillsModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-zinc-900/40 backdrop-blur-[1px] flex items-center justify-center p-4"
+          onClick={() => setSkillsModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-2xl max-h-[82vh] bg-white rounded-2xl border border-zinc-200 shadow-xl flex flex-col overflow-hidden text-xs"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="shrink-0 px-5 py-3.5 border-b border-zinc-200 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-zinc-900">
+                  Выбор общих навыков группы
+                </h3>
+                <p className="text-[11px] text-zinc-500">
+                  Отметьте навыки из каталога — они отобразятся на листе А4
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSkillsModalOpen(false)}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="shrink-0 px-5 py-3 border-b border-zinc-100 bg-[#FCFCFA]">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={modalSkillSearch}
+                  onChange={(e) => setModalSkillSearch(e.target.value)}
+                  placeholder="Поиск навыка..."
+                  className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-zinc-200 bg-white focus:outline-none focus:border-[#0D9488]"
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 grid grid-cols-1 sm:grid-cols-2 gap-2 content-start">
+              {skillsCatalog
+                .filter((def) => {
+                  const q = modalSkillSearch.trim().toLowerCase();
+                  return !q || def.label.toLowerCase().includes(q);
+                })
+                .map((def) => {
+                  const checked = draftModalSkillIds.includes(def.id);
+                  const recommended = recommendedSkillDefs.some(
+                    (r) => r.id === def.id
+                  );
+                  return (
+                    <label
+                      key={def.id}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors ${
+                        checked
+                          ? 'border-[#0D9488] bg-[#F0FDFA]'
+                          : 'border-zinc-200 bg-white hover:border-zinc-300'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          setDraftModalSkillIds((prev) =>
+                            prev.includes(def.id)
+                              ? prev.filter((id) => id !== def.id)
+                              : [...prev, def.id]
+                          )
+                        }
+                        className="rounded border-zinc-300 text-[#0D9488] shrink-0"
+                      />
+                      <span
+                        className={`font-medium flex-1 truncate ${
+                          checked ? 'text-[#0F766E]' : 'text-zinc-800'
+                        }`}
+                      >
+                        {def.label}
+                      </span>
+                      {recommended && (
+                        <span className="text-[10px] font-semibold text-[#0F766E] shrink-0">
+                          Реком.
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+            </div>
+
+            <div className="shrink-0 px-5 py-3 border-t border-zinc-200 bg-[#FCFCFA] flex items-center justify-between gap-3">
+              <span className="text-[11px] font-semibold text-zinc-600 tabular-nums">
+                Выбрано: {draftModalSkillIds.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSkillsModalOpen(false)}
+                  className="px-3.5 py-2 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 font-semibold text-zinc-700"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmSkillsModal}
+                  className="px-4 py-2 rounded-lg bg-[#0F766E] hover:bg-[#0D9488] text-white font-semibold"
+                >
+                  Добавить ({draftModalSkillIds.length})
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QUICK PICKER MODAL: NEXT CHAPTER TOPICS CATALOG */}
+      {topicsModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-zinc-900/40 backdrop-blur-[1px] flex items-center justify-center p-4"
+          onClick={() => setTopicsModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-2xl max-h-[82vh] bg-white rounded-2xl border border-zinc-200 shadow-xl flex flex-col overflow-hidden text-xs"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="shrink-0 px-5 py-3.5 border-b border-zinc-200 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-zinc-900">
+                  Выбор тем следующих модулей
+                </h3>
+                <p className="text-[11px] text-zinc-500">
+                  Отметьте будущие направления (ИИ, Веб-разработка, 3D и др.) для блока «Что интересного впереди?»
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTopicsModalOpen(false)}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="shrink-0 px-5 py-3 border-b border-zinc-100 bg-[#FCFCFA]">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={modalTopicSearch}
+                  onChange={(e) => setModalTopicSearch(e.target.value)}
+                  placeholder="Поиск темы (ИИ, Веб-разработка, 3D, Python...)"
+                  className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-zinc-200 bg-white focus:outline-none focus:border-[#0D9488]"
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 grid grid-cols-1 sm:grid-cols-2 gap-2 content-start">
+              {topicsCatalogOptions
+                .filter((opt) => {
+                  const q = modalTopicSearch.trim().toLowerCase();
+                  return (
+                    !q ||
+                    opt.title.toLowerCase().includes(q) ||
+                    opt.subtitle.toLowerCase().includes(q)
+                  );
+                })
+                .map((opt) => {
+                  const checked = draftModalTopicTitles.some(
+                    (t) => t.toLowerCase() === opt.title.toLowerCase()
+                  );
+                  return (
+                    <label
+                      key={opt.id}
+                      className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
+                        checked
+                          ? 'border-[#0D9488] bg-[#F0FDFA]'
+                          : 'border-zinc-200 bg-white hover:border-zinc-300'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          setDraftModalTopicTitles((prev) =>
+                            checked
+                              ? prev.filter(
+                                  (t) =>
+                                    t.toLowerCase() !== opt.title.toLowerCase()
+                                )
+                              : [...prev, opt.title]
+                          )
+                        }
+                        className="mt-0.5 rounded border-zinc-300 text-[#0D9488] shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div
+                          className={`font-bold truncate ${
+                            checked ? 'text-[#0F766E]' : 'text-zinc-900'
+                          }`}
+                        >
+                          {opt.title}
+                        </div>
+                        <div className="text-[11px] text-zinc-500 truncate mt-0.5">
+                          {opt.subtitle}
+                        </div>
                       </div>
-                    </div>
+                    </label>
+                  );
+                })}
+            </div>
+
+            <div className="shrink-0 px-5 py-3 border-t border-zinc-200 bg-[#FCFCFA] flex items-center justify-between gap-3">
+              <span className="text-[11px] font-semibold text-zinc-600 tabular-nums">
+                Выбрано: {draftModalTopicTitles.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTopicsModalOpen(false)}
+                  className="px-3.5 py-2 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 font-semibold text-zinc-700"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmTopicsModal}
+                  className="px-4 py-2 rounded-lg bg-[#0F766E] hover:bg-[#0D9488] text-white font-semibold"
+                >
+                  Добавить ({draftModalTopicTitles.length})
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODULE IMAGE & CROP/ZOOM MODAL */}
+      {editingModuleImageId &&
+        (() => {
+          const targetMod = commonDraft.modules.find(
+            (m) => m.id === editingModuleImageId
+          );
+          if (!targetMod) return null;
+          const linkedUrl =
+            targetMod.imageMediaId && mediaAssets
+              ? mediaAssets.find((a) => a.id === targetMod.imageMediaId)?.url
+              : undefined;
+          const resolvedUrl = linkedUrl || targetMod.customImageUrl;
+          const effectiveMode =
+            targetMod.visualMode ?? (resolvedUrl ? 'image' : 'illustration');
+          const imgScale = targetMod.imageScale ?? 1;
+          const imgX = targetMod.imagePosX ?? 0;
+          const imgY = targetMod.imagePosY ?? 0;
+
+          const updateTargetMod = (patch: Partial<ModuleItem>) => {
+            setCommonDraft((prev) => ({
+              ...prev,
+              modules: prev.modules.map((m) =>
+                m.id === targetMod.id ? { ...m, ...patch } : m
+              ),
+            }));
+          };
+
+          return (
+            <div
+              className="fixed inset-0 z-50 bg-zinc-900/40 backdrop-blur-[1px] flex items-center justify-center p-4"
+              onClick={() => setEditingModuleImageId(null)}
+            >
+              <div
+                className="w-full max-w-md bg-white rounded-2xl border border-zinc-200 shadow-xl overflow-hidden text-xs"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="px-5 py-3.5 border-b border-zinc-200 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-zinc-900 truncate">
+                      Настройка иллюстрации модуля
+                    </h3>
+                    <p className="text-[11px] text-zinc-500 truncate">
+                      {targetMod.title}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingModuleImageId(null)}
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="p-5 space-y-5">
+                  {/* Live A4-aspect preview */}
+                  <div
+                    style={{ backgroundColor: targetMod.cardBgColor }}
+                    className="w-[220px] h-[96px] mx-auto rounded-xl border border-zinc-200 overflow-hidden flex items-center justify-center"
+                  >
+                    {effectiveMode === 'image' && resolvedUrl ? (
+                      <img
+                        src={resolvedUrl}
+                        alt={targetMod.title}
+                        referrerPolicy="no-referrer"
+                        style={{
+                          transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
+                        }}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : effectiveMode === 'icon' ? (
+                      <div
+                        style={{
+                          transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
+                        }}
+                        className="flex items-center justify-center w-full h-full"
+                      >
+                        <div className="w-12 h-12 rounded-xl bg-white/85 border border-zinc-900 flex items-center justify-center">
+                          <ModuleLucideIcon
+                            iconKey={targetMod.iconKey}
+                            className="w-7 h-7 text-[#18181B]"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
+                        }}
+                        className="w-full h-full"
+                      >
+                        <ModuleSvgIllustration
+                          type={targetMod.illustrationKey}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Image Source Controls */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onOpenMediaPicker('modules', (url, asset) =>
+                          updateTargetMod({
+                            visualMode: 'image',
+                            customImageUrl: url,
+                            imageMediaId: asset?.id ?? null,
+                          })
+                        )
+                      }
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white font-semibold whitespace-nowrap"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5" />
+                      <span>Выбрать из медиатеки</span>
+                    </button>
+
+                    <label className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-zinc-200 hover:bg-zinc-50 font-semibold text-zinc-700 cursor-pointer whitespace-nowrap">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Загрузить файл</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={(e) =>
+                          handleUploadImage(e.target.files?.[0], (url) =>
+                            updateTargetMod({
+                              visualMode: 'image',
+                              customImageUrl: url,
+                              imageMediaId: null,
+                            })
+                          )
+                        }
+                      />
+                    </label>
 
                     <button
                       type="button"
-                      onClick={() => onOpenPreview(activeDoc.id)}
-                      className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900"
+                      onClick={() =>
+                        updateTargetMod({
+                          visualMode: 'illustration',
+                          customImageUrl: undefined,
+                          imageMediaId: null,
+                          imageScale: 1,
+                          imagePosX: 0,
+                          imagePosY: 0,
+                        })
+                      }
+                      className="w-full py-1.5 text-[11px] font-medium text-zinc-500 hover:text-zinc-900 text-center"
                     >
-                      <Maximize2 className="w-3.5 h-3.5" />
-                      <span>Открыть полноэкранный разворот</span>
+                      Встроенная иллюстрация (по умолчанию)
                     </button>
-                  </section>
+                  </div>
+
+                  {/* Crop & Zoom Sliders */}
+                  <div className="pt-3 border-t border-zinc-100 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-zinc-700">
+                        Масштаб и кадрирование
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateTargetMod({
+                            imageScale: 1,
+                            imagePosX: 0,
+                            imagePosY: 0,
+                          })
+                        }
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-[#0D9488] hover:underline"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Сбросить</span>
+                      </button>
+                    </div>
+
+                    <label className="block space-y-1">
+                      <div className="flex items-center justify-between text-[11px] text-zinc-500">
+                        <span>Масштаб</span>
+                        <span className="font-mono tabular-nums">
+                          {Math.round(imgScale * 100)}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0.7}
+                        max={2.2}
+                        step={0.05}
+                        value={imgScale}
+                        onChange={(e) =>
+                          updateTargetMod({
+                            imageScale: Number(e.target.value),
+                          })
+                        }
+                        className="w-full accent-[#0D9488]"
+                      />
+                    </label>
+
+                    <label className="block space-y-1">
+                      <div className="flex items-center justify-between text-[11px] text-zinc-500">
+                        <span>Смещение по X</span>
+                        <span className="font-mono tabular-nums">
+                          {imgX}px
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={-60}
+                        max={60}
+                        step={1}
+                        value={imgX}
+                        onChange={(e) =>
+                          updateTargetMod({
+                            imagePosX: Number(e.target.value),
+                          })
+                        }
+                        className="w-full accent-[#0D9488]"
+                      />
+                    </label>
+
+                    <label className="block space-y-1">
+                      <div className="flex items-center justify-between text-[11px] text-zinc-500">
+                        <span>Смещение по Y</span>
+                        <span className="font-mono tabular-nums">
+                          {imgY}px
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={-60}
+                        max={60}
+                        step={1}
+                        value={imgY}
+                        onChange={(e) =>
+                          updateTargetMod({
+                            imagePosY: Number(e.target.value),
+                          })
+                        }
+                        className="w-full accent-[#0D9488]"
+                      />
+                    </label>
+                  </div>
                 </div>
-              )}
-            </>
-          )}
-        </main>
-      </div>
+
+                <div className="px-5 py-3 border-t border-zinc-200 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setEditingModuleImageId(null)}
+                    className="px-4 py-1.5 rounded-lg bg-[#0F766E] hover:bg-[#0D9488] text-white font-semibold"
+                  >
+                    Готово
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
     </div>
   );
 }

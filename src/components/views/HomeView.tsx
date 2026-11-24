@@ -284,7 +284,7 @@ export function HomeView({
               {filteredGroups.map((group) => {
                 const branch = branchById.get(group.branchId);
                 const groupStudents = residents.filter(
-                  (r) => r.groupId === group.id && r.status !== 'dropped'
+                  (r) => r.groupId === group.id
                 );
                 const activeStudents = groupStudents.filter(
                   (r) => r.status === 'active'
@@ -1021,7 +1021,7 @@ export function HomeView({
                   required
                   value={newBranchName}
                   onChange={(e) => setNewBranchName(e.target.value)}
-                  placeholder="Название (например, Адрес 3)"
+                  placeholder="Название (например, Локация 3)"
                   className="rounded-lg border border-zinc-200 px-3 py-2"
                 />
                 <input

@@ -17,11 +17,14 @@ export function PrideSection({
 }: PrideSectionProps) {
   const isPrideActive = activeTarget?.page === 2 && activeTarget.block === 'pride';
   const isBearActive = activeTarget?.page === 2 && activeTarget.block === 'prideBear';
-  const bearMultiplier = ageCategory === '8-10' ? 1.06 : ageCategory === '14-15' ? 0.92 : 1;
+  const bearMultiplier = ageCategory === '8-10' ? 1.04 : ageCategory === '14-15' ? 0.94 : 1;
 
   return (
-    <section className="flex flex-col h-full">
-      <h3 className="font-extrabold text-[17px] tracking-tight uppercase text-[#111827] mb-2.5">
+    <section
+      style={{ width: '312px', height: '763px' }}
+      className="flex flex-col shrink-0"
+    >
+      <h3 className="font-extrabold text-[17px] leading-[24px] tracking-tight uppercase text-[#111827] mb-[10px] shrink-0">
         МОЙ МОМЕНТ ГОРДОСТИ
       </h3>
 
@@ -31,8 +34,12 @@ export function PrideSection({
           e.stopPropagation();
           onSelectTarget({ page: 2, block: 'pride' });
         }}
-        style={{ backgroundColor: config.prideBgColor }}
-        className={`relative flex-1 rounded-2xl p-4 flex flex-col justify-between overflow-hidden shadow-[0_6px_18px_rgba(255,138,117,0.3)] ${
+        style={{
+          width: '312px',
+          height: '729px',
+          backgroundColor: config.prideBgColor,
+        }}
+        className={`relative rounded-2xl p-[18px] flex flex-col justify-between overflow-hidden shrink-0 shadow-[0_6px_18px_rgba(255,138,117,0.3)] ${
           onSelectTarget ? 'editable-block' : ''
         } ${isPrideActive ? 'editable-block-active' : ''}`}
       >
@@ -41,7 +48,8 @@ export function PrideSection({
           <svg
             aria-hidden="true"
             viewBox="0 0 260 220"
-            className="pointer-events-none absolute inset-x-0 top-14 w-full h-48 opacity-80"
+            style={{ width: '276px', height: '190px' }}
+            className="pointer-events-none absolute left-[18px] top-[56px] opacity-80"
             fill="none"
           >
             <path d="M24 22L36 44" stroke="#18181B" strokeWidth="1.6" strokeLinecap="round" />
@@ -65,26 +73,27 @@ export function PrideSection({
           </svg>
         )}
 
-        {/* Heading + Personal Achievement Text */}
-        <div className="relative z-10 text-center">
-          <h4 className="font-extrabold text-[19px] leading-[1.15] text-[#111827]">
+        {/* Heading + Enlarged, Expressive Achievement Text */}
+        <div className="relative z-10 text-center shrink-0">
+          <h4 className="font-extrabold text-[20px] leading-[1.15] text-[#111827]">
             {config.prideTitle}
           </h4>
           {config.prideText && (
-            <div className="mt-2.5 bg-white/88 backdrop-blur-[2px] border border-black/10 rounded-xl px-3 py-2 text-[11.5px] leading-[1.38] font-medium text-[#111827] shadow-sm">
+            <div className="mt-[14px] bg-white/95 border border-black/12 rounded-xl px-[16px] py-[14px] text-[14.5px] leading-[1.45] font-semibold text-[#111827] shadow-[0_3px_10px_rgba(0,0,0,0.06)]">
               {config.prideText}
             </div>
           )}
         </div>
 
-        {/* Trophy Bear Mascot */}
+        {/* Smaller Trophy Bear Mascot leaving room for achievement copy */}
         <div
           onClick={(e) => {
             if (!onSelectTarget) return;
             e.stopPropagation();
             onSelectTarget({ page: 2, block: 'prideBear' });
           }}
-          className={`relative z-10 flex items-end justify-center mt-2 h-[290px] ${
+          style={{ width: '276px', height: '214px' }}
+          className={`relative z-10 flex items-end justify-center mt-[8px] shrink-0 ${
             onSelectTarget ? 'editable-block rounded-xl' : ''
           } ${isBearActive ? 'editable-block-active' : ''}`}
         >
@@ -94,7 +103,7 @@ export function PrideSection({
             scale={config.prideBearScale * bearMultiplier}
             offsetX={config.prideBearOffsetX}
             offsetY={config.prideBearOffsetY}
-            className="w-[248px] h-[288px] drop-shadow-[0_12px_18px_rgba(17,24,39,0.24)]"
+            className="w-[186px] h-[210px] drop-shadow-[0_12px_18px_rgba(17,24,39,0.24)]"
           />
         </div>
       </div>

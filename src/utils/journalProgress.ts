@@ -36,14 +36,53 @@ export function formatGroupPeriod(startDate?: string, endDate?: string): string 
   return 'Учебный период';
 }
 
-export function getStudentStatusLabel(status: StudentStatus): string {
-  switch (status) {
+export function normalizeStudentStatus(status: unknown): StudentStatus {
+  if (status === 'paused') return 'paused';
+  if (status === 'completed') return 'completed';
+  if (status === 'dropped' || status === 'transferred') return 'paused';
+  return 'active';
+}
+
+export function getStudentStatusLabel(status: StudentStatus | string): string {
+  switch (normalizeStudentStatus(status)) {
     case 'active':
       return 'Активен';
-    case 'dropped':
-      return 'Выбыл';
-    case 'transferred':
-      return 'Переведен';
+    case 'paused':
+      return 'На паузе';
+    case 'completed':
+      return 'Завершил курс';
+  }
+}
+
+export function getStudentStatusMeta(status: StudentStatus | string): {
+  status: StudentStatus;
+  label: string;
+  dotClass: string;
+  badgeClass: string;
+} {
+  const normalized = normalizeStudentStatus(status);
+  switch (normalized) {
+    case 'active':
+      return {
+        status: 'active',
+        label: 'Активен',
+        dotClass: 'bg-emerald-500',
+        badgeClass: 'text-emerald-700 bg-emerald-50 border-emerald-200',
+      };
+    case 'paused':
+      return {
+        status: 'paused',
+        label: 'На паузе',
+        dotClass: 'bg-amber-400',
+        badgeClass: 'text-amber-800 bg-amber-50 border-amber-200',
+      };
+    case 'completed':
+      return {
+        status: 'completed',
+        label: 'Завершил курс',
+        dotClass: 'bg-zinc-400',
+        badgeClass: 'text-zinc-600 bg-zinc-100 border-zinc-200',
+      };
   }
 }
 
@@ -55,8 +94,9 @@ export function computeJournalProgress(doc: JournalDocument): JournalProgress {
     Boolean((doc.resident.age || '').trim());
 
   const visibleModules = doc.page1.modules.filter((m) => !m.hidden);
+  const visibleSkills = doc.page1.skills.filter((s) => !s.hidden);
   const skillsCount = Math.max(
-    doc.page1.skills.length,
+    visibleSkills.length,
     doc.page1.confirmedSkills?.length ?? 0
   );
   const hasCurriculum = visibleModules.length > 0 && skillsCount > 0;
@@ -220,7 +260,7 @@ export function createStudentJournal(
           isRealScreenshot: false,
         },
       ],
-      footerWebsite: 'kiber-one.com',
+      footerWebsite: '',
     },
     page2: {
       background: { color: palette.pageBg, showGrid: false, gridStyle: 'dots' },
@@ -269,7 +309,7 @@ export function createStudentJournal(
         bearOffsetX: 0,
         bearOffsetY: 0,
       },
-      footerWebsite: 'kiber-one.com',
+      footerWebsite: '',
     },
   };
 
@@ -289,25 +329,70 @@ export function applyGroupCommonDataToJournal(
   const periodStr = formatGroupPeriod(group.startDate, group.endDate);
   const branchStr = branch ? branch.name : existing.resident.branch;
 
-  const mappedModules = common.modules.map((m, idx) => ({
-    ...m,
-    id: `mod-${existing.residentId || existing.id}-${idx}-${Date.now()}`,
-    order: idx + 1,
-  }));
+  const existingGroupModules = existing.page1.modules.filter(
+    (m) => !m.isIndividual
+  );
+  const existingIndividualModules = existing.page1.modules.filter(
+    (m) => m.isIndividual
+  );
 
-  const mappedSkills = common.skills.map((s, idx) => ({
-    ...s,
-    id: `sk-${existing.residentId || existing.id}-${idx}-${Date.now()}`,
-  }));
+  const syncedGroupModules = common.modules.map((m, idx) => {
+    const match = existingGroupModules.find(
+      (em) =>
+        (m.libraryModuleId && em.libraryModuleId === m.libraryModuleId) ||
+        em.title.trim().toLowerCase() === m.title.trim().toLowerCase()
+    );
+    return {
+      ...m,
+      id: match?.id || `mod-${existing.residentId || existing.id}-${idx}-${Date.now()}`,
+      hidden: match?.hidden ?? false,
+      isIndividual: false,
+      order: idx + 1,
+    };
+  });
 
-  const mappedConfirmed: ConfirmedResidentSkill[] = mappedSkills.map((s) => ({
-    id: s.id,
-    skillId: s.skillId,
-    label: s.label,
-    bgColor: s.bgColor,
-    status: s.status ?? 'independent',
-    confirmedAt: now,
-  }));
+  const mergedModules = [
+    ...syncedGroupModules,
+    ...existingIndividualModules.map((m, idx) => ({
+      ...m,
+      order: syncedGroupModules.length + idx + 1,
+    })),
+  ];
+
+  const existingGroupSkills = existing.page1.skills.filter(
+    (s) => !s.isIndividual
+  );
+  const existingIndividualSkills = existing.page1.skills.filter(
+    (s) => s.isIndividual
+  );
+
+  const syncedGroupSkills = common.skills.map((s, idx) => {
+    const match = existingGroupSkills.find(
+      (es) =>
+        (s.skillId && es.skillId === s.skillId) ||
+        es.label.trim().toLowerCase() === s.label.trim().toLowerCase()
+    );
+    return {
+      ...s,
+      id: match?.id || `sk-${existing.residentId || existing.id}-${idx}-${Date.now()}`,
+      hidden: match?.hidden ?? false,
+      status: match?.status ?? s.status ?? 'independent',
+      isIndividual: false,
+    };
+  });
+
+  const mergedSkills = [...syncedGroupSkills, ...existingIndividualSkills];
+
+  const mappedConfirmed: ConfirmedResidentSkill[] = mergedSkills
+    .filter((s) => !s.hidden)
+    .map((s) => ({
+      id: s.id,
+      skillId: s.skillId,
+      label: s.label,
+      bgColor: s.bgColor,
+      status: s.status ?? 'independent',
+      confirmedAt: now,
+    }));
 
   const updated: JournalDocument = {
     ...existing,
@@ -329,11 +414,13 @@ export function applyGroupCommonDataToJournal(
       coverBgStart: palette.coverStart,
       coverBgEnd: palette.coverEnd,
       showBranch: Boolean(branchStr),
-      modules: mappedModules,
-      skills: mappedSkills,
+      showModules: mergedModules.length > 0 ? true : existing.page1.showModules,
+      modules: mergedModules,
+      showSkills: mergedSkills.length > 0 ? true : existing.page1.showSkills,
+      skills: mergedSkills,
       confirmedSkills: mappedConfirmed,
       suggestedSkillsPool: Array.from(
-        new Set(mappedModules.flatMap((m) => m.suggestedSkills ?? []))
+        new Set(mergedModules.flatMap((m) => m.suggestedSkills ?? []))
       ),
     },
     page2: {

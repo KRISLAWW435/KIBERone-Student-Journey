@@ -68,6 +68,7 @@ import {
   computeJournalProgress,
   createStudentJournal,
   formatGroupPeriod,
+  normalizeStudentStatus,
 } from './utils/journalProgress';
 
 type AppRoute = WorkspaceTab | 'groupEditor' | 'preview';
@@ -150,7 +151,10 @@ export default function App() {
           const branchMap = new Map(loadedBranches.map((b) => [b.id, b]));
           const groupMap = new Map(loadedGroups.map((g) => [g.id, g]));
           const nextJournals = [...loadedJournals];
-          const nextResidents = [...loadedResidents];
+          const nextResidents = loadedResidents.map((r) => ({
+            ...r,
+            status: normalizeStudentStatus(r.status),
+          }));
           const newlyCreatedJournals: JournalDocument[] = [];
           const updatedResidentsToSave: ResidentRecord[] = [];
 
@@ -550,6 +554,11 @@ export default function App() {
     updatedGroup: StudentGroup,
     commonData: GroupCommonCurriculum
   ) => {
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
     const stampedGroup: StudentGroup = {
       ...updatedGroup,
       commonData,
@@ -562,7 +571,7 @@ export default function App() {
 
     const branch = branches.find((b) => b.id === stampedGroup.branchId);
     const groupResidents = residents.filter(
-      (r) => r.groupId === stampedGroup.id && r.status !== 'dropped'
+      (r) => r.groupId === stampedGroup.id && r.status !== 'completed'
     );
 
     const nextJournals = [...journals];
@@ -611,25 +620,15 @@ export default function App() {
 
     setJournals(nextJournals);
     setResidents(nextResidents);
+    setSaveState('saved');
     showToast(
-      `Общие данные группы применены к журналам (${journalsToSave.length} учеников)`
+      `Данные применены к ${journalsToSave.length} ученикам. Индивидуальные изменения не затронуты`
     );
   };
 
   const handleOpenGroupEditor = (groupId: string) => {
     setActiveGroupId(groupId);
-    const groupStudents = residents.filter(
-      (r) => r.groupId === groupId && r.status === 'active'
-    );
-    const firstStudent = groupStudents[0];
-    if (firstStudent) {
-      const firstJournal = journals.find(
-        (j) => j.id === firstStudent.journalId || j.residentId === firstStudent.id
-      );
-      if (firstJournal) {
-        setActiveId(firstJournal.id);
-      }
-    }
+    setActiveId(null);
     setRoute('groupEditor');
   };
 

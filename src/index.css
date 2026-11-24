@@ -11,6 +11,11 @@
 .a4-canvas {
   width: 794px;
   height: 1123px;
+  min-width: 794px;
+  min-height: 1123px;
+  max-width: 794px;
+  max-height: 1123px;
+  aspect-ratio: 210 / 297;
   position: relative;
   overflow: hidden;
   box-sizing: border-box;
@@ -20,15 +25,17 @@
   flex-shrink: 0;
 }
 
-/* Spiral notebook lined paper texture for MentorNote */
+/* Spiral notebook lined paper texture for MentorNote (28px grid synced to 18px top padding) */
 .mentor-notebook-paper {
   background-color: #ffffff;
   background-image: linear-gradient(
     to bottom,
-    transparent 26px,
-    rgba(100, 116, 139, 0.22) 27px
+    transparent 27px,
+    rgba(100, 116, 139, 0.28) 27px,
+    rgba(100, 116, 139, 0.28) 28px
   );
-  background-size: 100% 27px;
+  background-size: 100% 28px;
+  background-position: 0 18px;
 }
 
 /* Interactive editable block highlight inside Editor */

@@ -1,4 +1,5 @@
 import {
+  AgeCategory,
   GroupCurriculumTemplate,
   JournalStatus,
   LibraryModule,
@@ -1496,3 +1497,72 @@ export const DEFAULT_GROUP_TEMPLATES: GroupCurriculumTemplate[] = [
     updatedAt: '2026-09-01T10:00:00.000Z',
   },
 ];
+
+const MODULE_AGE_MAP: Record<string, AgeCategory[]> = {
+  // 8–10 (Младшая группа)
+  'module-creative-engineering': ['8-10'],
+  'module-scratch-junior': ['8-10'],
+  'module-code-monkey': ['8-10'],
+  'module-run-marco': ['8-10'],
+  'module-piktomir': ['8-10'],
+  'module-blockly': ['8-10'],
+  'module-pixel-art-aseprite': ['8-10', '11-13'],
+  'module-tinkercad-3d': ['8-10', '11-13'],
+  'module-gif-animation': ['8-10', '11-13'],
+  'module-qr-tech': ['8-10', '11-13'],
+  'module-kodu-game-lab': ['8-10', '11-13'],
+  'module-scratch-advanced': ['8-10', '11-13'],
+  'module-lua-minecraft': ['8-10', '11-13'],
+  'module-roblox': ['8-10', '11-13'],
+  'module-pc-hardware': ['8-10', '11-13'],
+  'module-word-excel': ['8-10', '11-13'],
+  'module-powerpoint': ['8-10', '11-13'],
+  'module-yandex-services': ['8-10', '11-13'],
+  'module-ai-storytelling': ['8-10', '11-13'],
+  'module-thunkable': ['8-10', '11-13'],
+  'module-cybersecurity': ['8-10', '11-13', '14-15'],
+  'module-financial-intelligence': ['8-10', '11-13', '14-15'],
+
+  // 11–13 (Средняя группа)
+  'module-construct-2': ['11-13'],
+  'module-html-basics': ['11-13'],
+  'module-minecraft-mods': ['11-13', '14-15'],
+  'module-unity-2d': ['11-13', '14-15'],
+  'module-godot': ['11-13', '14-15'],
+  'module-prompt-engineering': ['11-13', '14-15'],
+  'module-neural-networks': ['11-13', '14-15'],
+  'module-vibe-coding': ['11-13', '14-15'],
+  'module-voice-assistant-alice': ['11-13', '14-15'],
+  'module-python-ai': ['11-13', '14-15'],
+  'module-web-design-figma': ['11-13', '14-15'],
+  'module-photoshop': ['11-13', '14-15'],
+  'module-blender-3d': ['11-13', '14-15'],
+  'module-motion-design': ['11-13', '14-15'],
+  'module-tilda-landing': ['11-13', '14-15'],
+  'module-html-css': ['11-13', '14-15'],
+  'module-javascript': ['11-13', '14-15'],
+  'module-python-telegram-bot': ['11-13', '14-15'],
+  'module-olympiad-programming': ['11-13', '14-15'],
+  'module-olympiad-prep': ['11-13', '14-15'],
+
+  // 14–15 (Старшая группа)
+  'module-unreal-engine': ['14-15'],
+  'module-ai-product-lab': ['14-15'],
+  'module-python-ai-website': ['14-15'],
+  'module-ai-vk-store': ['14-15'],
+  'module-typescript-ai': ['14-15'],
+  'module-telegram-mini-app': ['14-15'],
+  'module-php-sql': ['14-15'],
+  'module-testing-vibe-debug': ['14-15'],
+  'module-modern-tech-cloud': ['14-15'],
+  'module-ethical-hacking': ['14-15'],
+  'module-csharp': ['14-15'],
+};
+
+export function getModuleAgeCategories(mod: LibraryModule): AgeCategory[] {
+  if (mod.ageCategories && mod.ageCategories.length > 0) {
+    return mod.ageCategories;
+  }
+  return MODULE_AGE_MAP[mod.id] ?? ['8-10', '11-13', '14-15'];
+}
+

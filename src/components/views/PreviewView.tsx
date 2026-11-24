@@ -3,6 +3,12 @@ import { ArrowLeft, Edit3, Maximize, Minimize } from 'lucide-react';
 import { ASSETS } from '../../data/presets';
 import { JournalDocument, MediaAsset } from '../../types/journal';
 import { ExportMenu } from '../ExportMenu';
+import {
+  A4_PAGE_HEIGHT,
+  A4_PAGE_WIDTH,
+  A4_SPREAD_GAP,
+  A4PageSlot,
+} from '../journal/A4SpreadFrame';
 import { JournalPageOne } from '../journal/JournalPageOne';
 import { JournalPageTwo } from '../journal/JournalPageTwo';
 
@@ -38,20 +44,29 @@ export function PreviewView({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
 
+  const logicalW =
+    layout === 'spread' ? A4_PAGE_WIDTH * 2 + A4_SPREAD_GAP : A4_PAGE_WIDTH;
+
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
     const recalc = () => {
-      const availableW = el.clientWidth - 48;
-      const targetW = layout === 'spread' ? 794 * 2 + 12 : 794;
-      const next = Math.min(1, Math.max(0.35, availableW / targetW));
+      const availableW = Math.max(240, el.clientWidth - 48);
+      const availableH = Math.max(320, el.clientHeight - 84);
+      const scaleW = availableW / logicalW;
+      const scaleH = availableH / A4_PAGE_HEIGHT;
+      const next = Math.min(1, Math.max(0.28, Math.min(scaleW, scaleH)));
       setAutoScale(Number(next.toFixed(3)));
     };
     recalc();
+    const raf = window.requestAnimationFrame(recalc);
     const obs = new ResizeObserver(recalc);
     obs.observe(el);
-    return () => obs.disconnect();
-  }, [layout, isFullscreen]);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      obs.disconnect();
+    };
+  }, [logicalW, isFullscreen]);
 
   useEffect(() => {
     const handler = () => setIsFullscreen(Boolean(document.fullscreenElement));
@@ -68,15 +83,14 @@ export function PreviewView({
   };
 
   const effectiveScale = zoom === 'auto' ? autoScale : zoom;
-  const logicalW = layout === 'spread' ? 794 * 2 + 8 : 794;
 
   return (
     <div
       ref={containerRef}
-      className="min-h-screen bg-[#18181B] text-zinc-100 flex flex-col"
+      className="h-screen overflow-hidden bg-[#18181B] text-zinc-100 flex flex-col"
     >
       {/* CLEAN PREVIEW TOP BAR */}
-      <header className="h-16 bg-[#09090B] border-b border-zinc-800 px-6 flex items-center justify-between gap-6 sticky top-0 z-30">
+      <header className="h-16 shrink-0 bg-[#09090B] border-b border-zinc-800 px-6 flex items-center justify-between gap-6 z-30">
         <div className="flex items-center gap-3 shrink-0">
           <button
             type="button"
@@ -128,7 +142,7 @@ export function PreviewView({
           <div className="hidden md:flex items-center gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-lg">
             {(
               [
-                { v: 'auto', label: 'Авто' },
+                { v: 'auto', label: `Авто (${Math.round(autoScale * 100)}%)` },
                 { v: 0.75, label: '75%' },
                 { v: 1, label: '100% (А4)' },
               ] as const
@@ -155,7 +169,9 @@ export function PreviewView({
             type="button"
             onClick={toggleFullscreen}
             className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
-            title={isFullscreen ? 'Выйти из полноэкранного режима' : 'На весь экран'}
+            title={
+              isFullscreen ? 'Выйти из полноэкранного режима' : 'На весь экран'
+            }
           >
             {isFullscreen ? (
               <Minimize className="w-4 h-4" />
@@ -182,41 +198,41 @@ export function PreviewView({
         </div>
       </header>
 
-      {/* DISTRACTION-FREE SPREAD VIEWPORT */}
-      <main
-        ref={stageRef}
-        className="flex-1 overflow-auto px-6 py-8 flex flex-col items-center justify-start"
-      >
-        <div className="mb-4 text-xs font-mono text-zinc-400">
-          {doc.resident.fullName} · {doc.resident.period} · Формат А4 (210 × 297 мм)
-        </div>
+      {/* DISTRACTION-FREE SPREAD VIEWPORT (UNIFORM TRANSFORM SCALE ON FIXED 794x1123 PAGES) */}
+      <main ref={stageRef} className="flex-1 min-h-0 overflow-auto p-6 flex">
+        <div className="m-auto flex flex-col items-center shrink-0">
+          <div className="mb-3 text-xs font-mono text-zinc-400">
+            {doc.resident.fullName} · {doc.resident.period} · Формат А4 (210 × 297 мм)
+          </div>
 
-        <div
-          style={{
-            width: `${logicalW * effectiveScale}px`,
-            height: `${1123 * effectiveScale}px`,
-          }}
-          className="relative shrink-0"
-        >
           <div
             style={{
-              width: `${logicalW}px`,
-              height: '1123px',
-              transform: `scale(${effectiveScale})`,
-              transformOrigin: 'top left',
+              width: `${logicalW * effectiveScale}px`,
+              height: `${A4_PAGE_HEIGHT * effectiveScale}px`,
             }}
-            className={`flex items-start ${layout === 'spread' ? 'gap-2' : ''}`}
+            className="relative shrink-0"
           >
-            {(layout === 'spread' || layout === 'page1') && (
-              <div className="shadow-[0_24px_60px_rgba(0,0,0,0.55)] overflow-hidden">
-                <JournalPageOne doc={doc} mediaAssets={mediaAssets} />
-              </div>
-            )}
-            {(layout === 'spread' || layout === 'page2') && (
-              <div className="shadow-[0_24px_60px_rgba(0,0,0,0.55)] overflow-hidden">
-                <JournalPageTwo doc={doc} />
-              </div>
-            )}
+            <div
+              style={{
+                width: `${logicalW}px`,
+                height: `${A4_PAGE_HEIGHT}px`,
+                gap: layout === 'spread' ? `${A4_SPREAD_GAP}px` : '0px',
+                transform: `scale(${effectiveScale})`,
+                transformOrigin: 'top left',
+              }}
+              className="flex items-start"
+            >
+              {(layout === 'spread' || layout === 'page1') && (
+                <A4PageSlot className="shadow-[0_24px_60px_rgba(0,0,0,0.55)]">
+                  <JournalPageOne doc={doc} mediaAssets={mediaAssets} />
+                </A4PageSlot>
+              )}
+              {(layout === 'spread' || layout === 'page2') && (
+                <A4PageSlot className="shadow-[0_24px_60px_rgba(0,0,0,0.55)]">
+                  <JournalPageTwo doc={doc} />
+                </A4PageSlot>
+              )}
+            </div>
           </div>
         </div>
       </main>

@@ -26,16 +26,16 @@ const svgDataUrl = (svg: string) =>
 export const DEFAULT_BRANCHES: Branch[] = [
   {
     id: 'branch-1',
-    name: 'Адрес 1 — Центральный кампус',
-    address: 'ул. Ленина, 45',
+    name: 'Локация 1',
+    address: 'ул. Победы, 53, оф. 22',
     isDefault: true,
     createdAt: '2026-09-01T08:00:00.000Z',
     updatedAt: '2026-09-01T08:00:00.000Z',
   },
   {
     id: 'branch-2',
-    name: 'Адрес 2 — Северный филиал',
-    address: 'пр. Мира, 112',
+    name: 'Локация 2',
+    address: 'просп. 50 лет Октября, 54',
     isDefault: true,
     createdAt: '2026-09-01T08:00:00.000Z',
     updatedAt: '2026-09-01T08:00:00.000Z',
@@ -90,13 +90,13 @@ export const DESIGN_PALETTES: DesignPalettePreset[] = [
 ];
 
 export const SKILL_LIBRARY: Omit<SkillItem, 'id'>[] = [
-  { label: 'Алгоритмическое мышление', bgColor: '#FF8A75' },
-  { label: 'Логика кода', bgColor: '#48C9D8' },
-  { label: 'Решение задач', bgColor: '#FFE047' },
-  { label: 'Самостоятельность', bgColor: '#C4B5FD' },
-  { label: 'Программирование', bgColor: '#7DD3FC' },
-  { label: 'Цифровые инструменты', bgColor: '#A7F3D0' },
-  { label: 'Креативность', bgColor: '#FDE68A' },
+  { label: 'Алгоритмическое мышление', bgColor: '#E6FAF8' },
+  { label: 'Логика кода', bgColor: '#CCFBF1' },
+  { label: 'Решение задач', bgColor: '#E6FAF8' },
+  { label: 'Самостоятельность', bgColor: '#D1FAE5' },
+  { label: 'Программирование', bgColor: '#E0F2FE' },
+  { label: 'Цифровые инструменты', bgColor: '#CCFBF1' },
+  { label: 'Креативность', bgColor: '#E6FAF8' },
 ];
 
 export const STRENGTH_LIBRARY: Array<{
@@ -376,7 +376,7 @@ export const SAMPLE_JOURNALS: JournalDocument[] = [
       ageCategory: '11-13',
       period: 'с 01.09.2026 по 25.12.2026',
       mentorName: 'Алексей Смирнов',
-      branch: 'Адрес 1 — Центральный кампус',
+      branch: 'Локация 1',
     },
     page1: {
       background: { color: '#FFFFFF', showGrid: false, gridStyle: 'dots' },
@@ -431,7 +431,7 @@ export const SAMPLE_JOURNALS: JournalDocument[] = [
           isRealScreenshot: false,
         },
       ],
-      footerWebsite: 'kiber-one.com',
+      footerWebsite: '',
     },
     page2: {
       background: { color: '#FFFFFF', showGrid: false, gridStyle: 'dots' },
@@ -509,7 +509,7 @@ export const SAMPLE_JOURNALS: JournalDocument[] = [
         bearOffsetX: 0,
         bearOffsetY: 0,
       },
-      footerWebsite: 'kiber-one.com',
+      footerWebsite: '',
     },
   },
   {
@@ -525,7 +525,7 @@ export const SAMPLE_JOURNALS: JournalDocument[] = [
       ageCategory: '11-13',
       period: 'с 01.09.2026 по 25.12.2026',
       mentorName: 'Алексей Смирнов',
-      branch: 'Адрес 1 — Центральный кампус',
+      branch: 'Локация 1',
     },
     page1: {
       background: { color: '#FFFFFF', showGrid: false, gridStyle: 'dots' },
@@ -573,7 +573,7 @@ export const SAMPLE_JOURNALS: JournalDocument[] = [
           isRealScreenshot: false,
         },
       ],
-      footerWebsite: 'kiber-one.com',
+      footerWebsite: '',
     },
     page2: {
       background: { color: '#FFFFFF', showGrid: false, gridStyle: 'dots' },
@@ -628,7 +628,7 @@ export const SAMPLE_JOURNALS: JournalDocument[] = [
         bearOffsetX: 0,
         bearOffsetY: 0,
       },
-      footerWebsite: 'kiber-one.com',
+      footerWebsite: '',
     },
   },
   {
@@ -644,7 +644,7 @@ export const SAMPLE_JOURNALS: JournalDocument[] = [
       ageCategory: '11-13',
       period: 'с 01.09.2026 по 25.12.2026',
       mentorName: 'Алексей Смирнов',
-      branch: 'Адрес 1 — Центральный кампус',
+      branch: 'Локация 1',
     },
     page1: {
       background: { color: '#FFFFFF', showGrid: false, gridStyle: 'dots' },
@@ -670,7 +670,7 @@ export const SAMPLE_JOURNALS: JournalDocument[] = [
       confirmedSkills: [],
       showProjects: true,
       projects: [],
-      footerWebsite: 'kiber-one.com',
+      footerWebsite: '',
     },
     page2: {
       background: { color: '#FFFFFF', showGrid: false, gridStyle: 'dots' },
@@ -717,7 +717,7 @@ export const SAMPLE_JOURNALS: JournalDocument[] = [
         bearOffsetX: 0,
         bearOffsetY: 0,
       },
-      footerWebsite: 'kiber-one.com',
+      footerWebsite: '',
     },
   },
   {
@@ -733,7 +733,7 @@ export const SAMPLE_JOURNALS: JournalDocument[] = [
       ageCategory: '8-10',
       period: 'с 05.09.2026 по 20.12.2026',
       mentorName: 'Мария Кравцова',
-      branch: 'Адрес 2 — Северный филиал',
+      branch: 'Локация 2',
     },
     page1: {
       background: { color: '#FFFFFF', showGrid: false, gridStyle: 'dots' },
@@ -825,7 +825,7 @@ export const SAMPLE_JOURNALS: JournalDocument[] = [
           isRealScreenshot: false,
         },
       ],
-      footerWebsite: 'kiber-one.com',
+      footerWebsite: '',
     },
     page2: {
       background: { color: '#FFFFFF', showGrid: false, gridStyle: 'dots' },
@@ -903,7 +903,7 @@ export const SAMPLE_JOURNALS: JournalDocument[] = [
         bearOffsetX: 0,
         bearOffsetY: 0,
       },
-      footerWebsite: 'kiber-one.com',
+      footerWebsite: '',
     },
   },
 ];
@@ -1085,7 +1085,7 @@ export function createBlankJournal(): JournalDocument {
       ageCategory: '11-13',
       period: 'с 01.09.2026 по 25.12.2026',
       mentorName: 'Имя наставника',
-      branch: 'Адрес 1 — Центральный кампус',
+      branch: 'Локация 1',
     },
     page1: {
       ...base.page1,

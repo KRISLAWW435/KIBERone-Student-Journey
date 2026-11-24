@@ -22,22 +22,28 @@ export function CoverSection({
   const isBearActive = activeTarget?.page === 1 && activeTarget.block === 'coverBear';
 
   const bearSizeMultiplier =
-    ageCategory === '8-10' ? 1.08 : ageCategory === '14-15' ? 0.9 : 1;
+    ageCategory === '8-10' ? 1.03 : ageCategory === '14-15' ? 0.92 : 1;
+  const boundedBearScale = Math.min(
+    1.12,
+    Math.max(0.75, (config.bearScale || 1) * bearSizeMultiplier)
+  );
 
   return (
     <header
       onClick={() => onSelectTarget?.({ page: 1, block: 'cover' })}
       style={{
+        width: '794px',
+        height: '336px',
         background: `linear-gradient(110deg, ${config.coverBgStart} 0%, ${config.coverBgEnd} 100%)`,
       }}
-      className={`relative h-[338px] w-full px-10 pt-8 pb-7 flex items-stretch justify-between overflow-hidden ${
+      className={`relative px-[40px] pt-[30px] pb-[26px] shrink-0 overflow-hidden ${
         onSelectTarget ? 'editable-block' : ''
       } ${isCoverActive ? 'editable-block-active' : ''}`}
     >
       {/* Soft organic background shape matching reference */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -top-12 right-16 w-[360px] h-[360px] rounded-full opacity-25"
+        className="pointer-events-none absolute -top-[48px] right-[64px] w-[360px] h-[360px] rounded-full opacity-25"
         style={{ backgroundColor: '#FFFFFF' }}
       />
 
@@ -46,7 +52,7 @@ export function CoverSection({
         <svg
           aria-hidden="true"
           viewBox="0 0 120 80"
-          className="pointer-events-none absolute left-[355px] top-6 w-24 h-16 opacity-60"
+          className="pointer-events-none absolute left-[355px] top-[24px] w-[96px] h-[64px] opacity-60"
           fill="none"
         >
           <path d="M20 10L23 18L31 21L23 24L20 32L17 24L9 21L17 18L20 10Z" stroke="#18181B" strokeWidth="1.5" />
@@ -54,8 +60,11 @@ export function CoverSection({
         </svg>
       )}
 
-      {/* Left Column: Original Logo + Cover Title + Resident Info */}
-      <div className="relative z-10 flex flex-col justify-between max-w-[445px]">
+      {/* Left Column: Fixed width 442px so text never touches the mascot */}
+      <div
+        style={{ width: '442px', height: '280px' }}
+        className="relative z-10 flex flex-col justify-between shrink-0"
+      >
         {/* Original KIBERone Logo (untouched aspect ratio & colors) */}
         <div
           onClick={(e) => {
@@ -63,7 +72,7 @@ export function CoverSection({
             e.stopPropagation();
             onSelectTarget({ page: 1, block: 'logo' });
           }}
-          className={`inline-flex self-start bg-white rounded-md p-2 shadow-[0_2px_8px_rgba(0,0,0,0.08)] border border-black/10 ${
+          className={`inline-flex self-start bg-white rounded-md p-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.08)] border border-black/10 ${
             onSelectTarget ? 'editable-block' : ''
           } ${isLogoActive ? 'editable-block-active' : ''}`}
         >
@@ -76,7 +85,7 @@ export function CoverSection({
         </div>
 
         {/* Title & Subtitle */}
-        <div className="my-auto pt-3">
+        <div className="my-auto pt-[12px]">
           <h1
             className={`font-extrabold text-[#111827] leading-[0.98] tracking-tight ${
               ageCategory === '14-15' ? 'text-[48px]' : 'text-[54px]'
@@ -85,7 +94,7 @@ export function CoverSection({
           >
             {config.coverTitle}
           </h1>
-          <div className="mt-1.5 text-[24px] font-bold text-[#111827] leading-tight">
+          <div className="mt-[6px] text-[24px] font-bold text-[#111827] leading-tight">
             {config.coverSubtitle}
           </div>
         </div>
@@ -104,7 +113,7 @@ export function CoverSection({
         </div>
       </div>
 
-      {/* Right Column: KIBERone Bear Mascot */}
+      {/* Right Column: KIBERone Bear Mascot locked with fixed coordinates & safe right gutter */}
       {config.showCoverBear && (
         <div
           onClick={(e) => {
@@ -112,18 +121,25 @@ export function CoverSection({
             e.stopPropagation();
             onSelectTarget({ page: 1, block: 'coverBear' });
           }}
-          className={`relative z-20 w-[270px] h-[306px] flex items-end justify-end self-end -mb-7 -mr-2 ${
+          style={{
+            position: 'absolute',
+            right: '26px',
+            bottom: '0px',
+            width: '252px',
+            height: '296px',
+          }}
+          className={`z-20 flex items-end justify-center overflow-hidden ${
             onSelectTarget ? 'editable-block rounded-xl' : ''
           } ${isBearActive ? 'editable-block-active' : ''}`}
         >
           <BearCharacter
             src={config.bearImageUrl}
             alt="Медведь KIBERone"
-            scale={config.bearScale * bearSizeMultiplier}
+            scale={boundedBearScale}
             offsetX={config.bearOffsetX}
             offsetY={config.bearOffsetY}
             cropTop={config.bearCropTop}
-            className="w-[265px] h-[305px] drop-shadow-[0_12px_18px_rgba(17,24,39,0.22)]"
+            className="w-[238px] h-[284px] drop-shadow-[0_12px_18px_rgba(17,24,39,0.22)]"
           />
         </div>
       )}

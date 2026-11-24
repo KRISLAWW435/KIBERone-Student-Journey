@@ -17,8 +17,10 @@ export function PageGridOverlay({ background }: PageGridAndBackgroundProps) {
     return (
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-0"
+        className="pointer-events-none absolute top-0 left-0 z-0"
         style={{
+          width: '794px',
+          height: '1123px',
           backgroundImage:
             'radial-gradient(rgba(17, 24, 39, 0.14) 1px, transparent 1px)',
           backgroundSize: '20px 20px',
@@ -30,8 +32,10 @@ export function PageGridOverlay({ background }: PageGridAndBackgroundProps) {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 z-0"
+      className="pointer-events-none absolute top-0 left-0 z-0"
       style={{
+        width: '794px',
+        height: '1123px',
         backgroundImage:
           'linear-gradient(to right, rgba(17, 24, 39, 0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(17, 24, 39, 0.06) 1px, transparent 1px)',
         backgroundSize: '24px 24px',

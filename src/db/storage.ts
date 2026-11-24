@@ -24,7 +24,11 @@ import {
   SkillDefinition,
   StudentGroup,
 } from '../types/journal';
-import { computeJournalProgress, formatGroupPeriod } from '../utils/journalProgress';
+import {
+  computeJournalProgress,
+  formatGroupPeriod,
+  normalizeStudentStatus,
+} from '../utils/journalProgress';
 
 const DB_NAME = 'kiberone_student_journey_db';
 const DB_VERSION = 4;
@@ -120,20 +124,31 @@ function normalizeJournal(doc: JournalDocument): JournalDocument {
         status: s.status ?? ('independent' as const),
         confirmedAt: doc.updatedAt || doc.createdAt,
       }));
+  const cleanBranch = (doc.resident.branch || '').includes('кампус') ||
+    (doc.resident.branch || '').includes('Адрес 1')
+    ? 'Локация 1'
+    : (doc.resident.branch || '').includes('Северный филиал') ||
+      (doc.resident.branch || '').includes('Адрес 2')
+    ? 'Локация 2'
+    : doc.resident.branch;
+
   const normalized: JournalDocument = {
     ...doc,
     status: doc.status || 'draft',
     resident: {
       ...doc.resident,
+      branch: cleanBranch,
       period: stripLegacyQuarterText(doc.resident.period),
     },
     page1: {
       ...p1,
+      footerWebsite: '',
       confirmedSkills,
       suggestedSkillsPool: p1.suggestedSkillsPool ?? [],
     },
     page2: {
       ...doc.page2,
+      footerWebsite: '',
       mentorNote: {
         ...doc.page2.mentorNote,
         greeting: (doc.page2.mentorNote.greeting || '').replace(
@@ -163,9 +178,9 @@ function normalizeGroup(grp: StudentGroup & { defaultPeriod?: string }): Student
 function normalizeResident(
   res: ResidentRecord & { branch?: string; period?: string }
 ): ResidentRecord {
-  const status =
-    res.status ||
-    (res.archived ? ('dropped' as const) : ('active' as const));
+  const status = normalizeStudentStatus(
+    res.status || (res.archived ? 'paused' : 'active')
+  );
   const branchId = res.branchId || DEFAULT_BRANCHES[0].id;
   return {
     id: res.id,
@@ -176,7 +191,7 @@ function normalizeResident(
     mentorName: res.mentorName,
     branchId,
     status,
-    archived: status === 'dropped',
+    archived: status !== 'active',
     journalId: res.journalId,
     createdAt: res.createdAt,
     updatedAt: res.updatedAt,
@@ -199,13 +214,49 @@ function normalizeLibraryModule(mod: LibraryModule): LibraryModule {
 }
 
 // Branches
+function normalizeBranch(branch: Branch): Branch {
+  if (
+    branch.id === 'branch-1' &&
+    (branch.name.includes('кампус') ||
+      branch.name.includes('Адрес 1') ||
+      branch.address === 'ул. Ленина, 45')
+  ) {
+    return {
+      ...branch,
+      name: 'Локация 1',
+      address: 'ул. Победы, 53, оф. 22',
+    };
+  }
+  if (
+    branch.id === 'branch-2' &&
+    (branch.name.includes('Северный филиал') ||
+      branch.name.includes('Адрес 2') ||
+      branch.address === 'пр. Мира, 112')
+  ) {
+    return {
+      ...branch,
+      name: 'Локация 2',
+      address: 'просп. 50 лет Октября, 54',
+    };
+  }
+  return branch;
+}
+
 export async function getAllBranches(): Promise<Branch[]> {
   const existing = await readStore<Branch>(STORE_BRANCHES);
   if (existing.length === 0) {
     await Promise.all(DEFAULT_BRANCHES.map((b) => putItem(STORE_BRANCHES, b)));
     return [...DEFAULT_BRANCHES];
   }
-  return existing.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  const normalized = existing.map(normalizeBranch);
+  const changed = normalized.filter(
+    (b, idx) =>
+      b.name !== existing[idx].name || b.address !== existing[idx].address
+  );
+  if (changed.length > 0) {
+    await Promise.all(changed.map((b) => putItem(STORE_BRANCHES, b)));
+  }
+  return normalized.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
 }
 
 export const saveBranch = (branch: Branch) => putItem(STORE_BRANCHES, branch);

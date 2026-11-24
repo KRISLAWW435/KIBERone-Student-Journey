@@ -27,53 +27,70 @@ export function NextChapter({
         e.stopPropagation();
         onSelectTarget({ page: 2, block: 'nextChapter' });
       }}
-      style={{ backgroundColor: nextChapter.bgColor }}
-      className={`relative rounded-2xl px-6 py-4 pr-44 flex flex-col justify-between min-h-[168px] overflow-visible shadow-[0_4px_12px_rgba(0,0,0,0.06)] ${
+      style={{
+        width: '714px',
+        height: '168px',
+        backgroundColor: nextChapter.bgColor,
+      }}
+      className={`relative rounded-2xl px-[24px] py-[14px] pr-[184px] flex flex-col justify-between overflow-visible shrink-0 shadow-[0_4px_12px_rgba(0,0,0,0.06)] ${
         onSelectTarget ? 'editable-block' : ''
       } ${isActive ? 'editable-block-active' : ''}`}
     >
-      <div>
-        <h3 className="font-extrabold text-[19px] leading-tight uppercase text-[#111827]">
+      <div style={{ width: '482px' }} className="shrink-0">
+        <h3 className="font-extrabold text-[18.5px] leading-tight uppercase text-[#111827]">
           {nextChapter.title}
         </h3>
-        <p className="text-[13px] font-medium text-[#111827]/90 mt-1">
+        <p className="text-[13px] font-medium text-[#111827]/90 mt-[3px]">
           {nextChapter.description}
         </p>
       </div>
 
-      {/* 2-3 Future Direction Icons */}
-      <div className="mt-3 grid grid-cols-3 gap-3 max-w-[460px]">
+      {/* 2-3 Future Direction Icons aligned on one strict horizontal axis */}
+      <div
+        style={{ width: '482px' }}
+        className="mt-[8px] grid grid-cols-3 gap-[12px] items-start shrink-0"
+      >
         {nextChapter.topics.slice(0, 3).map((topic) => (
-          <div key={topic.id} className="flex flex-col items-center text-center">
-            <div className="mb-1">
+          <div
+            key={topic.id}
+            className="flex flex-col items-center justify-start text-center"
+          >
+            <div className="w-[42px] h-[42px] rounded-xl bg-white/80 border border-[#18181B]/15 shadow-[0_2px_0_rgba(24,24,27,0.08)] flex items-center justify-center shrink-0 mb-[5px]">
               <NextTopicLineIcon type={topic.iconKey} />
             </div>
-            <span className="text-[11.5px] font-bold leading-tight text-[#111827]">
+            <span className="text-[11.5px] font-bold leading-[1.2] text-[#111827] min-h-[28px] flex items-start justify-center">
               {topic.title}
             </span>
           </div>
         ))}
       </div>
 
-      {/* Peeking Bear on Bottom-Right matching reference */}
+      {/* Peeking Bear on Bottom-Right */}
       <div
         onClick={(e) => {
           if (!onSelectTarget) return;
           e.stopPropagation();
           onSelectTarget({ page: 2, block: 'nextBear' });
         }}
-        className={`absolute -right-3 -bottom-8 w-[178px] h-[196px] flex items-end justify-end z-20 ${
+        style={{
+          position: 'absolute',
+          right: '-10px',
+          bottom: '-28px',
+          width: '174px',
+          height: '190px',
+        }}
+        className={`flex items-end justify-end z-20 ${
           onSelectTarget ? 'editable-block rounded-xl' : ''
         } ${isBearActive ? 'editable-block-active' : ''}`}
       >
         <BearCharacter
           src={nextChapter.bearUrl}
           alt="Медведь KIBERone приглашает к новому этапу"
-          scale={(ageCategory === '8-10' ? 1.06 : 1) * nextChapter.bearScale}
+          scale={(ageCategory === '8-10' ? 1.05 : 1) * nextChapter.bearScale}
           offsetX={nextChapter.bearOffsetX}
           offsetY={nextChapter.bearOffsetY}
           cropTop
-          className="w-[170px] h-[190px] drop-shadow-[0_10px_14px_rgba(17,24,39,0.2)]"
+          className="w-[168px] h-[186px] drop-shadow-[0_10px_14px_rgba(17,24,39,0.2)]"
         />
       </div>
     </section>

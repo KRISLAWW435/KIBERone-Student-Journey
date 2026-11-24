@@ -41,6 +41,7 @@ export function JournalPageOne({
     .filter((m) => !m.hidden)
     .sort((a, b) => a.order - b.order);
   const visibleProjects = page1.projects.filter((p) => !p.hidden);
+  const visibleSkills = page1.skills.filter((s) => !s.hidden);
 
   const isCompactModules = visibleModules.length > 3;
   const isCompactProjects = visibleProjects.length > 3;
@@ -55,9 +56,17 @@ export function JournalPageOne({
         }
       }}
       style={{
+        width: '794px',
+        height: '1123px',
+        minWidth: '794px',
+        minHeight: '1123px',
+        maxWidth: '794px',
+        maxHeight: '1123px',
+        aspectRatio: '210 / 297',
+        flexShrink: 0,
         backgroundColor: page1.background?.color || '#ffffff',
       }}
-      className="a4-canvas relative flex flex-col justify-between overflow-hidden"
+      className="a4-canvas shrink-0 relative overflow-hidden"
       aria-label="Страница 1: Мой путь в мире технологий"
     >
       {/* Background Grid */}
@@ -81,8 +90,11 @@ export function JournalPageOne({
         onMoveDecor={onMoveDecor}
       />
 
-      <div className="relative z-10">
-        {/* 1. COVER SECTION (30-33% height) */}
+      <div
+        style={{ width: '794px', height: '1123px' }}
+        className="relative z-10 flex flex-col overflow-hidden"
+      >
+        {/* 1. COVER SECTION (strict 794x336px) */}
         <DraggableDesignWrapper
           id="cover"
           transform={layouts.cover}
@@ -99,6 +111,7 @@ export function JournalPageOne({
               ? (next) => onUpdateTransform('cover', next)
               : undefined
           }
+          className="shrink-0"
         >
           <CoverSection
             resident={resident}
@@ -109,11 +122,14 @@ export function JournalPageOne({
           />
         </DraggableDesignWrapper>
 
-        {/* MAIN BODY */}
+        {/* MAIN BODY (strict 794px width, fixed padding & pixel gaps) */}
         <div
-          className={`px-10 pt-4 pb-2 flex flex-col ${
-            isCompactModules ? 'gap-3.5' : 'gap-4.5'
-          }`}
+          style={{
+            width: '794px',
+            height: '787px',
+            gap: isCompactModules ? '14px' : '16px',
+          }}
+          className="px-[40px] pt-[16px] pb-[18px] flex flex-col shrink-0 overflow-hidden"
         >
           {/* 2. МОИ ОТКРЫТИЯ */}
           {page1.showModules && visibleModules.length > 0 && (
@@ -136,15 +152,19 @@ export function JournalPageOne({
                   ? (next) => onUpdateTransform('modulesBlock', next)
                   : undefined
               }
+              className="shrink-0"
             >
-              <section>
-                <h2 className="font-extrabold text-[18.5px] tracking-tight uppercase text-[#111827] mb-2.5">
+              <section style={{ width: '714px' }}>
+                <h2 className="font-extrabold text-[18.5px] tracking-tight uppercase text-[#111827] mb-[10px]">
                   МОИ ОТКРЫТИЯ
                 </h2>
                 <div
-                  className={`grid gap-3.5 ${
+                  style={{
+                    width: visibleModules.length === 1 ? '260px' : '714px',
+                  }}
+                  className={`grid items-stretch auto-rows-fr gap-[14px] ${
                     visibleModules.length === 1
-                      ? 'grid-cols-1 max-w-[260px]'
+                      ? 'grid-cols-1'
                       : visibleModules.length === 2 || visibleModules.length === 4
                       ? 'grid-cols-2'
                       : 'grid-cols-3'
@@ -181,7 +201,7 @@ export function JournalPageOne({
           )}
 
           {/* 3. ЧЕМУ Я НАУЧИЛСЯ */}
-          {page1.showSkills && page1.skills.length > 0 && (
+          {page1.showSkills && visibleSkills.length > 0 && (
             <DraggableDesignWrapper
               id="skills"
               transform={layouts.skills}
@@ -200,13 +220,14 @@ export function JournalPageOne({
                   ? (next) => onUpdateTransform('skills', next)
                   : undefined
               }
+              className="shrink-0"
             >
-              <section className="rounded-xl py-0.5">
-                <h2 className="font-extrabold text-[18.5px] tracking-tight uppercase text-[#111827] mb-2">
+              <section style={{ width: '714px' }} className="py-[2px]">
+                <h2 className="font-extrabold text-[18.5px] tracking-tight uppercase text-[#111827] mb-[8px]">
                   ЧЕМУ Я НАУЧИЛСЯ
                 </h2>
-                <div className="flex flex-wrap items-center gap-2.5">
-                  {page1.skills.slice(0, 8).map((skill) => (
+                <div className="flex flex-wrap items-center gap-[10px]">
+                  {visibleSkills.slice(0, 8).map((skill) => (
                     <SkillTag
                       key={skill.id}
                       skill={skill}
@@ -239,15 +260,19 @@ export function JournalPageOne({
                   ? (next) => onUpdateTransform('projectsBlock', next)
                   : undefined
               }
+              className="shrink-0"
             >
-              <section>
-                <h2 className="font-extrabold text-[18.5px] tracking-tight uppercase text-[#111827] mb-2.5">
+              <section style={{ width: '714px' }}>
+                <h2 className="font-extrabold text-[18.5px] tracking-tight uppercase text-[#111827] mb-[10px]">
                   МОИ РЕЗУЛЬТАТЫ
                 </h2>
                 <div
-                  className={`grid gap-3.5 ${
+                  style={{
+                    width: visibleProjects.length === 1 ? '260px' : '714px',
+                  }}
+                  className={`grid items-stretch auto-rows-fr gap-[14px] ${
                     visibleProjects.length === 1
-                      ? 'grid-cols-1 max-w-[260px]'
+                      ? 'grid-cols-1'
                       : visibleProjects.length === 2
                       ? 'grid-cols-2'
                       : visibleProjects.length === 4
@@ -283,13 +308,6 @@ export function JournalPageOne({
           )}
         </div>
       </div>
-
-      {/* FOOTER WEBSITE */}
-      <footer className="relative z-10 pb-4 pt-1 text-center">
-        <span className="text-[16px] font-medium tracking-tight text-[#111827]">
-          {page1.footerWebsite}
-        </span>
-      </footer>
     </article>
   );
 }
