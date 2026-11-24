@@ -6,12 +6,14 @@ import {
 } from '../data/curriculumCatalog';
 import {
   BUILTIN_MEDIA_ASSETS,
+  DEFAULT_BRANCHES,
   SAMPLE_GROUPS,
   SAMPLE_JOURNALS,
   SAMPLE_RESIDENTS,
   SAMPLE_TEMPLATES,
 } from '../data/presets';
 import {
+  Branch,
   GroupCurriculumTemplate,
   JournalDocument,
   JournalTemplate,
@@ -22,12 +24,14 @@ import {
   SkillDefinition,
   StudentGroup,
 } from '../types/journal';
+import { computeJournalProgress, formatGroupPeriod } from '../utils/journalProgress';
 
 const DB_NAME = 'kiberone_student_journey_db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 const STORE_JOURNALS = 'journals';
 const STORE_MEDIA = 'media';
+const STORE_BRANCHES = 'branches';
 const STORE_GROUPS = 'groups';
 const STORE_RESIDENTS = 'residents';
 const STORE_MODULE_LIBRARY = 'moduleLibrary';
@@ -44,6 +48,7 @@ function openDatabase(): Promise<IDBDatabase> {
       const stores = [
         STORE_JOURNALS,
         STORE_MEDIA,
+        STORE_BRANCHES,
         STORE_GROUPS,
         STORE_RESIDENTS,
         STORE_MODULE_LIBRARY,
@@ -94,6 +99,14 @@ async function deleteItem(storeName: string, id: string): Promise<void> {
   });
 }
 
+function stripLegacyQuarterText(value?: string): string {
+  if (!value) return '';
+  if (/квартал|q[1-4]\b/i.test(value)) {
+    return 'с 01.09.2026 по 25.12.2026';
+  }
+  return value;
+}
+
 function normalizeJournal(doc: JournalDocument): JournalDocument {
   const p1 = doc.page1;
   const hasConfirmed = Array.isArray(p1.confirmedSkills);
@@ -107,14 +120,66 @@ function normalizeJournal(doc: JournalDocument): JournalDocument {
         status: s.status ?? ('independent' as const),
         confirmedAt: doc.updatedAt || doc.createdAt,
       }));
-  return {
+  const normalized: JournalDocument = {
     ...doc,
     status: doc.status || 'draft',
+    resident: {
+      ...doc.resident,
+      period: stripLegacyQuarterText(doc.resident.period),
+    },
     page1: {
       ...p1,
       confirmedSkills,
       suggestedSkillsPool: p1.suggestedSkillsPool ?? [],
     },
+    page2: {
+      ...doc.page2,
+      mentorNote: {
+        ...doc.page2.mentorNote,
+        greeting: (doc.page2.mentorNote.greeting || '').replace(
+          /в этом квартале/gi,
+          'за этот период обучения'
+        ),
+      },
+    },
+  };
+  normalized.completionProgress = computeJournalProgress(normalized);
+  return normalized;
+}
+
+function normalizeGroup(grp: StudentGroup & { defaultPeriod?: string }): StudentGroup {
+  const startDate = grp.startDate || '2026-09-01';
+  const endDate = grp.endDate || '2026-12-25';
+  const branchId = grp.branchId || DEFAULT_BRANCHES[0].id;
+  const { defaultPeriod: _legacy, ...rest } = grp;
+  return {
+    ...rest,
+    branchId,
+    startDate,
+    endDate,
+  };
+}
+
+function normalizeResident(
+  res: ResidentRecord & { branch?: string; period?: string }
+): ResidentRecord {
+  const status =
+    res.status ||
+    (res.archived ? ('dropped' as const) : ('active' as const));
+  const branchId = res.branchId || DEFAULT_BRANCHES[0].id;
+  return {
+    id: res.id,
+    groupId: res.groupId,
+    fullName: res.fullName,
+    age: res.age,
+    ageCategory: res.ageCategory,
+    mentorName: res.mentorName,
+    branchId,
+    status,
+    archived: status === 'dropped',
+    journalId: res.journalId,
+    createdAt: res.createdAt,
+    updatedAt: res.updatedAt,
   };
 }
 
@@ -132,6 +197,19 @@ function normalizeLibraryModule(mod: LibraryModule): LibraryModule {
     isEditable: mod.isEditable !== undefined ? mod.isEditable : true,
   };
 }
+
+// Branches
+export async function getAllBranches(): Promise<Branch[]> {
+  const existing = await readStore<Branch>(STORE_BRANCHES);
+  if (existing.length === 0) {
+    await Promise.all(DEFAULT_BRANCHES.map((b) => putItem(STORE_BRANCHES, b)));
+    return [...DEFAULT_BRANCHES];
+  }
+  return existing.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+}
+
+export const saveBranch = (branch: Branch) => putItem(STORE_BRANCHES, branch);
+export const deleteBranch = (id: string) => deleteItem(STORE_BRANCHES, id);
 
 // Journals
 export async function getAllJournals(): Promise<JournalDocument[]> {
@@ -151,7 +229,13 @@ export async function getAllJournals(): Promise<JournalDocument[]> {
     );
 }
 
-export const saveJournal = (doc: JournalDocument) => putItem(STORE_JOURNALS, doc);
+export const saveJournal = (doc: JournalDocument) => {
+  const stamped: JournalDocument = {
+    ...doc,
+    completionProgress: computeJournalProgress(doc),
+  };
+  return putItem(STORE_JOURNALS, stamped);
+};
 export const deleteJournal = (id: string) => deleteItem(STORE_JOURNALS, id);
 
 // Media
@@ -175,9 +259,11 @@ export async function getAllGroups(): Promise<StudentGroup[]> {
     await Promise.all(SAMPLE_GROUPS.map((g) => putItem(STORE_GROUPS, g)));
     return [...SAMPLE_GROUPS];
   }
-  return existing.sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  );
+  return existing
+    .map(normalizeGroup)
+    .sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
 }
 
 export const saveGroup = (group: StudentGroup) => putItem(STORE_GROUPS, group);
@@ -190,13 +276,15 @@ export async function getAllResidents(): Promise<ResidentRecord[]> {
     await Promise.all(SAMPLE_RESIDENTS.map((r) => putItem(STORE_RESIDENTS, r)));
     return [...SAMPLE_RESIDENTS];
   }
-  return existing.sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'));
+  return existing
+    .map(normalizeResident)
+    .sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'));
 }
 
 export const saveResident = (res: ResidentRecord) => putItem(STORE_RESIDENTS, res);
 export const deleteResident = (id: string) => deleteItem(STORE_RESIDENTS, id);
 
-// Module Library (with seamless v2 -> v3 catalog upgrade & non-destructive seeding)
+// Module Library
 const LEGACY_V2_STUB_IDS = new Set([
   'lib-kodu',
   'lib-python',
@@ -215,7 +303,6 @@ export async function getAllLibraryModules(): Promise<LibraryModule[]> {
     return [...KIBERONE_CURRICULUM_MODULES];
   }
 
-  // Upgrade from v2 stub seed or add missing official curriculum modules without overwriting user edits
   const existingIds = new Set(existing.map((m) => m.id));
   const isPureLegacyV2Seed = existing.every((m) => LEGACY_V2_STUB_IDS.has(m.id));
   const missingOfficial = KIBERONE_CURRICULUM_MODULES.filter(
@@ -323,6 +410,7 @@ export const deleteTemplate = (id: string) => deleteItem(STORE_TEMPLATES, id);
 export interface FullBackupPayload {
   version: number;
   exportedAt: string;
+  branches?: Branch[];
   journals: JournalDocument[];
   groups: StudentGroup[];
   residents: ResidentRecord[];
@@ -336,6 +424,7 @@ export interface FullBackupPayload {
 
 export async function exportFullBackupPayload(): Promise<FullBackupPayload> {
   const [
+    branches,
     journals,
     groups,
     residents,
@@ -346,6 +435,7 @@ export async function exportFullBackupPayload(): Promise<FullBackupPayload> {
     customTemplates,
     customMedia,
   ] = await Promise.all([
+    getAllBranches(),
     getAllJournals(),
     getAllGroups(),
     getAllResidents(),
@@ -358,8 +448,9 @@ export async function exportFullBackupPayload(): Promise<FullBackupPayload> {
   ]);
 
   return {
-    version: 3,
+    version: 4,
     exportedAt: new Date().toISOString(),
+    branches,
     journals,
     groups,
     residents,
@@ -377,6 +468,9 @@ export async function restoreFullBackupPayload(
 ): Promise<{ journalsCount: number }> {
   const journals = Array.isArray(payload.journals) ? payload.journals : [];
   await Promise.all([
+    ...(Array.isArray(payload.branches)
+      ? payload.branches.map((b) => putItem(STORE_BRANCHES, b))
+      : []),
     ...journals.map((j) => putItem(STORE_JOURNALS, j)),
     ...(Array.isArray(payload.groups)
       ? payload.groups.map((g) => putItem(STORE_GROUPS, g))
@@ -409,3 +503,5 @@ export async function restoreFullBackupPayload(
   ]);
   return { journalsCount: journals.length };
 }
+
+export { formatGroupPeriod };

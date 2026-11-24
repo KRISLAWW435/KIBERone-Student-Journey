@@ -8,6 +8,17 @@ export type JournalStatus =
   | 'ready'
   | 'exported';
 
+export type StudentStatus = 'active' | 'dropped' | 'transferred';
+
+export interface Branch {
+  id: string;
+  name: string;
+  address: string;
+  isDefault?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type ModuleCategoryId =
   | 'algorithms'
   | 'games'
@@ -320,11 +331,28 @@ export interface Page2Config {
   footerWebsite: string;
 }
 
+export type JournalProgressLevel = 'not_started' | 'in_progress' | 'ready';
+
+export interface JournalProgressBlock {
+  id: string;
+  label: string;
+  completed: boolean;
+}
+
+export interface JournalProgress {
+  filledBlocks: number;
+  totalBlocks: number;
+  label: string;
+  statusLevel: JournalProgressLevel;
+  blocks: JournalProgressBlock[];
+}
+
 export interface JournalDocument {
   id: string;
   groupId?: string;
   residentId?: string;
   status: JournalStatus;
+  completionProgress?: JournalProgress;
   createdAt: string;
   updatedAt: string;
   resident: ResidentInfo;
@@ -358,12 +386,24 @@ export interface MediaAsset {
   createdAt: string;
 }
 
+export interface GroupCommonCurriculum {
+  paletteId: string;
+  modules: ModuleItem[];
+  skills: SkillItem[];
+  nextChapterTitle: string;
+  nextChapterDescription: string;
+  nextChapterTopics: NextTopicItem[];
+}
+
 export interface StudentGroup {
   id: string;
   name: string;
+  branchId: string;
   mentorName: string;
-  defaultPeriod: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string;   // YYYY-MM-DD
   ageCategory: AgeCategory;
+  commonData?: GroupCommonCurriculum;
   createdAt: string;
   updatedAt: string;
 }
@@ -375,9 +415,9 @@ export interface ResidentRecord {
   age: string;
   ageCategory: AgeCategory;
   mentorName: string;
-  period: string;
-  branch: string;
-  archived: boolean;
+  branchId: string;
+  status: StudentStatus;
+  archived?: boolean;
   journalId?: string;
   createdAt: string;
   updatedAt: string;
@@ -465,4 +505,3 @@ export type EditorSectionTarget =
   | { page: 2; block: 'decor'; itemId: string }
   | { page: 2; block: 'background' }
   | null;
-

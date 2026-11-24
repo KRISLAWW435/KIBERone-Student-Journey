@@ -47,7 +47,7 @@ interface ModulesLibraryViewProps {
   groupTemplates: GroupCurriculumTemplate[];
   mediaAssets: MediaAsset[];
   onNavigate: (tab: WorkspaceTab) => void;
-  onCreateNewJournal: () => void;
+  onCreateGroup: () => void;
   onOpenMediaLibrary: () => void;
   onSaveModule: (mod: LibraryModule) => Promise<void>;
   onDeleteModule: (id: string) => Promise<void>;
@@ -90,7 +90,7 @@ export function ModulesLibraryView({
   groupTemplates,
   mediaAssets,
   onNavigate,
-  onCreateNewJournal,
+  onCreateGroup,
   onOpenMediaLibrary,
   onSaveModule,
   onDeleteModule,
@@ -342,7 +342,7 @@ export function ModulesLibraryView({
       <AppHeader
         activeTab="modules"
         onNavigate={onNavigate}
-        onCreateNew={onCreateNewJournal}
+        onCreateGroup={onCreateGroup}
         onOpenMediaLibrary={onOpenMediaLibrary}
       />
 
@@ -1354,7 +1354,7 @@ export function ModulesLibraryView({
                   setEditingGroupTemplate({
                     id: `gtpl-${Date.now()}`,
                     name: 'Новый групповой шаблон',
-                    description: 'Набор модулей на учебный квартал.',
+                    description: 'Набор модулей на учебный период.',
                     ageCategory: '11-13',
                     paletteId: DESIGN_PALETTES[0].id,
                     moduleIds: modules.slice(0, 3).map((m) => m.id),
@@ -1411,7 +1411,7 @@ export function ModulesLibraryView({
                     <div className="pt-3 border-t border-zinc-100 flex items-center justify-between gap-2">
                       <button
                         type="button"
-                        onClick={() => onNavigate('groups')}
+                        onClick={() => onNavigate('home')}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-semibold"
                       >
                         <Sparkles className="w-3.5 h-3.5" />

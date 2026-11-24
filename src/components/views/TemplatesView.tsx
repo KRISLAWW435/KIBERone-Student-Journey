@@ -19,7 +19,7 @@ interface TemplatesViewProps {
   templates: JournalTemplate[];
   journals: JournalDocument[];
   onNavigate: (tab: WorkspaceTab) => void;
-  onCreateNewJournal: () => void;
+  onCreateGroup: () => void;
   onCreateFromTemplate: (template: JournalTemplate) => void;
   onSaveTemplate: (tpl: JournalTemplate) => Promise<void>;
   onDeleteTemplate: (id: string) => Promise<void>;
@@ -30,7 +30,7 @@ export function TemplatesView({
   templates,
   journals,
   onNavigate,
-  onCreateNewJournal,
+  onCreateGroup,
   onCreateFromTemplate,
   onSaveTemplate,
   onDeleteTemplate,
@@ -71,7 +71,7 @@ export function TemplatesView({
       <AppHeader
         activeTab="templates"
         onNavigate={onNavigate}
-        onCreateNew={onCreateNewJournal}
+        onCreateGroup={onCreateGroup}
         onOpenMediaLibrary={onOpenMediaLibrary}
       />
 
@@ -172,7 +172,7 @@ export function TemplatesView({
                     className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-semibold"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>Создать журнал</span>
+                    <span>Создать группу по шаблону</span>
                   </button>
 
                   <div className="flex items-center gap-1">

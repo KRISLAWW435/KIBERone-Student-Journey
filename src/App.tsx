@@ -3,18 +3,14 @@ import { WorkspaceTab } from './components/AppHeader';
 import { MediaLibraryModal } from './components/MediaLibraryModal';
 import { JournalPageOne } from './components/journal/JournalPageOne';
 import { JournalPageTwo } from './components/journal/JournalPageTwo';
-import { EditorView } from './components/views/EditorView';
-import {
-  BulkGroupGenerationPayload,
-  GroupsView,
-} from './components/views/GroupsView';
+import { GroupEditorView } from './components/views/GroupEditorView';
 import { HomeView } from './components/views/HomeView';
 import { ModulesLibraryView } from './components/views/ModulesLibraryView';
 import { PreviewView } from './components/views/PreviewView';
 import { TemplatesView } from './components/views/TemplatesView';
-import { WizardView } from './components/views/WizardView';
-import { createBlankJournal, DESIGN_PALETTES } from './data/presets';
+import { DESIGN_PALETTES } from './data/presets';
 import {
+  deleteBranch,
   deleteCategory,
   deleteGroup,
   deleteGroupTemplate,
@@ -25,6 +21,7 @@ import {
   deleteSkillDefinition,
   deleteTemplate,
   exportFullBackupPayload,
+  getAllBranches,
   getAllCategories,
   getAllGroups,
   getAllGroupTemplates,
@@ -35,6 +32,7 @@ import {
   getAllSkillsCatalog,
   getAllTemplates,
   restoreFullBackupPayload,
+  saveBranch,
   saveCategory,
   saveGroup,
   saveGroupTemplate,
@@ -46,7 +44,8 @@ import {
   saveTemplate,
 } from './db/storage';
 import {
-  AgeCategory,
+  Branch,
+  GroupCommonCurriculum,
   GroupCurriculumTemplate,
   JournalDocument,
   JournalStatus,
@@ -61,15 +60,21 @@ import {
 } from './types/journal';
 import {
   buildJournalPdfUint8Array,
-  exportFullPdf,
   exportGroupZipPdf,
   sanitizeFilename,
 } from './utils/exportService';
+import {
+  applyGroupCommonDataToJournal,
+  computeJournalProgress,
+  createStudentJournal,
+  formatGroupPeriod,
+} from './utils/journalProgress';
 
-type AppRoute = WorkspaceTab | 'wizard' | 'editor' | 'preview';
+type AppRoute = WorkspaceTab | 'groupEditor' | 'preview';
 
 export default function App() {
   const [route, setRoute] = useState<AppRoute>('home');
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [journals, setJournals] = useState<JournalDocument[]>([]);
   const [mediaAssets, setMediaAssets] = useState<MediaAsset[]>([]);
   const [groups, setGroups] = useState<StudentGroup[]>([]);
@@ -80,8 +85,9 @@ export default function App() {
   const [groupTemplates, setGroupTemplates] = useState<GroupCurriculumTemplate[]>([]);
   const [templates, setTemplates] = useState<JournalTemplate[]>([]);
 
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [wizardDraft, setWizardDraft] = useState<JournalDocument | null>(null);
+  const [createGroupSignal, setCreateGroupSignal] = useState(0);
   const [saveState, setSaveState] = useState<'saved' | 'saving'>('saved');
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
@@ -116,6 +122,7 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
     Promise.all([
+      getAllBranches(),
       getAllJournals(),
       getAllMediaAssets(),
       getAllGroups(),
@@ -127,7 +134,8 @@ export default function App() {
       getAllTemplates(),
     ])
       .then(
-        ([
+        async ([
+          loadedBranches,
           loadedJournals,
           loadedMedia,
           loadedGroups,
@@ -138,18 +146,65 @@ export default function App() {
           loadedGroupTemplates,
           loadedTemplates,
         ]) => {
+          // Ensure every active student in a group automatically has a journal
+          const branchMap = new Map(loadedBranches.map((b) => [b.id, b]));
+          const groupMap = new Map(loadedGroups.map((g) => [g.id, g]));
+          const nextJournals = [...loadedJournals];
+          const nextResidents = [...loadedResidents];
+          const newlyCreatedJournals: JournalDocument[] = [];
+          const updatedResidentsToSave: ResidentRecord[] = [];
+
+          for (let i = 0; i < nextResidents.length; i++) {
+            const res = nextResidents[i];
+            const hasJournal = nextJournals.some(
+              (j) => j.id === res.journalId || j.residentId === res.id
+            );
+            if (!hasJournal) {
+              const grp = groupMap.get(res.groupId);
+              if (grp) {
+                const br = branchMap.get(grp.branchId);
+                const generated = createStudentJournal(
+                  res,
+                  grp,
+                  br,
+                  loadedSkills
+                );
+                newlyCreatedJournals.push(generated);
+                nextJournals.push(generated);
+                const linkedRes: ResidentRecord = {
+                  ...res,
+                  journalId: generated.id,
+                  updatedAt: new Date().toISOString(),
+                };
+                nextResidents[i] = linkedRes;
+                updatedResidentsToSave.push(linkedRes);
+              }
+            }
+          }
+
+          if (newlyCreatedJournals.length > 0) {
+            await Promise.all([
+              ...newlyCreatedJournals.map((j) => saveJournal(j)),
+              ...updatedResidentsToSave.map((r) => saveResident(r)),
+            ]);
+          }
+
           if (!mounted) return;
-          setJournals(loadedJournals);
+          setBranches(loadedBranches);
+          setJournals(nextJournals);
           setMediaAssets(loadedMedia);
           setGroups(loadedGroups);
-          setResidents(loadedResidents);
+          setResidents(nextResidents);
           setLibraryModules(loadedModules);
           setCategories(loadedCategories);
           setSkillsCatalog(loadedSkills);
           setGroupTemplates(loadedGroupTemplates);
           setTemplates(loadedTemplates);
-          if (loadedJournals.length > 0) {
-            setActiveId(loadedJournals[0].id);
+          if (loadedGroups.length > 0) {
+            setActiveGroupId(loadedGroups[0].id);
+          }
+          if (nextJournals.length > 0) {
+            setActiveId(nextJournals[0].id);
           }
         }
       )
@@ -164,6 +219,8 @@ export default function App() {
     };
   }, [showToast]);
 
+  const activeGroup =
+    groups.find((g) => g.id === activeGroupId) ?? groups[0] ?? null;
   const activeDoc =
     journals.find((j) => j.id === activeId) ?? journals[0] ?? null;
 
@@ -175,11 +232,13 @@ export default function App() {
     []
   );
 
-  // Autosave journal edits to IndexedDB
-  const handleUpdateActiveDoc = useCallback(
+  // Autosave journal edits to IndexedDB with live progress computation
+  const handleUpdateJournal = useCallback(
     (updated: JournalDocument) => {
+      const progress = computeJournalProgress(updated);
       const stamped: JournalDocument = {
         ...updated,
+        completionProgress: progress,
         updatedAt: new Date().toISOString(),
       };
       setJournals((prev) =>
@@ -195,106 +254,10 @@ export default function App() {
           .catch(() =>
             showToast('Не удалось сохранить изменения в IndexedDB.')
           );
-      }, 350);
+      }, 320);
     },
     [showToast]
   );
-
-  const handleForceSave = useCallback(async () => {
-    if (!activeDoc) return;
-    setSaveState('saving');
-    try {
-      await saveJournal({ ...activeDoc, updatedAt: new Date().toISOString() });
-      setSaveState('saved');
-      showToast('Журнал сохранён');
-    } catch {
-      showToast('Ошибка при сохранении журнала');
-    }
-  }, [activeDoc, showToast]);
-
-  const handleCreateNew = (ageCategory?: AgeCategory) => {
-    const draft = createBlankJournal();
-    if (ageCategory) {
-      draft.resident.ageCategory = ageCategory;
-      draft.resident.age =
-        ageCategory === '8-10'
-          ? '9 лет'
-          : ageCategory === '14-15'
-          ? '14 лет'
-          : '11 лет';
-    }
-    setWizardDraft(draft);
-    setRoute('wizard');
-  };
-
-  const handleCreateFromTemplate = async (tpl: JournalTemplate) => {
-    const now = new Date().toISOString();
-    const cloned = JSON.parse(JSON.stringify(tpl.snapshot)) as JournalTemplate['snapshot'];
-    const doc: JournalDocument = {
-      id: `journal-${Date.now()}`,
-      status: 'draft',
-      createdAt: now,
-      updatedAt: now,
-      resident: {
-        ...cloned.resident,
-        fullName: 'Новый резидент',
-      },
-      page1: cloned.page1,
-      page2: cloned.page2,
-    };
-    await saveJournal(doc);
-    setJournals((prev) => [doc, ...prev]);
-    setActiveId(doc.id);
-    setRoute('editor');
-    showToast(`Создан журнал по шаблону «${tpl.name}»`);
-  };
-
-  const handleFinishWizard = async (completedDoc: JournalDocument) => {
-    const stamped: JournalDocument = {
-      ...completedDoc,
-      updatedAt: new Date().toISOString(),
-    };
-    await saveJournal(stamped);
-    setJournals((prev) => [
-      stamped,
-      ...prev.filter((j) => j.id !== stamped.id),
-    ]);
-    setActiveId(stamped.id);
-    setWizardDraft(null);
-    setRoute('editor');
-  };
-
-  const handleDuplicate = async (id: string) => {
-    const source = journals.find((j) => j.id === id);
-    if (!source) return;
-    const now = new Date().toISOString();
-    const copy: JournalDocument = {
-      ...(JSON.parse(JSON.stringify(source)) as JournalDocument),
-      id: `journal-${Date.now()}`,
-      status: 'draft',
-      createdAt: now,
-      updatedAt: now,
-      resident: {
-        ...source.resident,
-        fullName: `${source.resident.fullName} (копия)`,
-      },
-    };
-    await saveJournal(copy);
-    setJournals((prev) => [copy, ...prev]);
-    showToast('Создана копия журнала');
-  };
-
-  const handleDelete = async (id: string) => {
-    await deleteJournal(id);
-    setJournals((prev) => {
-      const remaining = prev.filter((j) => j.id !== id);
-      if (activeId === id) {
-        setActiveId(remaining[0]?.id ?? null);
-      }
-      return remaining;
-    });
-    showToast('Журнал удалён');
-  };
 
   const handleUpdateJournalStatus = useCallback(
     async (journalId: string, status: JournalStatus) => {
@@ -303,6 +266,7 @@ export default function App() {
       const updated: JournalDocument = {
         ...target,
         status,
+        completionProgress: computeJournalProgress({ ...target, status }),
         updatedAt: new Date().toISOString(),
       };
       await saveJournal(updated);
@@ -312,30 +276,6 @@ export default function App() {
     },
     [journals]
   );
-
-  const handleQuickDownload = async (doc: JournalDocument) => {
-    setBatchRenderDoc(doc);
-    showToast('Подготовка PDF...');
-    window.setTimeout(async () => {
-      if (exportPage1Ref.current && exportPage2Ref.current) {
-        try {
-          await exportFullPdf(
-            exportPage1Ref.current,
-            exportPage2Ref.current,
-            doc.resident.fullName
-          );
-          await handleUpdateJournalStatus(doc.id, 'exported');
-          showToast('PDF успешно сформирован');
-        } catch {
-          showToast('Ошибка экспорта PDF');
-        } finally {
-          setBatchRenderDoc(null);
-        }
-      } else {
-        setBatchRenderDoc(null);
-      }
-    }, 180);
-  };
 
   const handleUploadMedia = async (
     file: File,
@@ -373,283 +313,371 @@ export default function App() {
     setMediaAssets((prev) => prev.filter((m) => m.id !== id));
   };
 
-  // Groups & Residents handlers
+  // Branches handlers
+  const handleSaveBranch = async (branch: Branch) => {
+    await saveBranch(branch);
+    setBranches((prev) => [branch, ...prev.filter((b) => b.id !== branch.id)]);
+    showToast(`Локация «${branch.name}» сохранена`);
+  };
+
+  const handleDeleteBranch = async (branchId: string) => {
+    await deleteBranch(branchId);
+    setBranches((prev) => prev.filter((b) => b.id !== branchId));
+    showToast('Локация удалена');
+  };
+
+  // Groups handlers
   const handleSaveGroup = async (grp: StudentGroup) => {
     await saveGroup(grp);
     setGroups((prev) => [grp, ...prev.filter((g) => g.id !== grp.id)]);
-    showToast('Группа сохранена');
+
+    // Sync updated branch/period/mentorName to existing journals of this group
+    const branch = branches.find((b) => b.id === grp.branchId);
+    const periodStr = formatGroupPeriod(grp.startDate, grp.endDate);
+    const groupJournals = journals.filter((j) => j.groupId === grp.id);
+    if (groupJournals.length > 0) {
+      const updatedJournals = groupJournals.map((j) => ({
+        ...j,
+        updatedAt: new Date().toISOString(),
+        resident: {
+          ...j.resident,
+          ageCategory: grp.ageCategory,
+          period: periodStr,
+          mentorName: grp.mentorName || j.resident.mentorName,
+          branch: branch ? branch.name : j.resident.branch,
+        },
+      }));
+      await Promise.all(updatedJournals.map((j) => saveJournal(j)));
+      const map = new Map(updatedJournals.map((j) => [j.id, j]));
+      setJournals((prev) => prev.map((j) => map.get(j.id) ?? j));
+    }
+
+    showToast(`Группа «${grp.name}» сохранена`);
   };
 
   const handleDeleteGroup = async (groupId: string) => {
-    await deleteGroup(groupId);
+    const groupResidents = residents.filter((r) => r.groupId === groupId);
+    const resIds = new Set(groupResidents.map((r) => r.id));
+    const groupJournals = journals.filter(
+      (j) => j.groupId === groupId || (j.residentId && resIds.has(j.residentId))
+    );
+
+    await Promise.all([
+      deleteGroup(groupId),
+      ...groupResidents.map((r) => deleteResident(r.id)),
+      ...groupJournals.map((j) => deleteJournal(j.id)),
+    ]);
+
     setGroups((prev) => prev.filter((g) => g.id !== groupId));
-    showToast('Группа удалена');
+    setResidents((prev) => prev.filter((r) => r.groupId !== groupId));
+    const deletedJIds = new Set(groupJournals.map((j) => j.id));
+    setJournals((prev) => prev.filter((j) => !deletedJIds.has(j.id)));
+
+    if (activeGroupId === groupId) {
+      setActiveGroupId(null);
+      if (route === 'groupEditor') {
+        setRoute('home');
+      }
+    }
+    showToast('Группа и её журналы удалены');
   };
 
-  const handleSaveResident = async (res: ResidentRecord) => {
-    await saveResident(res);
+  // Quick Add Student -> automatically generates their JournalDocument
+  const handleQuickAddStudent = async (
+    groupId: string,
+    fullName: string,
+    age?: string
+  ): Promise<ResidentRecord | null> => {
+    const grp = groups.find((g) => g.id === groupId);
+    if (!grp) return null;
+    const branch = branches.find((b) => b.id === grp.branchId);
+    const now = new Date().toISOString();
+    const defaultAge =
+      age?.trim() ||
+      (grp.ageCategory === '8-10'
+        ? '9 лет'
+        : grp.ageCategory === '14-15'
+        ? '14 лет'
+        : '11 лет');
+
+    const newRes: ResidentRecord = {
+      id: `res-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+      groupId: grp.id,
+      fullName: fullName.trim(),
+      age: defaultAge,
+      ageCategory: grp.ageCategory,
+      mentorName: grp.mentorName,
+      branchId: grp.branchId,
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const newJournal = createStudentJournal(newRes, grp, branch, skillsCatalog);
+    const linkedRes: ResidentRecord = {
+      ...newRes,
+      journalId: newJournal.id,
+    };
+
+    await Promise.all([saveResident(linkedRes), saveJournal(newJournal)]);
     setResidents((prev) =>
-      [res, ...prev.filter((r) => r.id !== res.id)].sort((a, b) =>
+      [linkedRes, ...prev].sort((a, b) =>
         a.fullName.localeCompare(b.fullName, 'ru')
       )
     );
-    showToast('Карточка резидента сохранена');
+    setJournals((prev) => [newJournal, ...prev]);
+    setActiveId(newJournal.id);
+    showToast(`Добавлен ученик «${linkedRes.fullName}» и создан журнал`);
+    return linkedRes;
   };
 
-  const handleDeleteResident = async (residentId: string) => {
-    await deleteResident(residentId);
-    setResidents((prev) => prev.filter((r) => r.id !== residentId));
-    showToast('Резидент удалён');
-  };
-
-  const handleImportResidents = async (records: ResidentRecord[]) => {
-    await Promise.all(records.map((r) => saveResident(r)));
-    const refreshed = await getAllResidents();
-    setResidents(refreshed);
-    showToast(`Импортировано резидентов: ${records.length}`);
-  };
-
-  const handleCreateSingleResidentJournal = async (res: ResidentRecord) => {
-    const base = createBlankJournal();
-    const now = new Date().toISOString();
-    const doc: JournalDocument = {
-      ...base,
-      id: `journal-${Date.now()}`,
-      groupId: res.groupId,
-      residentId: res.id,
-      status: 'draft',
-      createdAt: now,
-      updatedAt: now,
-      resident: {
-        fullName: res.fullName,
-        age: res.age,
-        ageCategory: res.ageCategory,
-        period: res.period,
-        mentorName: res.mentorName,
-        branch: res.branch,
-      },
+  const handleUpdateStudent = async (updated: ResidentRecord) => {
+    const stamped: ResidentRecord = {
+      ...updated,
+      updatedAt: new Date().toISOString(),
     };
-    await saveJournal(doc);
-    await saveResident({ ...res, journalId: doc.id, updatedAt: now });
-    setJournals((prev) => [doc, ...prev]);
+    await saveResident(stamped);
     setResidents((prev) =>
-      prev.map((r) => (r.id === res.id ? { ...r, journalId: doc.id } : r))
+      prev
+        .map((r) => (r.id === stamped.id ? stamped : r))
+        .sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'))
     );
-    setActiveId(doc.id);
-    setRoute('editor');
+
+    // Sync student name / age with their journal
+    const targetJournal = journals.find(
+      (j) => j.id === stamped.journalId || j.residentId === stamped.id
+    );
+    if (targetJournal) {
+      const nextJournal: JournalDocument = {
+        ...targetJournal,
+        updatedAt: new Date().toISOString(),
+        resident: {
+          ...targetJournal.resident,
+          fullName: stamped.fullName,
+          age: stamped.age,
+        },
+      };
+      nextJournal.completionProgress = computeJournalProgress(nextJournal);
+      await saveJournal(nextJournal);
+      setJournals((prev) =>
+        prev.map((j) => (j.id === nextJournal.id ? nextJournal : j))
+      );
+    }
   };
 
-  const handleBulkCreateGroupJournals = async (
-    payload: BulkGroupGenerationPayload
+  const handleTransferStudent = async (
+    residentId: string,
+    targetGroupId: string
   ) => {
+    const res = residents.find((r) => r.id === residentId);
+    const targetGroup = groups.find((g) => g.id === targetGroupId);
+    if (!res || !targetGroup) return;
+
+    const targetBranch = branches.find((b) => b.id === targetGroup.branchId);
     const now = new Date().toISOString();
-    const palette =
-      DESIGN_PALETTES.find((p) => p.id === payload.paletteId) ??
-      DESIGN_PALETTES[0];
-    const skillColors = ['#FF8A75', '#48C9D8', '#FFE047', '#C4B5FD'];
 
-    const mappedModules = payload.selectedModules.map((m, idx) => ({
-      id: `mod-${Date.now()}-${idx}`,
-      libraryModuleId: m.libraryModuleId,
-      code: m.code,
-      officialTitle: m.officialTitle || m.title,
-      title: m.title,
-      subtitle: m.subtitle,
-      description: m.description,
-      category: m.category,
-      illustrationKey: m.illustrationKey,
-      iconKey: m.iconKey,
-      visualMode: m.visualMode || (m.customImageUrl || m.imageMediaId ? 'image' : 'illustration'),
-      imageMediaId: m.imageMediaId ?? null,
-      customImageUrl: m.customImageUrl,
-      cardBgColor: m.cardBgColor,
-      layoutVariant: 'classic' as const,
-      size: 'normal' as const,
-      order: idx + 1,
-      suggestedSkills: [...(m.suggestedSkills ?? [])],
-    }));
+    const updatedRes: ResidentRecord = {
+      ...res,
+      groupId: targetGroup.id,
+      branchId: targetGroup.branchId,
+      mentorName: targetGroup.mentorName || res.mentorName,
+      ageCategory: targetGroup.ageCategory,
+      status: 'active',
+      updatedAt: now,
+    };
 
-    const aggregatedSuggestedPool = Array.from(
-      new Set(payload.selectedModules.flatMap((m) => m.suggestedSkills ?? []))
+    const existingJournal = journals.find(
+      (j) => j.id === res.journalId || j.residentId === res.id
     );
 
-    const mappedSkills = payload.commonSkills.map((label, idx) => {
-      const def = skillsCatalog.find(
-        (s) => s.label.toLowerCase() === label.toLowerCase()
-      );
-      return {
-        id: `sk-${Date.now()}-${idx}`,
-        skillId: def?.id,
-        label,
-        bgColor: def?.defaultColor || skillColors[idx % skillColors.length],
-        status: 'independent' as const,
+    if (existingJournal) {
+      const updatedJournal: JournalDocument = {
+        ...existingJournal,
+        groupId: targetGroup.id,
+        updatedAt: now,
+        resident: {
+          ...existingJournal.resident,
+          branch: targetBranch ? targetBranch.name : existingJournal.resident.branch,
+          period: formatGroupPeriod(targetGroup.startDate, targetGroup.endDate),
+          mentorName: targetGroup.mentorName || existingJournal.resident.mentorName,
+          ageCategory: targetGroup.ageCategory,
+        },
       };
-    });
+      updatedJournal.completionProgress = computeJournalProgress(updatedJournal);
+      await Promise.all([saveResident(updatedRes), saveJournal(updatedJournal)]);
+      setJournals((prev) =>
+        prev.map((j) => (j.id === updatedJournal.id ? updatedJournal : j))
+      );
+    } else {
+      const created = createStudentJournal(
+        updatedRes,
+        targetGroup,
+        targetBranch,
+        skillsCatalog
+      );
+      updatedRes.journalId = created.id;
+      await Promise.all([saveResident(updatedRes), saveJournal(created)]);
+      setJournals((prev) => [created, ...prev]);
+    }
 
-    const mappedConfirmedSkills = mappedSkills.map((sk) => ({
-      ...sk,
-      confirmedAt: now,
-    }));
+    setResidents((prev) =>
+      prev.map((r) => (r.id === updatedRes.id ? updatedRes : r))
+    );
+    showToast(`Ученик «${res.fullName}» переведён в группу «${targetGroup.name}»`);
+  };
 
-    let createdCount = 0;
-    let updatedCount = 0;
+  const handleDeleteStudent = async (residentId: string) => {
+    const target = residents.find((r) => r.id === residentId);
+    const relatedJournals = journals.filter(
+      (j) => j.residentId === residentId || (target?.journalId && j.id === target.journalId)
+    );
+    await Promise.all([
+      deleteResident(residentId),
+      ...relatedJournals.map((j) => deleteJournal(j.id)),
+    ]);
 
-    const updatedJournals = [...journals];
-    const updatedResidents = [...residents];
+    setResidents((prev) => prev.filter((r) => r.id !== residentId));
+    const removedIds = new Set(relatedJournals.map((j) => j.id));
+    setJournals((prev) => prev.filter((j) => !removedIds.has(j.id)));
+    if (activeId && removedIds.has(activeId)) {
+      setActiveId(null);
+    }
+    showToast('Ученик и его журнал удалены');
+  };
 
-    for (const resId of payload.residentIds) {
-      const resIdx = updatedResidents.findIndex((r) => r.id === resId);
-      if (resIdx === -1) continue;
-      const res = updatedResidents[resIdx];
-      const existingIdx = updatedJournals.findIndex(
+  // Save Group Common Curriculum & propagate to all active students in the group
+  const handleSaveGroupAndApplyCommon = async (
+    updatedGroup: StudentGroup,
+    commonData: GroupCommonCurriculum
+  ) => {
+    const stampedGroup: StudentGroup = {
+      ...updatedGroup,
+      commonData,
+      updatedAt: new Date().toISOString(),
+    };
+    await saveGroup(stampedGroup);
+    setGroups((prev) =>
+      prev.map((g) => (g.id === stampedGroup.id ? stampedGroup : g))
+    );
+
+    const branch = branches.find((b) => b.id === stampedGroup.branchId);
+    const groupResidents = residents.filter(
+      (r) => r.groupId === stampedGroup.id && r.status !== 'dropped'
+    );
+
+    const nextJournals = [...journals];
+    const nextResidents = [...residents];
+    const journalsToSave: JournalDocument[] = [];
+    const residentsToSave: ResidentRecord[] = [];
+
+    for (const res of groupResidents) {
+      const jIdx = nextJournals.findIndex(
         (j) => j.id === res.journalId || j.residentId === res.id
       );
-
-      if (existingIdx !== -1) {
-        const existing = updatedJournals[existingIdx];
-        if (payload.updateExistingCommonModules) {
-          const nextPool = Array.from(
-            new Set([
-              ...(existing.page1.suggestedSkillsPool ?? []),
-              ...aggregatedSuggestedPool,
-            ])
-          );
-          // Safely update common group structure while strictly preserving personal fields & confirmed skills
-          const patched: JournalDocument = {
-            ...existing,
-            groupId: payload.group.id,
-            residentId: res.id,
-            updatedAt: now,
-            resident: {
-              ...existing.resident,
-              period: payload.period || existing.resident.period,
-              mentorName: payload.mentorName || existing.resident.mentorName,
-              ageCategory: payload.ageCategory,
-            },
-            page1: {
-              ...existing.page1,
-              background: {
-                ...(existing.page1.background ?? {
-                  showGrid: false,
-                  gridStyle: 'dots',
-                }),
-                color: palette.pageBg,
-              },
-              coverBgStart: palette.coverStart,
-              coverBgEnd: palette.coverEnd,
-              suggestedSkillsPool: nextPool,
-              modules:
-                mappedModules.length > 0
-                  ? mappedModules.map((m) => ({
-                      ...m,
-                      id: `${m.id}-${res.id}`,
-                    }))
-                  : existing.page1.modules,
-              skills:
-                mappedSkills.length > 0
-                  ? mappedSkills.map((s) => ({ ...s, id: `${s.id}-${res.id}` }))
-                  : existing.page1.skills,
-              confirmedSkills:
-                mappedConfirmedSkills.length > 0
-                  ? mappedConfirmedSkills.map((s) => ({
-                      ...s,
-                      id: `${s.id}-${res.id}`,
-                    }))
-                  : existing.page1.confirmedSkills,
-            },
-            page2: {
-              ...existing.page2,
-              background: {
-                ...(existing.page2.background ?? {
-                  showGrid: false,
-                  gridStyle: 'dots',
-                }),
-                color: palette.pageBg,
-              },
-              headerTealColor: palette.p2Teal,
-              headerYellowColor: palette.p2Yellow,
-              prideBgColor: palette.prideCoral,
-              nextChapter: {
-                ...existing.page2.nextChapter,
-                bgColor: palette.nextBg,
-              },
-            },
-          };
-          await saveJournal(patched);
-          updatedJournals[existingIdx] = patched;
-          updatedCount++;
-        }
+      if (jIdx !== -1) {
+        const patched = applyGroupCommonDataToJournal(
+          nextJournals[jIdx],
+          stampedGroup,
+          branch,
+          commonData
+        );
+        nextJournals[jIdx] = patched;
+        journalsToSave.push(patched);
       } else {
-        const blank = createBlankJournal();
-        const newDoc: JournalDocument = {
-          ...blank,
-          id: `journal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          groupId: payload.group.id,
-          residentId: res.id,
-          status: 'draft',
-          createdAt: now,
-          updatedAt: now,
-          resident: {
-            fullName: res.fullName,
-            age: res.age,
-            ageCategory: payload.ageCategory,
-            period: payload.period || res.period,
-            mentorName: payload.mentorName || res.mentorName,
-            branch: res.branch,
-          },
-          page1: {
-            ...blank.page1,
-            background: { color: palette.pageBg, showGrid: false, gridStyle: 'dots' },
-            coverBgStart: palette.coverStart,
-            coverBgEnd: palette.coverEnd,
-            suggestedSkillsPool: aggregatedSuggestedPool,
-            modules:
-              mappedModules.length > 0
-                ? mappedModules.map((m) => ({ ...m, id: `${m.id}-${res.id}` }))
-                : blank.page1.modules,
-            skills: mappedSkills.map((s) => ({ ...s, id: `${s.id}-${res.id}` })),
-            confirmedSkills: mappedConfirmedSkills.map((s) => ({
-              ...s,
-              id: `${s.id}-${res.id}`,
-            })),
-          },
-          page2: {
-            ...blank.page2,
-            background: { color: palette.pageBg, showGrid: false, gridStyle: 'dots' },
-            headerTealColor: palette.p2Teal,
-            headerYellowColor: palette.p2Yellow,
-            prideBgColor: palette.prideCoral,
-            nextChapter: {
-              ...blank.page2.nextChapter,
-              bgColor: palette.nextBg,
-            },
-            mentorNote: {
-              ...blank.page2.mentorNote,
-              greeting: `${res.fullName.split(' ')[0]}, ты отлично поработал в этом периоде,`,
-              signature: `Твой наставник, ${(payload.mentorName || res.mentorName).split(' ')[0]}`,
-            },
-          },
-        };
-        await saveJournal(newDoc);
-        updatedJournals.unshift(newDoc);
-        const updatedRes = { ...res, journalId: newDoc.id, updatedAt: now };
-        await saveResident(updatedRes);
-        updatedResidents[resIdx] = updatedRes;
-        createdCount++;
+        const created = createStudentJournal(
+          res,
+          stampedGroup,
+          branch,
+          skillsCatalog
+        );
+        nextJournals.unshift(created);
+        journalsToSave.push(created);
+        const rIdx = nextResidents.findIndex((r) => r.id === res.id);
+        if (rIdx !== -1) {
+          nextResidents[rIdx] = {
+            ...res,
+            journalId: created.id,
+            updatedAt: new Date().toISOString(),
+          };
+          residentsToSave.push(nextResidents[rIdx]);
+        }
       }
     }
 
-    setJournals(updatedJournals);
-    setResidents(updatedResidents);
+    await Promise.all([
+      ...journalsToSave.map((j) => saveJournal(j)),
+      ...residentsToSave.map((r) => saveResident(r)),
+    ]);
+
+    setJournals(nextJournals);
+    setResidents(nextResidents);
     showToast(
-      `Готово: создано ${createdCount}, обновлено ${updatedCount} журналов группы`
+      `Общие данные группы применены к журналам (${journalsToSave.length} учеников)`
     );
+  };
+
+  const handleOpenGroupEditor = (groupId: string) => {
+    setActiveGroupId(groupId);
+    const groupStudents = residents.filter(
+      (r) => r.groupId === groupId && r.status === 'active'
+    );
+    const firstStudent = groupStudents[0];
+    if (firstStudent) {
+      const firstJournal = journals.find(
+        (j) => j.id === firstStudent.journalId || j.residentId === firstStudent.id
+      );
+      if (firstJournal) {
+        setActiveId(firstJournal.id);
+      }
+    }
+    setRoute('groupEditor');
+  };
+
+  const handleCreateGroupFromTemplate = async (tpl: JournalTemplate) => {
+    const now = new Date().toISOString();
+    const defaultBranch = branches[0];
+    const matchedPalette =
+      DESIGN_PALETTES.find(
+        (p) =>
+          p.coverStart === tpl.snapshot.page1.coverBgStart &&
+          p.p2Teal === tpl.snapshot.page2.headerTealColor
+      ) ?? DESIGN_PALETTES[0];
+
+    const commonData: GroupCommonCurriculum = {
+      paletteId: matchedPalette.id,
+      modules: JSON.parse(JSON.stringify(tpl.snapshot.page1.modules)),
+      skills: JSON.parse(JSON.stringify(tpl.snapshot.page1.skills)),
+      nextChapterTitle: tpl.snapshot.page2.nextChapter.title,
+      nextChapterDescription: tpl.snapshot.page2.nextChapter.description,
+      nextChapterTopics: JSON.parse(
+        JSON.stringify(tpl.snapshot.page2.nextChapter.topics)
+      ),
+    };
+
+    const newGroup: StudentGroup = {
+      id: `grp-${Date.now()}`,
+      name: `${tpl.name} · Новая группа`,
+      branchId: defaultBranch?.id || 'branch-1',
+      mentorName: tpl.snapshot.resident.mentorName || 'Наставник KIBERone',
+      startDate: '2026-09-01',
+      endDate: '2026-12-25',
+      ageCategory: tpl.ageCategory,
+      commonData,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await saveGroup(newGroup);
+    setGroups((prev) => [newGroup, ...prev]);
+    setActiveGroupId(newGroup.id);
+    setRoute('groupEditor');
+    showToast(`Создана группа по шаблону «${tpl.name}»`);
   };
 
   // Sequential offscreen rendering + ZIP packaging of group PDFs
   const handleBatchExportGroupZip = async (group: StudentGroup) => {
     const groupRes = residents.filter(
-      (r) => r.groupId === group.id && !r.archived
+      (r) => r.groupId === group.id && r.status === 'active'
     );
     const docsToExport = groupRes
       .map((r) =>
@@ -658,7 +686,7 @@ export default function App() {
       .filter((d): d is JournalDocument => Boolean(d));
 
     if (docsToExport.length === 0) {
-      showToast('У резидентов этой группы ещё нет журналов для экспорта.');
+      showToast('У активных учеников этой группы ещё нет журналов для экспорта.');
       return;
     }
 
@@ -706,7 +734,17 @@ export default function App() {
         const exportedIds = new Set(docsToExport.map((d) => d.id));
         const stamp = new Date().toISOString();
         const updatedList = journals.map((j) =>
-          exportedIds.has(j.id) ? { ...j, status: 'exported' as const, updatedAt: stamp } : j
+          exportedIds.has(j.id)
+            ? {
+                ...j,
+                status: 'exported' as const,
+                completionProgress: computeJournalProgress({
+                  ...j,
+                  status: 'exported',
+                }),
+                updatedAt: stamp,
+              }
+            : j
         );
         await Promise.all(
           updatedList
@@ -788,7 +826,7 @@ export default function App() {
     showToast('Шаблон удалён');
   };
 
-  // Full JSON backup & restore (all 6 IndexedDB stores including embedded media)
+  // Full JSON backup & restore
   const handleExportAllBackup = async () => {
     const payload = await exportFullBackupPayload();
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -819,6 +857,7 @@ export default function App() {
         }
 
         const [
+          refreshedBranches,
           refreshedJournals,
           refreshedGroups,
           refreshedResidents,
@@ -829,6 +868,7 @@ export default function App() {
           refreshedTemplates,
           refreshedMedia,
         ] = await Promise.all([
+          getAllBranches(),
           getAllJournals(),
           getAllGroups(),
           getAllResidents(),
@@ -840,6 +880,7 @@ export default function App() {
           getAllMediaAssets(),
         ]);
 
+        setBranches(refreshedBranches);
         setJournals(refreshedJournals);
         setGroups(refreshedGroups);
         setResidents(refreshedResidents);
@@ -849,12 +890,19 @@ export default function App() {
         setGroupTemplates(refreshedGroupTemplates);
         setTemplates(refreshedTemplates);
         setMediaAssets(refreshedMedia);
-        showToast(`База данных восстановлена (журналов: ${refreshedJournals.length})`);
+        showToast(
+          `База данных восстановлена (групп: ${refreshedGroups.length}, журналов: ${refreshedJournals.length})`
+        );
       } catch {
         showToast('Ошибка чтения резервной копии JSON');
       }
     };
     reader.readAsText(file);
+  };
+
+  const triggerCreateGroupFromSubTab = () => {
+    setRoute('home');
+    setCreateGroupSignal((n) => n + 1);
   };
 
   if (loading) {
@@ -865,65 +913,34 @@ export default function App() {
     );
   }
 
-  const stageDoc =
-    batchRenderDoc ?? (route === 'wizard' ? wizardDraft : activeDoc);
+  const stageDoc = batchRenderDoc ?? activeDoc;
 
   return (
     <>
       <div className="no-print">
         {route === 'home' && (
           <HomeView
-            journals={journals}
+            branches={branches}
             groups={groups}
+            residents={residents}
+            journals={journals}
             onNavigate={(tab) => setRoute(tab)}
-            onCreateNew={handleCreateNew}
-            onOpenEditor={(id) => {
-              setActiveId(id);
-              setRoute('editor');
+            onOpenGroupEditor={handleOpenGroupEditor}
+            onSaveGroup={handleSaveGroup}
+            onDeleteGroup={handleDeleteGroup}
+            onSaveBranch={handleSaveBranch}
+            onDeleteBranch={handleDeleteBranch}
+            onQuickAddStudent={async (groupId, fullName, age) => {
+              await handleQuickAddStudent(groupId, fullName, age);
             }}
-            onOpenPreview={(id) => {
-              setActiveId(id);
-              setRoute('preview');
-            }}
-            onDuplicate={handleDuplicate}
-            onDelete={handleDelete}
-            onQuickDownload={handleQuickDownload}
+            onTransferStudent={handleTransferStudent}
+            onDeleteStudent={handleDeleteStudent}
             onOpenMediaLibrary={() =>
               setMediaModal({ open: true, category: 'all' })
             }
             onExportAllBackup={handleExportAllBackup}
             onImportBackup={handleImportBackup}
-          />
-        )}
-
-        {route === 'groups' && (
-          <GroupsView
-            groups={groups}
-            residents={residents}
-            journals={journals}
-            libraryModules={libraryModules}
-            groupTemplates={groupTemplates}
-            categories={categories}
-            skillsCatalog={skillsCatalog}
-            batchProgress={batchProgress}
-            onNavigate={(tab) => setRoute(tab)}
-            onCreateNewJournal={() => handleCreateNew()}
-            onOpenMediaLibrary={() =>
-              setMediaModal({ open: true, category: 'all' })
-            }
-            onSaveGroup={handleSaveGroup}
-            onDeleteGroup={handleDeleteGroup}
-            onSaveResident={handleSaveResident}
-            onDeleteResident={handleDeleteResident}
-            onImportResidents={handleImportResidents}
-            onOpenJournalInEditor={(id) => {
-              setActiveId(id);
-              setRoute('editor');
-            }}
-            onCreateSingleResidentJournal={handleCreateSingleResidentJournal}
-            onUpdateJournalStatus={handleUpdateJournalStatus}
-            onBulkCreateGroupJournals={handleBulkCreateGroupJournals}
-            onBatchExportGroupZip={handleBatchExportGroupZip}
+            openCreateGroupSignal={createGroupSignal}
           />
         )}
 
@@ -935,7 +952,7 @@ export default function App() {
             groupTemplates={groupTemplates}
             mediaAssets={mediaAssets}
             onNavigate={(tab) => setRoute(tab)}
-            onCreateNewJournal={() => handleCreateNew()}
+            onCreateGroup={triggerCreateGroupFromSubTab}
             onOpenMediaLibrary={() =>
               setMediaModal({ open: true, category: 'all' })
             }
@@ -965,8 +982,8 @@ export default function App() {
             templates={templates}
             journals={journals}
             onNavigate={(tab) => setRoute(tab)}
-            onCreateNewJournal={() => handleCreateNew()}
-            onCreateFromTemplate={handleCreateFromTemplate}
+            onCreateGroup={triggerCreateGroupFromSubTab}
+            onCreateFromTemplate={handleCreateGroupFromTemplate}
             onSaveTemplate={handleSaveTemplate}
             onDeleteTemplate={handleDeleteTemplate}
             onOpenMediaLibrary={() =>
@@ -975,46 +992,36 @@ export default function App() {
           />
         )}
 
-        {route === 'wizard' && wizardDraft && (
-          <WizardView
-            initialDoc={wizardDraft}
+        {route === 'groupEditor' && activeGroup && (
+          <GroupEditorView
+            group={activeGroup}
+            branches={branches}
+            residents={residents}
+            journals={journals}
             libraryModules={libraryModules}
             categories={categories}
             skillsCatalog={skillsCatalog}
-            onCancel={() => {
-              setWizardDraft(null);
-              setRoute('home');
-            }}
-            onFinish={handleFinishWizard}
-            onOpenMediaPicker={(category, onSelect) =>
-              setMediaModal({
-                open: true,
-                category,
-                onSelect: (url, asset) => {
-                  onSelect(url, asset);
-                  setMediaModal({ open: false, category: 'all' });
-                },
-              })
-            }
-          />
-        )}
-
-        {route === 'editor' && activeDoc && (
-          <EditorView
-            doc={activeDoc}
-            libraryModules={libraryModules}
-            categories={categories}
-            skillsCatalog={skillsCatalog}
+            groupTemplates={groupTemplates}
             mediaAssets={mediaAssets}
             saveState={saveState}
-            onChange={handleUpdateActiveDoc}
-            onForceSave={handleForceSave}
+            batchProgress={batchProgress}
+            activeJournalId={activeId}
+            onSelectActiveJournal={(journalId) => setActiveId(journalId)}
+            onChangeJournal={handleUpdateJournal}
+            onSaveGroupAndApplyCommon={handleSaveGroupAndApplyCommon}
+            onQuickAddStudent={handleQuickAddStudent}
+            onUpdateStudent={handleUpdateStudent}
+            onDeleteStudent={handleDeleteStudent}
             onBackHome={() => setRoute('home')}
-            onOpenPreview={() => setRoute('preview')}
+            onOpenPreview={(journalId) => {
+              setActiveId(journalId);
+              setRoute('preview');
+            }}
             onPrint={() => window.print()}
-            onExportSuccess={() =>
-              handleUpdateJournalStatus(activeDoc.id, 'exported')
+            onExportSuccess={(journalId) =>
+              handleUpdateJournalStatus(journalId, 'exported')
             }
+            onBatchExportGroupZip={handleBatchExportGroupZip}
             getExportPageElements={getExportPageElements}
             onOpenMediaPicker={(category, onSelect) =>
               setMediaModal({
@@ -1033,7 +1040,9 @@ export default function App() {
           <PreviewView
             doc={activeDoc}
             mediaAssets={mediaAssets}
-            onBackToEditor={() => setRoute('editor')}
+            onBackToEditor={() =>
+              setRoute(activeGroupId ? 'groupEditor' : 'home')
+            }
             onBackHome={() => setRoute('home')}
             onPrint={() => window.print()}
             onExportSuccess={() =>
