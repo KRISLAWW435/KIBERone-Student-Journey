@@ -1,0 +1,6 @@
+{
+  "name": "KIBERone Student Journey",
+  "description": "Веб-приложение школы KIBERone для создания, визуального редактирования и экспорта персональных журналов образовательного развития резидентов.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
