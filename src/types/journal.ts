@@ -65,6 +65,9 @@ export type ModuleIllustrationKey =
   | 'hardware';
 
 export type ModuleLucideIconKey =
+  | 'python'
+  | 'cube3d'
+  | 'robots'
   | 'lightbulb'
   | 'blocks'
   | 'gamepad'
@@ -144,7 +147,8 @@ export type NextTopicIconKey =
   | 'cube3d'
   | 'web'
   | 'ai'
-  | 'mobile';
+  | 'mobile'
+  | ModuleLucideIconKey;
 
 export interface CanvasObjectTransform {
   x: number;

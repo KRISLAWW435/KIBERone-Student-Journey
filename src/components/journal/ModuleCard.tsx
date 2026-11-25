@@ -1,6 +1,6 @@
 import React from 'react';
 import { AgeCategory, MediaAsset, ModuleItem } from '../../types/journal';
-import { ModuleLucideIcon, ModuleSvgIllustration } from './JournalArtwork';
+import { ModuleSvgIllustration, ModuleVectorIcon } from './JournalArtwork';
 
 interface ModuleCardProps {
   module: ModuleItem;
@@ -97,10 +97,14 @@ export function ModuleCard({
               }}
               className="flex items-center justify-center w-full h-full"
             >
-              <div className="w-[52px] h-[52px] rounded-2xl bg-white/85 border-[1.5px] border-[#18181B] shadow-[0_2px_0_rgba(24,24,27,0.18)] flex items-center justify-center">
-                <ModuleLucideIcon
+              <div
+                className={`${
+                  compact ? 'w-[54px] h-[54px]' : 'w-[62px] h-[62px]'
+                } rounded-2xl bg-white/65 border-[1.5px] border-[#18181B]/15 shadow-[0_3px_10px_rgba(24,24,27,0.08)] flex items-center justify-center`}
+              >
+                <ModuleVectorIcon
                   iconKey={module.iconKey}
-                  className="w-[30px] h-[30px] text-[#18181B]"
+                  className={compact ? 'w-[38px] h-[38px]' : 'w-[44px] h-[44px]'}
                 />
               </div>
             </div>

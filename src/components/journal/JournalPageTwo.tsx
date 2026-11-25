@@ -190,7 +190,7 @@ export function JournalPageTwo({
             {/* LEFT COLUMN: Strengths + Mentor Note */}
             <div
               style={{ width: '378px', height: '763px' }}
-              className="flex flex-col justify-between gap-[14px] shrink-0"
+              className="flex flex-col justify-start gap-[20px] shrink-0"
             >
               {page2.showStrengths && strengthsToRender.length > 0 && (
                 <DraggableDesignWrapper

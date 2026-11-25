@@ -1159,8 +1159,8 @@ export function ModulesLibraryView({
                             className="mt-1 w-full rounded-lg border border-zinc-200 px-2 py-1.5 bg-white"
                           >
                             <option value="illustration">SVG-иллюстрация</option>
-                            <option value="icon">Lucide-иконка</option>
-                            <option value="image">Картинка</option>
+                            <option value="icon">Иконка (SVG-библиотека)</option>
+                            <option value="image">Своя картинка</option>
                           </select>
                         </label>
 
@@ -1189,7 +1189,7 @@ export function ModulesLibraryView({
 
                         <label className="block">
                           <span className="text-[11px] font-medium text-zinc-600">
-                            Lucide-иконка
+                            Векторная иконка
                           </span>
                           <select
                             value={editingModule.iconKey}
