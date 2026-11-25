@@ -186,6 +186,10 @@ export function JournalPageOne({
             ageCategory={resident.ageCategory}
             designMode={designMode}
             scaleFactor={scaleFactor}
+            titleTransform={layouts.coverTitle}
+            subtitleTransform={layouts.coverSubtitle}
+            infoTransform={layouts.coverInfo}
+            bubbleTransform={layouts.coverBubble}
             bearTransform={layouts.coverBear}
             logoTransform={layouts.logo}
             activeTarget={activeTarget}

@@ -103,6 +103,7 @@ import {
   A4_SPREAD_GAP,
   A4PageSlot,
 } from '../journal/A4SpreadFrame';
+import { COVER_OBJECT_DEFAULTS } from '../journal/CoverSection';
 import {
   MODULE_VECTOR_ICON_OPTIONS,
   ModuleSvgIllustration,
@@ -1052,14 +1053,72 @@ export function GroupEditorView({
   };
 
   const getDefaultZForBlock = (blockId: string): number => {
+    if (blockId === 'coverBubble') return 28;
+    if (blockId === 'coverBear') return 25;
+    if (blockId === 'coverInfo') return 24;
     if (
-      blockId === 'coverBear' ||
-      blockId === 'prideBear' ||
-      blockId === 'nextBear'
+      blockId === 'coverTitle' ||
+      blockId === 'coverSubtitle' ||
+      blockId === 'logo'
     ) {
+      return 22;
+    }
+    if (blockId === 'prideBear' || blockId === 'nextBear') {
       return 20;
     }
     return 10;
+  };
+
+  const getBlockLabel = (t: EditorSectionTarget): string => {
+    if (!t) return '';
+    switch (t.block) {
+      case 'cover':
+        return 'Обложка (верхняя шапка)';
+      case 'coverTitle':
+        return 'Заголовок «МОЙ ПУТЬ»';
+      case 'coverSubtitle':
+        return 'Подзаголовок «в мире технологий»';
+      case 'coverInfo':
+        return 'Плашка с данными ученика';
+      case 'coverBubble':
+        return 'Облачко с репликой (Стр. 1)';
+      case 'coverBear':
+        return 'Мишка на обложке';
+      case 'logo':
+        return 'Логотип KIBERone';
+      case 'modulesBlock':
+        return 'Секция «Мои открытия»';
+      case 'module':
+        return (
+          activeDoc?.page1.modules.find((m) => m.id === t.itemId)?.title ||
+          'Карточка модуля'
+        );
+      case 'skills':
+        return 'Блок «Чему я научился»';
+      case 'projectsBlock':
+        return 'Секция «Мои результаты»';
+      case 'project':
+        return (
+          activeDoc?.page1.projects.find((p) => p.id === t.itemId)?.title ||
+          'Карточка проекта'
+        );
+      case 'header':
+        return 'Шапка «Мои достижения»';
+      case 'strengths':
+        return 'Секция «Мои сильные стороны»';
+      case 'pride':
+        return 'Блок «Мой момент гордости»';
+      case 'prideBear':
+        return 'Мишка в блоке гордости';
+      case 'mentorNote':
+        return 'Лист «Слово наставника»';
+      case 'nextChapter':
+        return 'Блок «Что интересного впереди?»';
+      case 'nextBear':
+        return 'Мишка внизу страницы 2';
+      default:
+        return 'Элемент макета';
+    }
   };
 
   const handleUpdatePageTransform = (
@@ -1411,10 +1470,23 @@ export function GroupEditorView({
     if (target.page === 1) {
       if (
         target.block === 'cover' ||
+        target.block === 'coverTitle' ||
+        target.block === 'coverSubtitle' ||
+        target.block === 'coverInfo' ||
+        target.block === 'coverBubble' ||
         target.block === 'logo' ||
         target.block === 'coverBear'
       ) {
         focusSection('profile', 1);
+        if (target.block === 'coverTitle') {
+          setActiveTextField({ page: 1, field: 'coverTitle' });
+        } else if (target.block === 'coverSubtitle') {
+          setActiveTextField({ page: 1, field: 'coverSubtitle' });
+        } else if (target.block === 'coverBubble') {
+          setActiveTextField({ page: 1, field: 'coverSpeechBubble' });
+        } else if (target.block === 'coverInfo') {
+          setActiveTextField(null);
+        }
       } else if (
         target.block === 'project' ||
         target.block === 'projectsBlock'
@@ -4229,7 +4301,12 @@ export function GroupEditorView({
 
                     if (activeTextField.page === 1) {
                       if (activeTextField.field === 'coverTitle') {
-                        fieldLabel = 'Обложка · Заголовок';
+                        const curTitleSize =
+                          activeDoc.page1.coverTitleSize ??
+                          (activeDoc.resident.ageCategory === '14-15' ? 50 : 58);
+                        const curTitleColor =
+                          activeDoc.page1.coverTitleColor || '#FFFFFF';
+                        fieldLabel = 'Обложка · Заголовок «МОЙ ПУТЬ»';
                         currentValue = activeDoc.page1.coverTitle;
                         updateValue = (val) =>
                           onChangeJournal({
@@ -4237,27 +4314,73 @@ export function GroupEditorView({
                             page1: { ...activeDoc.page1, coverTitle: val },
                           });
                         companionNode = (
-                          <label className="block pt-1">
-                            <span className="text-[10px] text-zinc-500">
-                              Подзаголовок обложки
-                            </span>
-                            <input
-                              type="text"
-                              value={activeDoc.page1.coverSubtitle}
-                              onChange={(e) =>
-                                onChangeJournal({
-                                  ...activeDoc,
-                                  page1: {
-                                    ...activeDoc.page1,
-                                    coverSubtitle: e.target.value,
-                                  },
-                                })
-                              }
-                              className={flatInputClass}
-                            />
-                          </label>
+                          <div className="pt-1.5 grid grid-cols-2 gap-2">
+                            <label className="block">
+                              <span className="text-[10px] text-zinc-500">
+                                Размер шрифта (px)
+                              </span>
+                              <input
+                                type="number"
+                                min={22}
+                                max={92}
+                                value={curTitleSize}
+                                onChange={(e) =>
+                                  onChangeJournal({
+                                    ...activeDoc,
+                                    page1: {
+                                      ...activeDoc.page1,
+                                      coverTitleSize: Math.max(
+                                        22,
+                                        Math.min(92, Number(e.target.value) || 58)
+                                      ),
+                                    },
+                                  })
+                                }
+                                className={flatInputClass}
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="text-[10px] text-zinc-500">
+                                Цвет текста
+                              </span>
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <input
+                                  type="color"
+                                  value={curTitleColor}
+                                  onChange={(e) =>
+                                    onChangeJournal({
+                                      ...activeDoc,
+                                      page1: {
+                                        ...activeDoc.page1,
+                                        coverTitleColor: e.target.value,
+                                      },
+                                    })
+                                  }
+                                  className="w-6 h-6 rounded border border-zinc-200 cursor-pointer bg-white p-0.5 shrink-0"
+                                />
+                                <input
+                                  type="text"
+                                  value={curTitleColor}
+                                  onChange={(e) =>
+                                    onChangeJournal({
+                                      ...activeDoc,
+                                      page1: {
+                                        ...activeDoc.page1,
+                                        coverTitleColor: e.target.value,
+                                      },
+                                    })
+                                  }
+                                  className={flatInputClass}
+                                />
+                              </div>
+                            </label>
+                          </div>
                         );
                       } else if (activeTextField.field === 'coverSubtitle') {
+                        const curSubSize =
+                          activeDoc.page1.coverSubtitleSize ?? 26;
+                        const curSubColor =
+                          activeDoc.page1.coverSubtitleColor || '#111827';
                         fieldLabel = 'Обложка · Подзаголовок';
                         currentValue = activeDoc.page1.coverSubtitle;
                         updateValue = (val) =>
@@ -4265,11 +4388,78 @@ export function GroupEditorView({
                             ...activeDoc,
                             page1: { ...activeDoc.page1, coverSubtitle: val },
                           });
+                        companionNode = (
+                          <div className="pt-1.5 grid grid-cols-2 gap-2">
+                            <label className="block">
+                              <span className="text-[10px] text-zinc-500">
+                                Размер шрифта (px)
+                              </span>
+                              <input
+                                type="number"
+                                min={14}
+                                max={54}
+                                value={curSubSize}
+                                onChange={(e) =>
+                                  onChangeJournal({
+                                    ...activeDoc,
+                                    page1: {
+                                      ...activeDoc.page1,
+                                      coverSubtitleSize: Math.max(
+                                        14,
+                                        Math.min(54, Number(e.target.value) || 26)
+                                      ),
+                                    },
+                                  })
+                                }
+                                className={flatInputClass}
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="text-[10px] text-zinc-500">
+                                Цвет текста
+                              </span>
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <input
+                                  type="color"
+                                  value={curSubColor}
+                                  onChange={(e) =>
+                                    onChangeJournal({
+                                      ...activeDoc,
+                                      page1: {
+                                        ...activeDoc.page1,
+                                        coverSubtitleColor: e.target.value,
+                                      },
+                                    })
+                                  }
+                                  className="w-6 h-6 rounded border border-zinc-200 cursor-pointer bg-white p-0.5 shrink-0"
+                                />
+                                <input
+                                  type="text"
+                                  value={curSubColor}
+                                  onChange={(e) =>
+                                    onChangeJournal({
+                                      ...activeDoc,
+                                      page1: {
+                                        ...activeDoc.page1,
+                                        coverSubtitleColor: e.target.value,
+                                      },
+                                    })
+                                  }
+                                  className={flatInputClass}
+                                />
+                              </div>
+                            </label>
+                          </div>
+                        );
                       } else if (activeTextField.field === 'coverSpeechBubble') {
                         const curBubble =
                           activeDoc.page1.coverSpeechBubbleText !== undefined
                             ? activeDoc.page1.coverSpeechBubbleText
                             : DEFAULT_SPEECH_BUBBLE_TEXT;
+                        const curBubbleSize =
+                          activeDoc.page1.coverBubbleFontSize ?? 16.5;
+                        const curBubbleColor =
+                          activeDoc.page1.coverBubbleTextColor || '#111827';
                         fieldLabel = 'Обложка · Облачко мишки (Стр. 1)';
                         currentValue = curBubble;
                         updateValue = (val) =>
@@ -4281,7 +4471,69 @@ export function GroupEditorView({
                             },
                           });
                         companionNode = (
-                          <div className="pt-1 space-y-1.5">
+                          <div className="pt-1 space-y-2">
+                            <div className="grid grid-cols-2 gap-2">
+                              <label className="block">
+                                <span className="text-[10px] text-zinc-500">
+                                  Шрифт (px)
+                                </span>
+                                <input
+                                  type="number"
+                                  min={11}
+                                  max={30}
+                                  step={0.5}
+                                  value={curBubbleSize}
+                                  onChange={(e) =>
+                                    onChangeJournal({
+                                      ...activeDoc,
+                                      page1: {
+                                        ...activeDoc.page1,
+                                        coverBubbleFontSize: Math.max(
+                                          11,
+                                          Math.min(30, Number(e.target.value) || 16.5)
+                                        ),
+                                      },
+                                    })
+                                  }
+                                  className={flatInputClass}
+                                />
+                              </label>
+                              <label className="block">
+                                <span className="text-[10px] text-zinc-500">
+                                  Цвет текста
+                                </span>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <input
+                                    type="color"
+                                    value={curBubbleColor}
+                                    onChange={(e) =>
+                                      onChangeJournal({
+                                        ...activeDoc,
+                                        page1: {
+                                          ...activeDoc.page1,
+                                          coverBubbleTextColor: e.target.value,
+                                        },
+                                      })
+                                    }
+                                    className="w-6 h-6 rounded border border-zinc-200 cursor-pointer bg-white p-0.5 shrink-0"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={curBubbleColor}
+                                    onChange={(e) =>
+                                      onChangeJournal({
+                                        ...activeDoc,
+                                        page1: {
+                                          ...activeDoc.page1,
+                                          coverBubbleTextColor: e.target.value,
+                                        },
+                                      })
+                                    }
+                                    className={flatInputClass}
+                                  />
+                                </div>
+                              </label>
+                            </div>
                             <span className="text-[10px] font-semibold text-zinc-500 block">
                               Готовые фразы (нажмите для выбора):
                             </span>
@@ -4615,52 +4867,6 @@ export function GroupEditorView({
                               zIndex: getDefaultZForBlock(selectedBlockId),
                             }
                           : null;
-
-                      const getBlockLabel = (t: EditorSectionTarget): string => {
-                        if (!t) return '';
-                        switch (t.block) {
-                          case 'cover':
-                            return 'Обложка (верхняя шапка)';
-                          case 'coverBear':
-                            return 'Мишка на обложке';
-                          case 'logo':
-                            return 'Логотип KIBERone';
-                          case 'modulesBlock':
-                            return 'Секция «Мои открытия»';
-                          case 'module':
-                            return (
-                              activeDoc.page1.modules.find(
-                                (m) => m.id === t.itemId
-                              )?.title || 'Карточка модуля'
-                            );
-                          case 'skills':
-                            return 'Блок «Чему я научился»';
-                          case 'projectsBlock':
-                            return 'Секция «Мои результаты»';
-                          case 'project':
-                            return (
-                              activeDoc.page1.projects.find(
-                                (p) => p.id === t.itemId
-                              )?.title || 'Карточка проекта'
-                            );
-                          case 'header':
-                            return 'Шапка «Мои достижения»';
-                          case 'strengths':
-                            return 'Секция «Мои сильные стороны»';
-                          case 'pride':
-                            return 'Блок «Мой момент гордости»';
-                          case 'prideBear':
-                            return 'Мишка в блоке гордости';
-                          case 'mentorNote':
-                            return 'Лист «Слово наставника»';
-                          case 'nextChapter':
-                            return 'Блок «Что интересного впереди?»';
-                          case 'nextBear':
-                            return 'Мишка внизу страницы 2';
-                          default:
-                            return 'Элемент макета';
-                        }
-                      };
 
                       return (
                         <div className="flex-1 min-h-0 overflow-y-auto p-3.5 space-y-4 text-xs bg-[#FBFBFA]">
@@ -5595,98 +5801,555 @@ export function GroupEditorView({
                                 </div>
                               </div>
 
-                              {/* X / Y / Scale / Rotation */}
-                              <div className="grid grid-cols-2 gap-2">
-                                <label className="block">
-                                  <span className="text-[10px] text-zinc-500">
-                                    Смещение X (px)
-                                  </span>
-                                  <input
-                                    type="number"
-                                    value={selectedBlockTransform.x}
-                                    onChange={(e) =>
-                                      handleUpdatePageTransform(
-                                        activeTarget.page,
-                                        selectedBlockId,
-                                        {
-                                          ...selectedBlockTransform,
-                                          x: Number(e.target.value) || 0,
+                              {/* X / Y / Width / Height / Scale / Rotation */}
+                              {(() => {
+                                const coverDefaults =
+                                  selectedBlockId === 'coverTitle' ||
+                                  selectedBlockId === 'coverSubtitle' ||
+                                  selectedBlockId === 'coverInfo' ||
+                                  selectedBlockId === 'coverBubble'
+                                    ? COVER_OBJECT_DEFAULTS[selectedBlockId]
+                                    : null;
+                                const displayX = coverDefaults
+                                  ? coverDefaults.x + selectedBlockTransform.x
+                                  : selectedBlockTransform.x;
+                                const displayY = coverDefaults
+                                  ? coverDefaults.y + selectedBlockTransform.y
+                                  : selectedBlockTransform.y;
+
+                                return (
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        {coverDefaults ? 'X (px)' : 'Смещение X (px)'}
+                                      </span>
+                                      <input
+                                        type="number"
+                                        value={displayX}
+                                        onChange={(e) => {
+                                          const rawVal = Number(e.target.value) || 0;
+                                          handleUpdatePageTransform(
+                                            activeTarget.page,
+                                            selectedBlockId,
+                                            {
+                                              ...selectedBlockTransform,
+                                              x: coverDefaults
+                                                ? rawVal - coverDefaults.x
+                                                : rawVal,
+                                            }
+                                          );
+                                        }}
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        {coverDefaults ? 'Y (px)' : 'Смещение Y (px)'}
+                                      </span>
+                                      <input
+                                        type="number"
+                                        value={displayY}
+                                        onChange={(e) => {
+                                          const rawVal = Number(e.target.value) || 0;
+                                          handleUpdatePageTransform(
+                                            activeTarget.page,
+                                            selectedBlockId,
+                                            {
+                                              ...selectedBlockTransform,
+                                              y: coverDefaults
+                                                ? rawVal - coverDefaults.y
+                                                : rawVal,
+                                            }
+                                          );
+                                        }}
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+
+                                    {coverDefaults && (
+                                      <>
+                                        <label className="block">
+                                          <span className="text-[10px] text-zinc-500">
+                                            Ширина (px)
+                                          </span>
+                                          <input
+                                            type="number"
+                                            min={60}
+                                            max={760}
+                                            value={
+                                              selectedBlockTransform.width ??
+                                              coverDefaults.width
+                                            }
+                                            onChange={(e) =>
+                                              handleUpdatePageTransform(
+                                                activeTarget.page,
+                                                selectedBlockId,
+                                                {
+                                                  ...selectedBlockTransform,
+                                                  width: Math.max(
+                                                    60,
+                                                    Math.min(
+                                                      760,
+                                                      Number(e.target.value) ||
+                                                        coverDefaults.width
+                                                    )
+                                                  ),
+                                                }
+                                              )
+                                            }
+                                            className={flatInputClass}
+                                          />
+                                        </label>
+                                        <label className="block">
+                                          <span className="text-[10px] text-zinc-500">
+                                            Высота (px)
+                                          </span>
+                                          <input
+                                            type="number"
+                                            min={24}
+                                            max={400}
+                                            value={
+                                              selectedBlockTransform.height ??
+                                              coverDefaults.height
+                                            }
+                                            onChange={(e) =>
+                                              handleUpdatePageTransform(
+                                                activeTarget.page,
+                                                selectedBlockId,
+                                                {
+                                                  ...selectedBlockTransform,
+                                                  height: Math.max(
+                                                    24,
+                                                    Math.min(
+                                                      400,
+                                                      Number(e.target.value) ||
+                                                        coverDefaults.height
+                                                    )
+                                                  ),
+                                                }
+                                              )
+                                            }
+                                            className={flatInputClass}
+                                          />
+                                        </label>
+                                      </>
+                                    )}
+
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Масштаб ({selectedBlockTransform.scale.toFixed(2)}x)
+                                      </span>
+                                      <input
+                                        type="range"
+                                        min={0.5}
+                                        max={1.8}
+                                        step={0.05}
+                                        value={selectedBlockTransform.scale}
+                                        onChange={(e) =>
+                                          handleUpdatePageTransform(
+                                            activeTarget.page,
+                                            selectedBlockId,
+                                            {
+                                              ...selectedBlockTransform,
+                                              scale: Number(e.target.value),
+                                            }
+                                          )
                                         }
-                                      )
-                                    }
-                                    className={flatInputClass}
-                                  />
-                                </label>
-                                <label className="block">
-                                  <span className="text-[10px] text-zinc-500">
-                                    Смещение Y (px)
-                                  </span>
-                                  <input
-                                    type="number"
-                                    value={selectedBlockTransform.y}
-                                    onChange={(e) =>
-                                      handleUpdatePageTransform(
-                                        activeTarget.page,
-                                        selectedBlockId,
-                                        {
-                                          ...selectedBlockTransform,
-                                          y: Number(e.target.value) || 0,
+                                        className="w-full accent-[#0D9488] mt-1.5"
+                                      />
+                                    </label>
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Поворот (°)
+                                      </span>
+                                      <input
+                                        type="number"
+                                        min={-180}
+                                        max={180}
+                                        value={selectedBlockTransform.rotation}
+                                        onChange={(e) =>
+                                          handleUpdatePageTransform(
+                                            activeTarget.page,
+                                            selectedBlockId,
+                                            {
+                                              ...selectedBlockTransform,
+                                              rotation: Number(e.target.value) || 0,
+                                            }
+                                          )
                                         }
-                                      )
-                                    }
-                                    className={flatInputClass}
-                                  />
-                                </label>
-                                <label className="block">
-                                  <span className="text-[10px] text-zinc-500">
-                                    Масштаб ({selectedBlockTransform.scale.toFixed(2)}x)
-                                  </span>
-                                  <input
-                                    type="range"
-                                    min={0.5}
-                                    max={1.6}
-                                    step={0.05}
-                                    value={selectedBlockTransform.scale}
-                                    onChange={(e) =>
-                                      handleUpdatePageTransform(
-                                        activeTarget.page,
-                                        selectedBlockId,
-                                        {
-                                          ...selectedBlockTransform,
-                                          scale: Number(e.target.value),
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                  </div>
+                                );
+                              })()}
+
+                              {/* Cover Title Settings in Design Mode */}
+                              {selectedBlockId === 'coverTitle' && (
+                                <div className="pt-2.5 border-t border-zinc-100 space-y-2.5">
+                                  <div className="text-[11px] font-bold text-zinc-800">
+                                    Текст и стиль заголовка
+                                  </div>
+                                  <label className="block">
+                                    <span className="text-[10px] text-zinc-500">
+                                      Текст заголовка
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={activeDoc.page1.coverTitle}
+                                      onChange={(e) =>
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page1: {
+                                            ...activeDoc.page1,
+                                            coverTitle: e.target.value,
+                                          },
+                                        })
+                                      }
+                                      className={flatInputClass}
+                                    />
+                                  </label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Размер шрифта (px)
+                                      </span>
+                                      <input
+                                        type="number"
+                                        min={22}
+                                        max={92}
+                                        value={
+                                          activeDoc.page1.coverTitleSize ??
+                                          (activeDoc.resident.ageCategory === '14-15'
+                                            ? 50
+                                            : 58)
                                         }
-                                      )
-                                    }
-                                    className="w-full accent-[#0D9488] mt-1.5"
-                                  />
-                                </label>
-                                <label className="block">
-                                  <span className="text-[10px] text-zinc-500">
-                                    Поворот (°)
-                                  </span>
-                                  <input
-                                    type="number"
-                                    min={-180}
-                                    max={180}
-                                    value={selectedBlockTransform.rotation}
-                                    onChange={(e) =>
-                                      handleUpdatePageTransform(
-                                        activeTarget.page,
-                                        selectedBlockId,
-                                        {
-                                          ...selectedBlockTransform,
-                                          rotation: Number(e.target.value) || 0,
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page1: {
+                                              ...activeDoc.page1,
+                                              coverTitleSize: Math.max(
+                                                22,
+                                                Math.min(
+                                                  92,
+                                                  Number(e.target.value) || 58
+                                                )
+                                              ),
+                                            },
+                                          })
                                         }
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Цвет текста
+                                      </span>
+                                      <div className="flex items-center gap-1.5 mt-1">
+                                        <input
+                                          type="color"
+                                          value={
+                                            activeDoc.page1.coverTitleColor ||
+                                            '#FFFFFF'
+                                          }
+                                          onChange={(e) =>
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page1: {
+                                                ...activeDoc.page1,
+                                                coverTitleColor: e.target.value,
+                                              },
+                                            })
+                                          }
+                                          className="w-6 h-6 rounded border border-zinc-200 cursor-pointer bg-white p-0.5 shrink-0"
+                                        />
+                                        <input
+                                          type="text"
+                                          value={
+                                            activeDoc.page1.coverTitleColor ||
+                                            '#FFFFFF'
+                                          }
+                                          onChange={(e) =>
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page1: {
+                                                ...activeDoc.page1,
+                                                coverTitleColor: e.target.value,
+                                              },
+                                            })
+                                          }
+                                          className={flatInputClass}
+                                        />
+                                      </div>
+                                    </label>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    {['#FFFFFF', '#FFE14D', '#111827', '#0D9488', '#F43F5E'].map(
+                                      (swatch) => (
+                                        <button
+                                          key={swatch}
+                                          type="button"
+                                          onClick={() =>
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page1: {
+                                                ...activeDoc.page1,
+                                                coverTitleColor: swatch,
+                                              },
+                                            })
+                                          }
+                                          style={{ backgroundColor: swatch }}
+                                          className={`w-5 h-5 rounded-full border ${
+                                            (activeDoc.page1.coverTitleColor ||
+                                              '#FFFFFF') === swatch
+                                              ? 'border-[#2563EB] ring-2 ring-[#2563EB]/30'
+                                              : 'border-zinc-300'
+                                          }`}
+                                          title={swatch}
+                                        />
                                       )
-                                    }
-                                    className={flatInputClass}
-                                  />
-                                </label>
-                              </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Cover Subtitle Settings in Design Mode */}
+                              {selectedBlockId === 'coverSubtitle' && (
+                                <div className="pt-2.5 border-t border-zinc-100 space-y-2.5">
+                                  <div className="text-[11px] font-bold text-zinc-800">
+                                    Текст и стиль подзаголовка
+                                  </div>
+                                  <label className="block">
+                                    <span className="text-[10px] text-zinc-500">
+                                      Текст подзаголовка
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={activeDoc.page1.coverSubtitle}
+                                      onChange={(e) =>
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page1: {
+                                            ...activeDoc.page1,
+                                            coverSubtitle: e.target.value,
+                                          },
+                                        })
+                                      }
+                                      className={flatInputClass}
+                                    />
+                                  </label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Размер шрифта (px)
+                                      </span>
+                                      <input
+                                        type="number"
+                                        min={14}
+                                        max={54}
+                                        value={
+                                          activeDoc.page1.coverSubtitleSize ?? 26
+                                        }
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page1: {
+                                              ...activeDoc.page1,
+                                              coverSubtitleSize: Math.max(
+                                                14,
+                                                Math.min(
+                                                  54,
+                                                  Number(e.target.value) || 26
+                                                )
+                                              ),
+                                            },
+                                          })
+                                        }
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Цвет текста
+                                      </span>
+                                      <div className="flex items-center gap-1.5 mt-1">
+                                        <input
+                                          type="color"
+                                          value={
+                                            activeDoc.page1.coverSubtitleColor ||
+                                            '#111827'
+                                          }
+                                          onChange={(e) =>
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page1: {
+                                                ...activeDoc.page1,
+                                                coverSubtitleColor: e.target.value,
+                                              },
+                                            })
+                                          }
+                                          className="w-6 h-6 rounded border border-zinc-200 cursor-pointer bg-white p-0.5 shrink-0"
+                                        />
+                                        <input
+                                          type="text"
+                                          value={
+                                            activeDoc.page1.coverSubtitleColor ||
+                                            '#111827'
+                                          }
+                                          onChange={(e) =>
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page1: {
+                                                ...activeDoc.page1,
+                                                coverSubtitleColor: e.target.value,
+                                              },
+                                            })
+                                          }
+                                          className={flatInputClass}
+                                        />
+                                      </div>
+                                    </label>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    {['#111827', '#FFFFFF', '#0F766E', '#1E293B', '#FFE14D'].map(
+                                      (swatch) => (
+                                        <button
+                                          key={swatch}
+                                          type="button"
+                                          onClick={() =>
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page1: {
+                                                ...activeDoc.page1,
+                                                coverSubtitleColor: swatch,
+                                              },
+                                            })
+                                          }
+                                          style={{ backgroundColor: swatch }}
+                                          className={`w-5 h-5 rounded-full border ${
+                                            (activeDoc.page1.coverSubtitleColor ||
+                                              '#111827') === swatch
+                                              ? 'border-[#2563EB] ring-2 ring-[#2563EB]/30'
+                                              : 'border-zinc-300'
+                                          }`}
+                                          title={swatch}
+                                        />
+                                      )
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Cover Student Info Plaque Settings in Design Mode */}
+                              {selectedBlockId === 'coverInfo' && (
+                                <div className="pt-2.5 border-t border-zinc-100 space-y-2.5">
+                                  <div className="text-[11px] font-bold text-zinc-800">
+                                    Данные ученика на плашке
+                                  </div>
+                                  <label className="block">
+                                    <span className="text-[10px] text-zinc-500">
+                                      Имя и фамилия
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={activeDoc.resident.fullName}
+                                      onChange={(e) => {
+                                        const fullName = e.target.value;
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          resident: {
+                                            ...activeDoc.resident,
+                                            fullName,
+                                          },
+                                        });
+                                        onUpdateStudent({
+                                          ...selectedStudent,
+                                          fullName,
+                                          updatedAt: new Date().toISOString(),
+                                        });
+                                      }}
+                                      className={flatInputClass}
+                                    />
+                                  </label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Возраст
+                                      </span>
+                                      <input
+                                        type="text"
+                                        value={activeDoc.resident.age}
+                                        onChange={(e) => {
+                                          const age = e.target.value;
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            resident: {
+                                              ...activeDoc.resident,
+                                              age,
+                                            },
+                                          });
+                                          onUpdateStudent({
+                                            ...selectedStudent,
+                                            age,
+                                            updatedAt: new Date().toISOString(),
+                                          });
+                                        }}
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Период
+                                      </span>
+                                      <input
+                                        type="text"
+                                        value={activeDoc.resident.period}
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            resident: {
+                                              ...activeDoc.resident,
+                                              period: e.target.value,
+                                            },
+                                          })
+                                        }
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                  </div>
+                                  <label className="block">
+                                    <span className="text-[10px] text-zinc-500">
+                                      Наставник
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={activeDoc.resident.mentorName}
+                                      onChange={(e) => {
+                                        const mentorName = e.target.value;
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          resident: {
+                                            ...activeDoc.resident,
+                                            mentorName,
+                                          },
+                                        });
+                                        onUpdateStudent({
+                                          ...selectedStudent,
+                                          mentorName,
+                                          updatedAt: new Date().toISOString(),
+                                        });
+                                      }}
+                                      className={flatInputClass}
+                                    />
+                                  </label>
+                                </div>
+                              )}
 
                               {(selectedBlockId === 'cover' ||
-                                selectedBlockId === 'coverBear') && (
-                                <div className="pt-2.5 border-t border-zinc-100 space-y-2">
+                                selectedBlockId === 'coverBear' ||
+                                selectedBlockId === 'coverBubble') && (
+                                <div className="pt-2.5 border-t border-zinc-100 space-y-2.5">
                                   <div className="text-[11px] font-bold text-zinc-800">
                                     Облачко мишки на обложке (Стр. 1)
                                   </div>
@@ -5743,6 +6406,85 @@ export function GroupEditorView({
                                     placeholder="Свой текст для облачка (без имени)…"
                                     className="w-full rounded-md border border-zinc-200 bg-zinc-50/70 px-2.5 py-1.5 text-[11px] text-zinc-800 focus:outline-none focus:bg-white focus:border-[#0D9488] resize-none"
                                   />
+                                  <div className="grid grid-cols-3 gap-2 pt-0.5">
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Шрифт (px)
+                                      </span>
+                                      <input
+                                        type="number"
+                                        min={11}
+                                        max={30}
+                                        step={0.5}
+                                        value={
+                                          activeDoc.page1.coverBubbleFontSize ??
+                                          16.5
+                                        }
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page1: {
+                                              ...activeDoc.page1,
+                                              coverBubbleFontSize: Math.max(
+                                                11,
+                                                Math.min(
+                                                  30,
+                                                  Number(e.target.value) || 16.5
+                                                )
+                                              ),
+                                            },
+                                          })
+                                        }
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Цвет текста
+                                      </span>
+                                      <input
+                                        type="color"
+                                        value={
+                                          activeDoc.page1
+                                            .coverBubbleTextColor || '#111827'
+                                        }
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page1: {
+                                              ...activeDoc.page1,
+                                              coverBubbleTextColor:
+                                                e.target.value,
+                                            },
+                                          })
+                                        }
+                                        className="mt-1 w-full h-7 rounded border border-zinc-200 cursor-pointer bg-white p-0.5"
+                                      />
+                                    </label>
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Фон облачка
+                                      </span>
+                                      <input
+                                        type="color"
+                                        value={
+                                          activeDoc.page1.coverBubbleBgColor ||
+                                          '#FFFFFF'
+                                        }
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page1: {
+                                              ...activeDoc.page1,
+                                              coverBubbleBgColor:
+                                                e.target.value,
+                                            },
+                                          })
+                                        }
+                                        className="mt-1 w-full h-7 rounded border border-zinc-200 cursor-pointer bg-white p-0.5"
+                                      />
+                                    </label>
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -6054,6 +6796,54 @@ export function GroupEditorView({
                                 <div className="grid grid-cols-2 gap-3">
                                   <label className="block">
                                     <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
+                                      Период
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={activeDoc.resident.period}
+                                      onChange={(e) =>
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          resident: {
+                                            ...activeDoc.resident,
+                                            period: e.target.value,
+                                          },
+                                        })
+                                      }
+                                      placeholder="с 01.09.2026 по 25.12.2026"
+                                      className="w-full px-3 py-2 rounded-md border border-zinc-200 bg-white text-xs font-medium text-zinc-900 focus:outline-none focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/15 transition-colors"
+                                    />
+                                  </label>
+                                  <label className="block">
+                                    <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
+                                      Наставник
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={activeDoc.resident.mentorName}
+                                      onChange={(e) => {
+                                        const mentorName = e.target.value;
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          resident: {
+                                            ...activeDoc.resident,
+                                            mentorName,
+                                          },
+                                        });
+                                        onUpdateStudent({
+                                          ...selectedStudent,
+                                          mentorName,
+                                          updatedAt: new Date().toISOString(),
+                                        });
+                                      }}
+                                      className="w-full px-3 py-2 rounded-md border border-zinc-200 bg-white text-xs font-medium text-zinc-900 focus:outline-none focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/15 transition-colors"
+                                    />
+                                  </label>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                  <label className="block">
+                                    <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
                                       Возраст
                                     </span>
                                     <input
@@ -6113,6 +6903,250 @@ export function GroupEditorView({
                                       </select>
                                     </div>
                                   </label>
+                                </div>
+
+                                {/* Contextual Cover Object Geometry & Typography Card in Content Mode */}
+                                {activeTarget?.page === 1 &&
+                                  (activeTarget.block === 'coverTitle' ||
+                                    activeTarget.block === 'coverSubtitle' ||
+                                    activeTarget.block === 'coverInfo' ||
+                                    activeTarget.block === 'coverBubble') && (() => {
+                                    const blockId = activeTarget.block;
+                                    const defaults = COVER_OBJECT_DEFAULTS[blockId];
+                                    const curT: CanvasObjectTransform =
+                                      (activeDoc.page1.objectLayouts ?? {})[
+                                        blockId
+                                      ] ?? {
+                                        x: 0,
+                                        y: 0,
+                                        scale: 1,
+                                        rotation: 0,
+                                        zIndex: defaults.zIndex,
+                                      };
+                                    return (
+                                      <div className="pt-3 border-t border-zinc-100 space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="text-[11px] font-bold text-zinc-800">
+                                            Позиция и размер: {getBlockLabel(activeTarget)}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setInspectorMode('design')
+                                            }
+                                            className="text-[10px] font-semibold text-[#0D9488] hover:underline"
+                                          >
+                                            В режим «Дизайн» →
+                                          </button>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2">
+                                          <label className="block">
+                                            <span className="text-[10px] text-zinc-500">
+                                              X (px)
+                                            </span>
+                                            <input
+                                              type="number"
+                                              value={defaults.x + curT.x}
+                                              onChange={(e) =>
+                                                handleUpdatePageTransform(
+                                                  1,
+                                                  blockId,
+                                                  {
+                                                    ...curT,
+                                                    x:
+                                                      (Number(e.target.value) ||
+                                                        0) - defaults.x,
+                                                  }
+                                                )
+                                              }
+                                              className={flatInputClass}
+                                            />
+                                          </label>
+                                          <label className="block">
+                                            <span className="text-[10px] text-zinc-500">
+                                              Y (px)
+                                            </span>
+                                            <input
+                                              type="number"
+                                              value={defaults.y + curT.y}
+                                              onChange={(e) =>
+                                                handleUpdatePageTransform(
+                                                  1,
+                                                  blockId,
+                                                  {
+                                                    ...curT,
+                                                    y:
+                                                      (Number(e.target.value) ||
+                                                        0) - defaults.y,
+                                                  }
+                                                )
+                                              }
+                                              className={flatInputClass}
+                                            />
+                                          </label>
+                                          <label className="block">
+                                            <span className="text-[10px] text-zinc-500">
+                                              Поворот (°)
+                                            </span>
+                                            <input
+                                              type="number"
+                                              min={-180}
+                                              max={180}
+                                              value={curT.rotation}
+                                              onChange={(e) =>
+                                                handleUpdatePageTransform(
+                                                  1,
+                                                  blockId,
+                                                  {
+                                                    ...curT,
+                                                    rotation:
+                                                      Number(e.target.value) || 0,
+                                                  }
+                                                )
+                                              }
+                                              className={flatInputClass}
+                                            />
+                                          </label>
+                                          <label className="block">
+                                            <span className="text-[10px] text-zinc-500">
+                                              Ширина (px)
+                                            </span>
+                                            <input
+                                              type="number"
+                                              min={60}
+                                              max={760}
+                                              value={curT.width ?? defaults.width}
+                                              onChange={(e) =>
+                                                handleUpdatePageTransform(
+                                                  1,
+                                                  blockId,
+                                                  {
+                                                    ...curT,
+                                                    width: Math.max(
+                                                      60,
+                                                      Math.min(
+                                                        760,
+                                                        Number(e.target.value) ||
+                                                          defaults.width
+                                                      )
+                                                    ),
+                                                  }
+                                                )
+                                              }
+                                              className={flatInputClass}
+                                            />
+                                          </label>
+                                          <label className="block">
+                                            <span className="text-[10px] text-zinc-500">
+                                              Высота (px)
+                                            </span>
+                                            <input
+                                              type="number"
+                                              min={24}
+                                              max={400}
+                                              value={
+                                                curT.height ?? defaults.height
+                                              }
+                                              onChange={(e) =>
+                                                handleUpdatePageTransform(
+                                                  1,
+                                                  blockId,
+                                                  {
+                                                    ...curT,
+                                                    height: Math.max(
+                                                      24,
+                                                      Math.min(
+                                                        400,
+                                                        Number(e.target.value) ||
+                                                          defaults.height
+                                                      )
+                                                    ),
+                                                  }
+                                                )
+                                              }
+                                              className={flatInputClass}
+                                            />
+                                          </label>
+                                          <label className="block">
+                                            <span className="text-[10px] text-zinc-500">
+                                              Масштаб
+                                            </span>
+                                            <input
+                                              type="number"
+                                              min={0.5}
+                                              max={1.8}
+                                              step={0.05}
+                                              value={curT.scale}
+                                              onChange={(e) =>
+                                                handleUpdatePageTransform(
+                                                  1,
+                                                  blockId,
+                                                  {
+                                                    ...curT,
+                                                    scale: Math.max(
+                                                      0.5,
+                                                      Math.min(
+                                                        1.8,
+                                                        Number(e.target.value) ||
+                                                          1
+                                                      )
+                                                    ),
+                                                  }
+                                                )
+                                              }
+                                              className={flatInputClass}
+                                            />
+                                          </label>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+
+                                {/* Cover Titles Quick Editor in Step 1 */}
+                                <div className="pt-3 border-t border-zinc-100 space-y-2.5">
+                                  <span className="text-[11px] font-bold text-zinc-800 block">
+                                    Заголовки обложки (Стр. 1)
+                                  </span>
+                                  <div className="grid grid-cols-2 gap-2.5">
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500 mb-0.5 block">
+                                        Заголовок
+                                      </span>
+                                      <input
+                                        type="text"
+                                        value={activeDoc.page1.coverTitle}
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page1: {
+                                              ...activeDoc.page1,
+                                              coverTitle: e.target.value,
+                                            },
+                                          })
+                                        }
+                                        className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-white text-xs font-semibold text-zinc-900 focus:outline-none focus:border-[#0D9488]"
+                                      />
+                                    </label>
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500 mb-0.5 block">
+                                        Подзаголовок
+                                      </span>
+                                      <input
+                                        type="text"
+                                        value={activeDoc.page1.coverSubtitle}
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page1: {
+                                              ...activeDoc.page1,
+                                              coverSubtitle: e.target.value,
+                                            },
+                                          })
+                                        }
+                                        className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-white text-xs font-medium text-zinc-900 focus:outline-none focus:border-[#0D9488]"
+                                      />
+                                    </label>
+                                  </div>
                                 </div>
 
                                 {/* Cover Bear Speech Bubble Card (Page 1 Top) */}

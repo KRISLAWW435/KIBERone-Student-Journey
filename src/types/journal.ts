@@ -158,6 +158,8 @@ export interface CanvasObjectTransform {
   scale: number;
   rotation: number;
   zIndex: number;
+  width?: number;
+  height?: number;
   hidden?: boolean;
   locked?: boolean;
 }
@@ -272,7 +274,11 @@ export interface Page1Config {
   decorSeeded?: boolean;
   objectLayouts?: Record<string, CanvasObjectTransform>;
   coverTitle: string;
+  coverTitleSize?: number;
+  coverTitleColor?: string;
   coverSubtitle: string;
+  coverSubtitleSize?: number;
+  coverSubtitleColor?: string;
   coverBgStart: string;
   coverBgEnd: string;
   showAge: boolean;
@@ -284,6 +290,9 @@ export interface Page1Config {
   bearOffsetY: number;
   bearCropTop: boolean;
   coverSpeechBubbleText?: string;
+  coverBubbleFontSize?: number;
+  coverBubbleTextColor?: string;
+  coverBubbleBgColor?: string;
   logoUrl: string;
   showModules: boolean;
   modules: ModuleItem[];
@@ -516,6 +525,10 @@ export interface JournalTemplate {
 
 export type EditorSectionTarget =
   | { page: 1; block: 'cover' }
+  | { page: 1; block: 'coverTitle' }
+  | { page: 1; block: 'coverSubtitle' }
+  | { page: 1; block: 'coverInfo' }
+  | { page: 1; block: 'coverBubble' }
   | { page: 1; block: 'coverBear' }
   | { page: 1; block: 'logo' }
   | { page: 1; block: 'modulesBlock' }

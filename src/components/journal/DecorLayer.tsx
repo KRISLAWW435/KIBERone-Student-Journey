@@ -255,6 +255,8 @@ export interface InlineEditableTextProps {
   onChange?: (next: string) => void;
   onBeginEdit?: () => void;
   onEndEdit?: () => void;
+  inlineEditOnDoubleClick?: boolean;
+  designMode?: boolean;
   multiline?: boolean;
   as?: 'span' | 'div' | 'p' | 'h1' | 'h2' | 'h3' | 'h4';
   className?: string;
@@ -266,26 +268,150 @@ export function InlineEditableText({
   placeholder = 'Введите текст…',
   onSelectText,
   isSelected = false,
+  onChange,
+  onBeginEdit,
+  onEndEdit,
+  inlineEditOnDoubleClick = false,
+  designMode = false,
+  multiline = false,
   as: Tag = 'span',
   className = '',
   style,
 }: InlineEditableTextProps) {
-  const interactive = Boolean(onSelectText);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const interactive = Boolean(onSelectText) || (inlineEditOnDoubleClick && Boolean(onChange));
+
+  useEffect(() => {
+    if (!isEditing) {
+      setDraft(value);
+    }
+  }, [value, isEditing]);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    const el = multiline ? textareaRef.current : inputRef.current;
+    if (el) {
+      el.focus();
+      el.select();
+    }
+  }, [isEditing, multiline]);
+
+  const commitEdit = () => {
+    setIsEditing(false);
+    if (onChange && draft !== value) {
+      onChange(draft);
+    }
+    onEndEdit?.();
+  };
+
+  const cancelEdit = () => {
+    setIsEditing(false);
+    setDraft(value);
+    onEndEdit?.();
+  };
+
+  if (isEditing && onChange) {
+    const sharedEditStyle: React.CSSProperties = {
+      ...style,
+      fontFamily: 'inherit',
+      fontSize: 'inherit',
+      fontWeight: 'inherit',
+      lineHeight: 'inherit',
+      letterSpacing: 'inherit',
+      color: 'inherit',
+      textAlign: 'inherit',
+      background: 'rgba(255, 255, 255, 0.22)',
+      border: '1.5px solid #2563EB',
+      borderRadius: '6px',
+      padding: '1px 6px',
+      outline: 'none',
+      width: '100%',
+      minWidth: '120px',
+    };
+
+    if (multiline) {
+      return (
+        <textarea
+          ref={textareaRef}
+          rows={2}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commitEdit}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              cancelEdit();
+            } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              commitEdit();
+            }
+          }}
+          className={`${className} resize-none`}
+          style={sharedEditStyle}
+        />
+      );
+    }
+
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commitEdit}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commitEdit();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelEdit();
+          }
+        }}
+        className={className}
+        style={sharedEditStyle}
+      />
+    );
+  }
 
   return (
     <Tag
       onClick={
-        onSelectText
+        onSelectText && !designMode
           ? (e: React.MouseEvent) => {
               e.stopPropagation();
               onSelectText();
             }
           : undefined
       }
-      title={interactive ? 'Нажмите, чтобы редактировать текст в правой панели' : undefined}
+      onDoubleClick={
+        inlineEditOnDoubleClick && onChange
+          ? (e: React.MouseEvent) => {
+              e.stopPropagation();
+              setDraft(value);
+              setIsEditing(true);
+              onSelectText?.();
+              onBeginEdit?.();
+            }
+          : undefined
+      }
+      title={
+        inlineEditOnDoubleClick && onChange
+          ? 'Дважды нажмите для редактирования текста'
+          : interactive
+          ? 'Нажмите, чтобы редактировать текст в правой панели'
+          : undefined
+      }
       style={style}
       className={`${className} ${
-        interactive
+        interactive && !designMode
           ? isSelected
             ? 'cursor-pointer outline outline-2 outline-[#0D9488] bg-[#F0FDFA]/45 rounded-[3px] transition-[outline,background-color]'
             : 'cursor-pointer hover:outline hover:outline-1 hover:outline-dashed hover:outline-[#0D9488]/65 rounded-[3px] transition-[outline]'
@@ -305,6 +431,7 @@ interface DraggableDesignWrapperProps {
   isActive?: boolean;
   scaleFactor?: number;
   onSelect?: () => void;
+  onDoubleClick?: (e: React.MouseEvent) => void;
   onUpdateTransform?: (next: CanvasObjectTransform) => void;
   onSnapLinesChange?: (lines: SnapLinesState) => void;
   onInteractionStart?: () => void;
@@ -322,6 +449,7 @@ export function DraggableDesignWrapper({
   isActive = false,
   scaleFactor = 1,
   onSelect,
+  onDoubleClick,
   onUpdateTransform,
   onSnapLinesChange,
   onInteractionStart,
@@ -341,6 +469,8 @@ export function DraggableDesignWrapper({
   const y = transform?.y ?? 0;
   const scale = transform?.scale ?? 1;
   const rotation = transform?.rotation ?? 0;
+  const explicitWidth = transform?.width;
+  const explicitHeight = transform?.height;
   const resolvedZIndex =
     transform?.zIndex !== undefined ? transform.zIndex : defaultZIndex;
   const locked = Boolean(transform?.locked);
@@ -446,6 +576,8 @@ export function DraggableDesignWrapper({
         scale,
         rotation,
         zIndex: baseZ,
+        ...(explicitWidth !== undefined ? { width: explicitWidth } : {}),
+        ...(explicitHeight !== undefined ? { height: explicitHeight } : {}),
         hidden: transform?.hidden,
         locked,
       });
@@ -498,6 +630,8 @@ export function DraggableDesignWrapper({
         scale: nextScale,
         rotation,
         zIndex: baseZ,
+        ...(explicitWidth !== undefined ? { width: explicitWidth } : {}),
+        ...(explicitHeight !== undefined ? { height: explicitHeight } : {}),
         hidden: transform?.hidden,
         locked,
       });
@@ -547,6 +681,8 @@ export function DraggableDesignWrapper({
         scale,
         rotation: nextRot,
         zIndex: baseZ,
+        ...(explicitWidth !== undefined ? { width: explicitWidth } : {}),
+        ...(explicitHeight !== undefined ? { height: explicitHeight } : {}),
         hidden: transform?.hidden,
         locked,
       });
@@ -564,6 +700,29 @@ export function DraggableDesignWrapper({
   };
 
   const hasCustomTransform = scale !== 1 || rotation !== 0;
+  const isAbsoluteSlot = externalStyle?.position === 'absolute';
+  const resolvedInnerWidth =
+    explicitWidth !== undefined
+      ? `${explicitWidth}px`
+      : externalStyle?.width
+      ? externalStyle.width
+      : isAbsoluteSlot
+      ? isMoved
+        ? 'max-content'
+        : '100%'
+      : isMoved && slotSize
+      ? `${slotSize.w}px`
+      : '100%';
+  const resolvedInnerHeight =
+    explicitHeight !== undefined
+      ? `${explicitHeight}px`
+      : externalStyle?.height
+      ? externalStyle.height
+      : isAbsoluteSlot
+      ? undefined
+      : isMoved && slotSize
+      ? `${slotSize.h}px`
+      : undefined;
 
   return (
     <div
@@ -571,11 +730,21 @@ export function DraggableDesignWrapper({
       style={{
         ...externalStyle,
         width:
-          externalStyle?.width ??
-          (isMoved && slotSize ? `${slotSize.w}px` : undefined),
+          explicitWidth !== undefined
+            ? `${explicitWidth}px`
+            : externalStyle?.width ??
+              (isMoved && slotSize && !isAbsoluteSlot
+                ? `${slotSize.w}px`
+                : undefined),
+        maxWidth:
+          explicitWidth !== undefined ? undefined : externalStyle?.maxWidth,
         height:
-          externalStyle?.height ??
-          (isMoved && slotSize ? `${slotSize.h}px` : undefined),
+          explicitHeight !== undefined
+            ? `${explicitHeight}px`
+            : externalStyle?.height ??
+              (isMoved && slotSize && !isAbsoluteSlot
+                ? `${slotSize.h}px`
+                : undefined),
         position: externalStyle?.position ?? 'relative',
         zIndex: isActive ? Math.max(resolvedZIndex ?? 10, 40) : resolvedZIndex,
       }}
@@ -591,16 +760,20 @@ export function DraggableDesignWrapper({
             onSelect();
           }
         }}
+        onDoubleClick={(e) => {
+          if (onDoubleClick) {
+            e.stopPropagation();
+            onDoubleClick(e);
+          }
+        }}
         style={{
           position: isMoved ? 'absolute' : 'relative',
           left: isMoved ? `${x}px` : undefined,
           top: isMoved ? `${y}px` : undefined,
-          width:
-            isMoved && slotSize
-              ? `${slotSize.w}px`
-              : externalStyle?.width ?? '100%',
-          height:
-            isMoved && slotSize ? `${slotSize.h}px` : externalStyle?.height,
+          width: resolvedInnerWidth,
+          maxWidth:
+            explicitWidth !== undefined ? undefined : externalStyle?.maxWidth,
+          height: resolvedInnerHeight,
           transform: hasCustomTransform
             ? `scale(${scale}) rotate(${rotation}deg)`
             : undefined,
