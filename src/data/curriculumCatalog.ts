@@ -3,6 +3,7 @@ import {
   GroupCurriculumTemplate,
   JournalStatus,
   LibraryModule,
+  ModuleAgeGroup,
   ModuleCategoryConfig,
   ModuleCategoryId,
   ModuleIllustrationKey,
@@ -10,6 +11,16 @@ import {
   SkillDefinition,
   SkillMasteryStatus,
 } from '../types/journal';
+
+export const MODULE_AGE_GROUP_OPTIONS: Array<{
+  id: ModuleAgeGroup;
+  label: string;
+  shortLabel: string;
+}> = [
+  { id: '6-8', label: 'Младшая (6–8 лет)', shortLabel: '6–8 лет' },
+  { id: '9-11', label: 'Средняя (9–11 лет)', shortLabel: '9–11 лет' },
+  { id: '12-14', label: 'Старшая (12–14 лет)', shortLabel: '12–14 лет' },
+];
 
 export const JOURNAL_STATUS_OPTIONS: Array<{
   id: JournalStatus;
@@ -276,13 +287,13 @@ const CATEGORY_COLOR_MAP: Record<string, string> = Object.fromEntries(
 
 interface SeedSpec {
   id: string;
-  code: string;
   officialTitle: string;
   displayTitle: string;
   subtitle: string;
   description: string;
   category: ModuleCategoryId;
   filterCategories?: ModuleCategoryId[];
+  ageGroups: ModuleAgeGroup[];
   illustrationKey: ModuleIllustrationKey;
   iconKey: ModuleLucideIconKey;
   visualNotes: string;
@@ -296,14 +307,18 @@ function makeModule(spec: SeedSpec): LibraryModule {
   const bg = spec.cardBgColor ?? CATEGORY_COLOR_MAP[spec.category] ?? '#C9F3EE';
   return {
     id: spec.id,
-    code: spec.code,
     officialTitle: spec.officialTitle,
     displayTitle: spec.displayTitle,
-    title: spec.displayTitle,
+    shortTitle: spec.displayTitle,
+    title: spec.officialTitle,
     subtitle: spec.subtitle,
     description: spec.description,
     category: spec.category,
+    categoryId: spec.category,
     filterCategories: spec.filterCategories,
+    ageGroups: spec.ageGroups,
+    illustrationType: 'svg',
+    illustrationValue: spec.illustrationKey,
     illustrationKey: spec.illustrationKey,
     iconKey: spec.iconKey,
     visualMode: 'illustration',
@@ -327,13 +342,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   // КАТЕГОРИЯ 1. ПЕРВЫЕ ШАГИ И АЛГОРИТМЫ
   makeModule({
     id: 'module-creative-engineering',
-    code: 'M001',
     officialTitle: 'Вводный модуль. Креативный инжиниринг и магия ИИ',
     displayTitle: 'Креативный инжиниринг',
     subtitle: 'Старт и AI',
     description:
       'Знакомство с технологиями, креативным мышлением и возможностями искусственного интеллекта. Первые эксперименты с цифровыми инструментами и поиск необычных решений.',
     category: 'algorithms',
+    ageGroups: ['9-11'],
     illustrationKey: 'ai',
     iconKey: 'lightbulb',
     visualNotes: 'лампочка, цифровые идеи, нейросеть, творческая лаборатория',
@@ -349,13 +364,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-scratch-junior',
-    code: 'M002',
     officialTitle: 'Основы программирования в Scratch Junior',
     displayTitle: 'Scratch Junior',
     subtitle: 'Блочный код',
     description:
       'Первые шаги в программировании через визуальные блоки. Создание простых интерактивных историй и управление персонажами с помощью последовательности команд.',
     category: 'algorithms',
+    ageGroups: ['6-8'],
     illustrationKey: 'scratch',
     iconKey: 'blocks',
     visualNotes: 'цветные блоки программирования, персонажи, планшет',
@@ -370,13 +385,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-code-monkey',
-    code: 'M003',
     officialTitle: 'Логика и алгоритмы через игровые квесты Code Monkey',
     displayTitle: 'Code Monkey',
     subtitle: 'Игровые квесты',
     description:
       'Решение игровых головоломок с помощью алгоритмов и последовательных команд. Знакомство с логикой программирования через игровые задачи.',
     category: 'algorithms',
+    ageGroups: ['6-8', '9-11'],
     illustrationKey: 'algorithms',
     iconKey: 'rocket',
     visualNotes: 'обезьянка, бананы, игровой маршрут, блоки команд',
@@ -391,13 +406,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-kodu-game-lab',
-    code: 'M004',
     officialTitle: 'Знакомство с 3D. Разработка 3D-миров в Kodu Game Lab',
     displayTitle: 'Kodu Game Lab',
     subtitle: '3D-игры',
     description:
-      'Знакомство с визуальным программированием и создание собственных трёхмерных миров, игровых персонажей и игровых ситуаций.',
+      'Разрабатываем свои 3D-миры: рисуем территорию, добавляем персонажей и программируем их действия с помощью визуального конструктора.',
     category: 'algorithms',
+    ageGroups: ['9-11'],
     illustrationKey: 'kodu',
     iconKey: 'gamepad',
     visualNotes: 'объёмные игровые блоки, 3D-остров, контроллер',
@@ -412,13 +427,14 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-scratch-advanced',
-    code: 'M005',
-    officialTitle: 'Scratch. Продвинутый уровень - создаём игры, как маленькие разработчики!',
+    officialTitle:
+      'Scratch. Продвинутый уровень - создаём игры, как маленькие разработчики!',
     displayTitle: 'Scratch Advanced',
     subtitle: 'Игры в Scratch',
     description:
       'Продолжение работы в Scratch и создание собственных интерактивных игр с персонажами, событиями и игровыми механиками.',
     category: 'algorithms',
+    ageGroups: ['6-8', '9-11'],
     illustrationKey: 'scratch',
     iconKey: 'blocks',
     visualNotes: 'Scratch-блоки, игровые персонажи, сцена игры',
@@ -433,13 +449,14 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-run-marco',
-    code: 'M006',
-    officialTitle: 'Алгоритмы приключений: квест-кодинг Run Marco! Учимся думать, как разработчики.',
+    officialTitle:
+      'Алгоритмы приключений: квест-кодинг Run Marco! Учимся думать, как разработчики',
     displayTitle: 'Run Marco!',
     subtitle: 'Квест-кодинг',
     description:
       'Прохождение алгоритмических приключений, в которых необходимо составлять последовательности команд и находить правильный путь к решению задачи.',
     category: 'algorithms',
+    ageGroups: ['9-11'],
     illustrationKey: 'algorithms',
     iconKey: 'rocket',
     visualNotes: 'игровой квест, карта маршрута, команды движения',
@@ -454,13 +471,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-piktomir',
-    code: 'M007',
     officialTitle: 'Алгоритмические головоломки. Пиктомир',
     displayTitle: 'Пиктомир',
     subtitle: 'Алгоритмы',
     description:
       'Решение алгоритмических головоломок и освоение принципов построения команд для виртуальных исполнителей.',
     category: 'algorithms',
+    ageGroups: ['6-8'],
     illustrationKey: 'algorithms',
     iconKey: 'blocks',
     visualNotes: 'пиктограммы, геометрическая сетка, стрелки и маршруты',
@@ -475,13 +492,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-blockly',
-    code: 'M008',
     officialTitle: 'Текстовый код и мышление программиста. Blockly',
     displayTitle: 'Blockly',
     subtitle: 'Логика и код',
     description:
-      'Знакомство с принципами программного кода через визуальные конструкции и переход к более структурированному пониманию команд.',
+      'Прокачиваем логику и создаём программы в Blockly с помощью визуального кода: учимся строить алгоритмы, находить решения и понимать принципы работы настоящего программирования.',
     category: 'algorithms',
+    ageGroups: ['9-11'],
     illustrationKey: 'scratch',
     iconKey: 'code',
     visualNotes: 'цветные блоки кода, окно программирования',
@@ -494,17 +511,37 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
     ],
     badgeLabel: 'Blockly',
   }),
+  makeModule({
+    id: 'module-algorithms-turtle',
+    officialTitle: 'Исполнители алгоритмов: чертежник и черепаха',
+    displayTitle: 'Чертёжник и черепаха',
+    subtitle: 'Исполнители алгоритмов',
+    description:
+      'Модуль познакомит детей с понятием «исполнитель алгоритмов». Виды алгоритмов: линейные, ветвление, циклические. Этот модуль поможет ребятам развить мышление для грамотного написания программ в будущем.',
+    category: 'algorithms',
+    ageGroups: ['6-8'],
+    illustrationKey: 'algorithms',
+    iconKey: 'blocks',
+    visualNotes: 'черепашка, геометрические траектории, сетка координат',
+    suggestedSkills: [
+      'skill-algorithmization',
+      'skill-logic',
+      'skill-sequence',
+      'skill-spatial',
+    ],
+    badgeLabel: 'Алгоритмы',
+  }),
 
   // КАТЕГОРИЯ 2. СОЗДАНИЕ ИГР И ИГРОВЫЕ ДВИЖКИ
   makeModule({
     id: 'module-lua-minecraft',
-    code: 'M009',
-    officialTitle: 'Азы программирования на языке Lua. Minecraft Education.',
+    officialTitle: 'Азы программирования на языке Lua. Minecraft Education',
     displayTitle: 'Lua + Minecraft',
     subtitle: 'Код в игре',
     description:
-      'Знакомство с программированием на языке Lua в контексте игровой среды Minecraft Education и изучение принципов взаимодействия команд с игровым миром.',
+      'Практикуем английский и изучаем программирование через любимую игру. Данный подход способствует творчеству, командной работе, помогает рассматривать мир комплексно, не разделяя его на предметы.',
     category: 'games',
+    ageGroups: ['9-11'],
     illustrationKey: 'roblox',
     iconKey: 'code',
     visualNotes: 'пиксельный игровой мир, кубы, код',
@@ -519,16 +556,16 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-construct-2',
-    code: 'M010',
-    officialTitle: 'Игры без кода: проектируем как профи на Construct 2',
-    displayTitle: 'Construct 2',
+    officialTitle: 'Основы геймдизайна. Проектируем как профи в Construct 3',
+    displayTitle: 'Construct 3',
     subtitle: '2D-движок',
     description:
-      'Создание игровых проектов без традиционного написания программного кода. Знакомство с игровыми событиями, объектами и механиками.',
+      'Создаём собственные видеоигры в Construct 3: продумываем механику, дизайн и логику работы. Осваиваем основы разработки цифровых продуктов, развиваем техническое мышление и учимся превращать идеи в готовые проекты.',
     category: 'games',
+    ageGroups: ['6-8', '9-11'],
     illustrationKey: 'kodu',
     iconKey: 'gamepad',
-    visualNotes: 'игровая сцена, объекты, редактор Construct',
+    visualNotes: 'игровая сцена, объекты, редактор Construct 3',
     suggestedSkills: [
       'skill-game-design',
       'skill-game-mechanics',
@@ -536,17 +573,39 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
       'skill-decomposition',
       'skill-game-testing',
     ],
-    badgeLabel: 'Construct 2',
+    badgeLabel: 'Construct 3',
+  }),
+  makeModule({
+    id: 'module-geometry-dash',
+    officialTitle:
+      'Проектирование и программирование через геймификацию в Geometry Dash',
+    displayTitle: 'Geometry Dash',
+    subtitle: 'Геймдизайн уровней',
+    description:
+      'Становимся создателями, а не просто пользователями игр: разрабатываем пространственное мышление, создаем собственные уровни в Geometry Dash, продумываем механику, прописываем триггеры, строим уровни, украшаем музыкой и эффектами.',
+    category: 'games',
+    ageGroups: ['6-8'],
+    illustrationKey: 'kodu',
+    iconKey: 'gamepad',
+    visualNotes: 'геометрический уровень, триггеры, ритм-платформер',
+    suggestedSkills: [
+      'skill-spatial',
+      'skill-game-design',
+      'skill-game-mechanics',
+      'skill-creativity',
+    ],
+    badgeLabel: 'Geometry Dash',
   }),
   makeModule({
     id: 'module-roblox',
-    code: 'M011',
-    officialTitle: 'Roblox. Структурируем алгоритмы и коды с помощью популярной игры',
+    officialTitle:
+      'Roblox. Структурируем алгоритмы и коды с помощью популярной игры',
     displayTitle: 'Roblox',
     subtitle: 'Игровые миры',
     description:
-      'Знакомство с игровым проектированием и алгоритмическими принципами через популярную игровую среду Roblox.',
+      'Прокачиваем навыки геймдизайна: разрабатываем собственные миры в Roblox Studio, тренируем воображение и создаём персонажей, настраиваем механику и программируем взаимодействия. Осваиваем основы разработки больших проектов и учимся работать с кодом и скриптами.',
     category: 'games',
+    ageGroups: ['9-11'],
     illustrationKey: 'roblox',
     iconKey: 'gamepad',
     visualNotes: '3D-персонажи, игровой мир, кубические объекты',
@@ -561,13 +620,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-minecraft-mods',
-    code: 'M012',
     officialTitle: 'Создание модов в Minecraft',
     displayTitle: 'Minecraft Mods',
     subtitle: 'Модификации',
     description:
       'Знакомство с возможностями изменения игровой среды и создание собственных элементов и модификаций для Minecraft.',
     category: 'games',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'kodu',
     iconKey: 'blocks',
     visualNotes: 'кубы Minecraft, игровые предметы, редактор модификаций',
@@ -581,14 +640,36 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
     badgeLabel: 'Minecraft',
   }),
   makeModule({
+    id: 'module-python-pygame',
+    officialTitle: '2D игра на Python в PyGame',
+    displayTitle: 'Python PyGame',
+    subtitle: '2D-игра на Python',
+    description:
+      'Ребята на языке Python с помощью библиотеки PyGame создают собственную 2D-игру "CyberEscape". Применяют циклы, условия и функции для разработки игровой логики, физики, персонажей и противников.',
+    category: 'games',
+    ageGroups: ['9-11'],
+    illustrationKey: 'python',
+    iconKey: 'gamepad',
+    visualNotes: '2D-игра, Python, PyGame, спрайты и физика',
+    suggestedSkills: [
+      'skill-python',
+      'skill-game-mechanics',
+      'skill-program-logic',
+      'skill-game-testing',
+      'skill-project-work',
+    ],
+    badgeLabel: 'PyGame',
+  }),
+  makeModule({
     id: 'module-unity-2d',
-    code: 'M013',
     officialTitle: 'Мир игр на Unity 2D на популярном движке + AI-помощники',
     displayTitle: 'Unity 2D',
     subtitle: 'Unity + AI',
     description:
-      'Знакомство с разработкой двухмерных игр в Unity, созданием игровых сцен, объектов и взаимодействий с использованием AI-помощников.',
+      'Погружаемся в профессиональную платформу Unity для разработки проектов в реальном времени на языке C#. Осваиваем принципы создания современных 2D-игр, программируем механику и настраиваем объекты.',
     category: 'games',
+    filterCategories: ['games', 'advanced-tech'],
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'kodu',
     iconKey: 'gamepad',
     visualNotes: 'игровая 2D-сцена, Unity, персонаж',
@@ -602,17 +683,16 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
     ],
     badgeLabel: 'Unity 2D',
   }),
-  // Deduplicated M014 & M051 -> single canonical Unreal Engine entry with filterCategories
   makeModule({
     id: 'module-unreal-engine',
-    code: 'M014',
-    officialTitle: 'Разработка игр на движке Unreal',
+    officialTitle: 'Разработка 3D-игр на движке Unreal Engine',
     displayTitle: 'Unreal Engine',
     subtitle: '3D-движок',
     description:
       'Знакомство с возможностями игрового движка Unreal Engine и процессом создания 3D-игровых пространств, объектов и интерактивных проектов.',
     category: 'games',
     filterCategories: ['games', 'advanced-tech'],
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'design3d',
     iconKey: 'box',
     visualNotes: 'трёхмерная игровая сцена, игровой движок Unreal Engine',
@@ -626,10 +706,8 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
     ],
     badgeLabel: 'Unreal',
   }),
-  // Deduplicated M015 & M052 -> single canonical Godot entry with filterCategories
   makeModule({
     id: 'module-godot',
-    code: 'M015',
     officialTitle: 'Godot. Основа создания легендарных игр',
     displayTitle: 'Godot',
     subtitle: 'Игровой движок',
@@ -637,6 +715,7 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
       'Знакомство с игровым движком Godot, организацией сцен, логикой взаимодействий и основными этапами создания собственного игрового проекта.',
     category: 'games',
     filterCategories: ['games', 'advanced-tech'],
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'kodu',
     iconKey: 'gamepad',
     visualNotes: 'игровой редактор Godot, персонаж, игровая сцена',
@@ -653,13 +732,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   // КАТЕГОРИЯ 3. ЦИФРОВАЯ ГРАМОТНОСТЬ И БЕЗОПАСНОСТЬ
   makeModule({
     id: 'module-pc-hardware',
-    code: 'M016',
     officialTitle: 'Устройство компьютера: из чего состоит пк и как он работает',
     displayTitle: 'Устройство компьютера',
     subtitle: 'Архитектура ПК',
     description:
-      'Знакомство с основными компонентами компьютера, их назначением и принципами взаимодействия.',
+      'Изучаем устройство компьютера: знакомимся с комплектующими, разбираемся, как работают основные компоненты ПК и собираем собственный компьютер с помощью интерактивного конструктора.',
     category: 'digital-literacy',
+    ageGroups: ['9-11'],
     illustrationKey: 'hardware',
     iconKey: 'cpu',
     visualNotes: 'компьютер в разобранном виде, комплектующие',
@@ -672,14 +751,33 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
     badgeLabel: 'Железо',
   }),
   makeModule({
+    id: 'module-keyboard-master',
+    officialTitle: 'Клавиатурный мастер: скоропечать и полезные горячие клавиши',
+    displayTitle: 'Клавиатурный мастер',
+    subtitle: 'Скоропечать и шорткаты',
+    description:
+      'Учимся уверенно работать с клавиатурой, развиваем навык скоропечати, изучаем полезные сочетания клавиш в различных программах. Эти навыки помогают быстрее выполнять задачи и экономить время при учёбе.',
+    category: 'digital-literacy',
+    ageGroups: ['6-8', '9-11'],
+    illustrationKey: 'hardware',
+    iconKey: 'terminal',
+    visualNotes: 'клавиатура, слепая печать, комбинации клавиш',
+    suggestedSkills: [
+      'skill-digital-literacy',
+      'skill-autonomy',
+      'skill-time-management',
+    ],
+    badgeLabel: 'Скоропечать',
+  }),
+  makeModule({
     id: 'module-word-excel',
-    code: 'M017',
     officialTitle: 'Цифровая база для школьника: используем Word и Excel как профи',
     displayTitle: 'Word + Excel',
     subtitle: 'Документы и таблицы',
     description:
       'Освоение инструментов для работы с документами, таблицами и организацией информации.',
     category: 'digital-literacy',
+    ageGroups: ['9-11'],
     illustrationKey: 'office',
     iconKey: 'fileSpreadsheet',
     visualNotes: 'документы, таблицы, офисные приложения',
@@ -693,13 +791,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-powerpoint',
-    code: 'M018',
     officialTitle: 'Магия эффектных презентаций PowerPoint',
     displayTitle: 'PowerPoint',
     subtitle: 'Презентации',
     description:
       'Создание выразительных презентаций, работа с композицией слайдов, визуальными материалами и представлением информации.',
     category: 'digital-literacy',
+    ageGroups: ['9-11'],
     illustrationKey: 'office',
     iconKey: 'presentation',
     visualNotes: 'презентационные слайды, экран, иллюстрации',
@@ -713,13 +811,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-qr-tech',
-    code: 'M019',
     officialTitle: 'QR-код: что это и как его использовать',
     displayTitle: 'QR-технологии',
     subtitle: 'Цифровые ссылки',
     description:
       'Знакомство с QR-кодами, принципами их использования и способами быстрого доступа к цифровой информации.',
     category: 'digital-literacy',
+    ageGroups: ['6-8', '9-11'],
     illustrationKey: 'hardware',
     iconKey: 'qr',
     visualNotes: 'QR-код, смартфон, цифровые ссылки',
@@ -732,13 +830,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-yandex-services',
-    code: 'M020',
     officialTitle: 'Полезные Яндекс-сервисы для жизни',
     displayTitle: 'Сервисы Яндекса',
     subtitle: 'Облачные сервисы',
     description:
       'Знакомство с цифровыми сервисами Яндекса и их применением для учёбы, поиска информации и повседневных задач.',
     category: 'digital-literacy',
+    ageGroups: ['6-8', '9-11'],
     illustrationKey: 'cloud',
     iconKey: 'cloud',
     visualNotes: 'поисковая строка, облако, браузер',
@@ -751,13 +849,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-cybersecurity',
-    code: 'M021',
     officialTitle: 'Основы кибербезопасности',
     displayTitle: 'Кибербезопасность',
     subtitle: 'Защита данных',
     description:
-      'Знакомство с правилами безопасного поведения в интернете, защитой личных данных и основными цифровыми угрозами.',
+      'Раскроем понятие кибербезопасности, основные источники опасности и способы защиты. Типы кибератак, деструктивная информация и интернет-вирусы — как защитить свои гаджеты и данные.',
     category: 'digital-literacy',
+    ageGroups: ['6-8', '9-11', '12-14'],
     illustrationKey: 'security',
     iconKey: 'shield',
     visualNotes: 'щит, замок, компьютер, защищённые данные',
@@ -769,17 +867,37 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
     ],
     badgeLabel: 'Безопасность',
   }),
+  makeModule({
+    id: 'module-open-lesson-pitching',
+    officialTitle: 'Открытый урок. Тренируем навык Питчинга',
+    displayTitle: 'Открытый урок',
+    subtitle: 'Питчинг и защита проекта',
+    description:
+      'Проведение открытых уроков для родителей в декабре и мае. Каждый резидент презентует проект по любимому модулю, тренирует навык уверенного питчинга, участвует в КИБЕРмаркете и получает сертификат.',
+    category: 'digital-literacy',
+    ageGroups: ['6-8', '9-11', '12-14'],
+    illustrationKey: 'office',
+    iconKey: 'presentation',
+    visualNotes: 'презентация проекта, сцена, питчинг, сертификат',
+    suggestedSkills: [
+      'skill-presentation',
+      'skill-project-work',
+      'skill-creativity',
+      'skill-autonomy',
+    ],
+    badgeLabel: 'Питчинг',
+  }),
 
   // КАТЕГОРИЯ 4. ИСКУССТВЕННЫЙ ИНТЕЛЛЕКТ И AI-ПРОДУКТЫ
   makeModule({
     id: 'module-prompt-engineering',
-    code: 'M022',
     officialTitle: 'Промпт-инжиниринг: учимся правильно давать задачи ИИ',
     displayTitle: 'Prompt Engineering',
     subtitle: 'Задачи для ИИ',
     description:
       'Изучение способов взаимодействия с нейросетями через правильно сформулированные запросы и постановку задач.',
     category: 'ai',
+    ageGroups: ['9-11'],
     illustrationKey: 'ai',
     iconKey: 'sparkles',
     visualNotes: 'диалог с AI, текстовый запрос, цифровая голова',
@@ -793,13 +911,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-neural-networks',
-    code: 'M023',
     officialTitle: 'Нейросети: современные инструменты для учебы и творчества',
     displayTitle: 'Нейросети',
     subtitle: 'AI для учёбы',
     description:
       'Знакомство с современными инструментами искусственного интеллекта и их применением в учебных и творческих задачах.',
     category: 'ai',
+    ageGroups: ['9-11'],
     illustrationKey: 'ai',
     iconKey: 'bot',
     visualNotes: 'нейросеть, цифровые изображения, AI-символ',
@@ -813,13 +931,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-ai-storytelling',
-    code: 'M024',
     officialTitle: 'Цифровая книга с персонажами и озвучкой - AI Storytelling',
     displayTitle: 'AI Storytelling',
     subtitle: 'Цифровая книга',
     description:
-      'Создание собственной цифровой истории с персонажами, иллюстрациями и озвучкой с использованием AI-инструментов.',
+      'Создаём свою историю с помощью ИИ: придумываем сюжет и героев, воплощаем творческие идеи через генерацию изображений и озвучки, оформляем готовый мультимедийный проект в виде цифровой книги.',
     category: 'ai',
+    ageGroups: ['9-11'],
     illustrationKey: 'animaker',
     iconKey: 'bookOpen',
     visualNotes: 'открытая книга, персонажи, звуковые волны',
@@ -833,13 +951,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-vibe-coding',
-    code: 'M025',
     officialTitle: 'Vibe Coding & AI-инжиниринг',
     displayTitle: 'Vibe Coding',
     subtitle: 'AI-разработка',
     description:
       'Знакомство с новым подходом к созданию цифровых продуктов при помощи AI-инструментов и последовательной постановки задач.',
     category: 'ai',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'ai',
     iconKey: 'terminal',
     visualNotes: 'AI-ассистент, окно кода, цифровой проект',
@@ -853,14 +971,35 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
     badgeLabel: 'Vibe Coding',
   }),
   makeModule({
+    id: 'module-vibe-coding-kodik',
+    officialTitle: 'Основы Вайбкодинга. ИИ для программирования Kodik',
+    displayTitle: 'Вайбкодинг и Kodik',
+    subtitle: 'ИИ для кода',
+    description:
+      'Осваиваем современный подход к разработке — создаём приложения с помощью искусственного интеллекта, используя нейросети для ускорения работы. Учимся правильно ставить задачи ИИ, понимать созданный код и улучшать проекты.',
+    category: 'ai',
+    ageGroups: ['9-11'],
+    illustrationKey: 'ai',
+    iconKey: 'terminal',
+    visualNotes: 'Kodik, ИИ-помощник программиста, редактор кода',
+    suggestedSkills: [
+      'skill-ai-dev',
+      'skill-prompting',
+      'skill-task-setting',
+      'skill-code-work',
+    ],
+    badgeLabel: 'Kodik',
+  }),
+  makeModule({
     id: 'module-ai-product-lab',
-    code: 'M026',
-    officialTitle: 'AI Product Lab. Собираем MVP за 3 занятия – как взрослые IT-команды',
+    officialTitle:
+      'AI Product Lab. Собираем MVP за 3 занятия – как взрослые IT-команды',
     displayTitle: 'AI Product Lab',
     subtitle: 'Продукт и MVP',
     description:
       'Знакомство с процессом создания цифрового продукта: от идеи и определения задачи до прототипа и первого MVP.',
     category: 'ai',
+    ageGroups: ['12-14'],
     illustrationKey: 'ai',
     iconKey: 'rocket',
     visualNotes: 'прототип приложения, доска идей, продуктовые карточки',
@@ -875,13 +1014,14 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-voice-assistant-alice',
-    code: 'M027',
-    officialTitle: 'Обучение голосового помощника. Собственный навык для Алисы',
+    officialTitle:
+      'Обучение голосового помощника. Собственный навык для Алисы',
     displayTitle: 'Голосовой помощник',
     subtitle: 'Навык для Алисы',
     description:
       'Разработка собственного сценария взаимодействия с голосовым помощником и знакомство с принципами голосовых интерфейсов.',
     category: 'ai',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'chatbot',
     iconKey: 'bot',
     visualNotes: 'голосовой помощник, микрофон, звуковые волны',
@@ -895,13 +1035,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-python-ai',
-    code: 'M028',
     officialTitle: 'Язык программирования Python + AI-помощники',
     displayTitle: 'Python + AI',
     subtitle: 'Код и AI',
     description:
-      'Изучение основ текстового программирования на Python с использованием AI-помощников для решения задач и работы с кодом.',
+      'Фундамент для IT. Один из самых востребованных языков программирования с простой структурой кода. Идеален для начинающих разработчиков, ИИ, автоматизации и создания цифровых продуктов с AI-помощниками.',
     category: 'ai',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'python',
     iconKey: 'code',
     visualNotes: 'логотип Python, окно кода, AI-ассистент',
@@ -917,13 +1057,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-python-ai-website',
-    code: 'M029',
     officialTitle: 'Мой первый сайт с мозгами: Python + AI',
     displayTitle: 'Python + AI Website',
     subtitle: 'Умный сайт',
     description:
       'Создание собственного сайта с использованием Python и инструментов искусственного интеллекта.',
     category: 'ai',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'web',
     iconKey: 'globe',
     visualNotes: 'браузер, сайт, элементы AI',
@@ -938,13 +1078,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-ai-vk-store',
-    code: 'M030',
-    officialTitle: 'Нейросети и VK-магазин',
+    officialTitle: 'VK-магазин с применением нейросетей',
     displayTitle: 'AI + VK Магазин',
     subtitle: 'Цифровой бизнес',
     description:
-      'Знакомство с возможностями нейросетей при создании и оформлении цифрового магазина в экосистеме VK.',
+      'Создаём собственный интернет-магазин в VK и осваиваем современные инструменты на базе искусственного интеллекта. Учимся генерировать тексты, изображения и контент для продвижения проекта.',
     category: 'ai',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'ai',
     iconKey: 'sparkles',
     visualNotes: 'интернет-магазин, карточки товаров, нейросеть',
@@ -958,13 +1098,14 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-typescript-ai',
-    code: 'M031',
-    officialTitle: 'TypeScript + AI: создаём умные веб-приложения',
+    officialTitle:
+      'Язык программирования TypeScript. Знакомимся с типизацией и создаем чат-ботов',
     displayTitle: 'TypeScript + AI',
     subtitle: 'Веб-приложения',
     description:
-      'Знакомство с разработкой веб-приложений на TypeScript и использованием AI-помощников в процессе программирования.',
+      'Переходим на новый уровень веб-разработки с TypeScript и AI-помощниками: сравниваем его с JavaScript, осваиваем типизацию, создаём чат-ботов и учимся писать более надёжный код.',
     category: 'ai',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'typescript',
     iconKey: 'terminal',
     visualNotes: 'редактор кода, TypeScript, AI-интерфейс',
@@ -982,13 +1123,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   // КАТЕГОРИЯ 5. ДИЗАЙН, АНИМАЦИЯ И 3D
   makeModule({
     id: 'module-pixel-art-aseprite',
-    code: 'M032',
     officialTitle: 'Компьютерная анимация в стиле «Пиксель-арт» в Aseprite',
     displayTitle: 'Pixel Art / Aseprite',
     subtitle: 'Пиксель-арт',
     description:
       'Создание пиксельных изображений и анимаций, знакомство с визуальным представлением движения.',
     category: 'design-3d',
+    ageGroups: ['6-8', '9-11'],
     illustrationKey: 'pixel',
     iconKey: 'palette',
     visualNotes: 'пиксельный персонаж, сетка пикселей, Aseprite',
@@ -1003,13 +1144,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-tinkercad-3d',
-    code: 'M033',
     officialTitle: 'Продвинутый уровень в 3D. Tinkercad',
     displayTitle: 'Tinkercad 3D',
     subtitle: '3D-модели',
     description:
       'Продолжение работы с трёхмерными объектами и освоение более сложных приёмов 3D-моделирования.',
     category: 'design-3d',
+    ageGroups: ['6-8', '9-11'],
     illustrationKey: 'design3d',
     iconKey: 'box',
     visualNotes: 'разноцветные 3D-фигуры, геометрические объекты',
@@ -1022,14 +1163,34 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
     badgeLabel: 'Tinkercad',
   }),
   makeModule({
+    id: 'module-spline-3d',
+    officialTitle: '3D-дизайн и моделирование в Spline',
+    displayTitle: 'Spline 3D',
+    subtitle: '3D-графика и анимация',
+    description:
+      'Осваиваем современный инструмент 3D-дизайна: создаём объёмные модели, добавляем материалы, анимацию и интерактивные элементы. Развиваем пространственное мышление и чувство дизайна.',
+    category: 'design-3d',
+    ageGroups: ['6-8'],
+    illustrationKey: 'design3d',
+    iconKey: 'box',
+    visualNotes: '3D-модели, материалы, интерактивные объекты Spline',
+    suggestedSkills: [
+      'skill-3d-modeling',
+      'skill-spatial',
+      'skill-composition',
+      'skill-creativity',
+    ],
+    badgeLabel: 'Spline',
+  }),
+  makeModule({
     id: 'module-web-design-figma',
-    code: 'M034',
-    officialTitle: 'Веб-дизайн, проектируем свой сайт с нуля в Figma',
-    displayTitle: 'Веб-дизайн / Figma',
+    officialTitle: 'Web-дизайн, проектируем свой сайт с нуля в Figma',
+    displayTitle: 'Web-дизайн / Figma',
     subtitle: 'UI/UX в Figma',
     description:
-      'Проектирование внешнего вида сайта, знакомство с интерфейсами, композицией и визуальной организацией веб-страниц.',
+      'Создаем прототип сайта с нуля в инновационной платформе Figma для профессиональных Web-дизайнеров. Разрабатываем концепцию и фирменный стиль Web-проекта.',
     category: 'design-3d',
+    ageGroups: ['6-8', '9-11'],
     illustrationKey: 'web',
     iconKey: 'palette',
     visualNotes: 'макет сайта, Figma, UI-карточки',
@@ -1043,13 +1204,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-gif-animation',
-    code: 'M035',
     officialTitle: 'Gif-анимация',
     displayTitle: 'GIF Animation',
     subtitle: 'Покадровая анимация',
     description:
       'Создание коротких анимированных изображений и знакомство с принципами последовательной смены кадров.',
     category: 'design-3d',
+    ageGroups: ['6-8', '9-11'],
     illustrationKey: 'animaker',
     iconKey: 'film',
     visualNotes: 'последовательность кадров, анимированные изображения',
@@ -1063,13 +1224,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-photoshop',
-    code: 'M036',
     officialTitle: 'Волшебный Photoshop',
     displayTitle: 'Photoshop',
     subtitle: 'Растровая графика',
     description:
       'Знакомство с возможностями графического редактора и создание цифровых изображений с использованием инструментов обработки графики.',
     category: 'design-3d',
+    ageGroups: ['9-11'],
     illustrationKey: 'pixel',
     iconKey: 'palette',
     visualNotes: 'графический редактор, слои, цифровая иллюстрация',
@@ -1082,13 +1243,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-blender-3d',
-    code: 'M037',
     officialTitle: '3D-моделирование. Blender для детей',
     displayTitle: 'Blender 3D',
     subtitle: '3D-графика',
     description:
       'Знакомство с трёхмерным моделированием и создание собственных объёмных объектов в Blender.',
     category: 'design-3d',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'blender',
     iconKey: 'box',
     visualNotes: '3D-объекты, Blender, объёмные формы',
@@ -1102,13 +1263,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-motion-design',
-    code: 'M038',
-    officialTitle: 'Motion Дизайн. Оживляем предметы',
+    officialTitle: 'Основы motion design и создания анимаций в After Effects',
     displayTitle: 'Motion Design',
     subtitle: 'Анимация графики',
     description:
-      'Знакомство с анимацией графических объектов и созданием движения в цифровых композициях.',
+      'Погружаемся в мир motion design и учимся превращать статичные изображения в динамичную анимацию. Осваиваем инструменты After Effects, создаём графику, эффекты и 3D-элементы для визуальных историй.',
     category: 'design-3d',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'animaker',
     iconKey: 'film',
     visualNotes: 'движущиеся геометрические формы, таймлайн анимации',
@@ -1123,13 +1284,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   // КАТЕГОРИЯ 6. САЙТЫ И МОБИЛЬНЫЕ ПРИЛОЖЕНИЯ
   makeModule({
     id: 'module-tilda-landing',
-    code: 'M039',
     officialTitle: 'Интернет-магазин за 2 занятия - Лендинг на Tilda',
     displayTitle: 'Tilda / Лендинг',
     subtitle: 'Конструктор сайтов',
     description:
-      'Создание веб-страницы интернет-магазина, знакомство с конструированием сайтов и представлением товаров в интернете.',
+      'Создаем интернет-магазин с нуля: проектируем, делаем дизайн и верстаем. Разберем структуру и принципы поведения пользователя на сайте, научимся создавать сайты как профи на платформе Tilda.',
     category: 'web-mobile',
+    ageGroups: ['6-8', '9-11'],
     illustrationKey: 'web',
     iconKey: 'globe',
     visualNotes: 'макет интернет-магазина, браузер, карточки товаров',
@@ -1143,13 +1304,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-thunkable',
-    code: 'M040',
     officialTitle: 'Разработка мобильных приложений в Thunkable',
     displayTitle: 'Thunkable',
     subtitle: 'Мобильные приложения',
     description:
-      'Проектирование и создание простых мобильных приложений с помощью визуальных инструментов.',
+      'Создаём собственные мобильные приложения и изучаем основы дизайна цифровых продуктов: продумываем интерфейс, удобство и логику работы.',
     category: 'web-mobile',
+    ageGroups: ['6-8', '9-11'],
     illustrationKey: 'mobile',
     iconKey: 'smartphone',
     visualNotes: 'смартфон, экран приложения, интерфейсные блоки',
@@ -1163,32 +1324,33 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-html-basics',
-    code: 'M041',
-    officialTitle: 'Web-мастер: первые шаги в мир современных сайтов. Основы HTML',
-    displayTitle: 'HTML Basics',
+    officialTitle: 'CSS - технологии. Управление элементами сайта',
+    displayTitle: 'HTML & CSS Basics',
     subtitle: 'Основы вёрстки',
     description:
-      'Первое знакомство с языком HTML и структурой веб-страниц. Создание базовых элементов собственного сайта.',
+      'Знакомство со структурой веб-страниц, разметкой HTML и управлением внешним видом и расположением элементов сайта с помощью CSS.',
     category: 'web-mobile',
+    ageGroups: ['9-11'],
     illustrationKey: 'web',
     iconKey: 'globe',
-    visualNotes: 'браузер, HTML-разметка, теги',
+    visualNotes: 'браузер, HTML-разметка, CSS-стили',
     suggestedSkills: [
       'skill-html',
+      'skill-css',
       'skill-web-structure',
       'skill-creativity',
     ],
-    badgeLabel: 'HTML',
+    badgeLabel: 'CSS',
   }),
   makeModule({
     id: 'module-html-css',
-    code: 'M042',
-    officialTitle: 'Web-мастер (HTML+CSS)',
+    officialTitle: 'WEB-мастер. Продвинутый уровень (HTML+CSS)',
     displayTitle: 'HTML + CSS',
     subtitle: 'Сайты и стили',
     description:
-      'Изучение основ веб-разработки и оформление веб-страниц с помощью HTML и CSS.',
+      'Продвинутая веб-разработка и оформление современных адаптивных веб-страниц с помощью HTML и CSS.',
     category: 'web-mobile',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'web',
     iconKey: 'code',
     visualNotes: 'окно браузера, CSS-код, элементы сайта',
@@ -1202,13 +1364,14 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-javascript',
-    code: 'M043',
-    officialTitle: 'JavaScript для детей: учимся создавать игры, квесты и сайты',
+    officialTitle:
+      'Язык программирования JavaScript + AI-помощники. Проектное обучение',
     displayTitle: 'JavaScript',
     subtitle: 'Интерактивный веб',
     description:
-      'Знакомство с JavaScript через создание интерактивных элементов, игровых механик и веб-проектов.',
+      'Осваиваем JavaScript — главный язык интерактивного веба. Учимся создавать интерактивные сайты, добавлять анимации, квесты, формы и умные элементы, превращая статичные страницы в живые проекты.',
     category: 'web-mobile',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'typescript',
     iconKey: 'code',
     visualNotes: 'JavaScript, интерактивная кнопка, окно кода',
@@ -1218,17 +1381,37 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
       'skill-program-logic',
       'skill-app-dev',
     ],
-    badgeLabel: 'JS',
+    badgeLabel: 'JS + AI',
+  }),
+  makeModule({
+    id: 'module-python-vk-bot',
+    officialTitle: 'Чат-бот на Python (Создаем своего чат-бота в VK)',
+    displayTitle: 'Чат-бот VK на Python',
+    subtitle: 'Боты для VK',
+    description:
+      'Создаём собственного чат-бота на Python для VK и знакомимся с технологиями общения с клиентами. Учимся разрабатывать сценарии работы бота, обрабатывать запросы пользователей и автоматизировать задачи.',
+    category: 'web-mobile',
+    ageGroups: ['9-11'],
+    illustrationKey: 'chatbot',
+    iconKey: 'bot',
+    visualNotes: 'VK-бот, диалоговые окна, Python',
+    suggestedSkills: [
+      'skill-python',
+      'skill-automation',
+      'skill-logic',
+      'skill-testing',
+    ],
+    badgeLabel: 'VK Bot',
   }),
   makeModule({
     id: 'module-python-telegram-bot',
-    code: 'M044',
     officialTitle: 'Умный чат-бот на Python на Telegram',
     displayTitle: 'Python Telegram Bot',
     subtitle: 'Боты на Python',
     description:
-      'Создание собственного чат-бота на Python и знакомство с логикой автоматизированного общения в мессенджере.',
+      'Создание собственного чат-бота на Python и знакомство с логикой автоматизированного общения в мессенджере Telegram.',
     category: 'web-mobile',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'chatbot',
     iconKey: 'bot',
     visualNotes: 'Telegram-бот, диалоговые окна, Python',
@@ -1242,13 +1425,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-telegram-mini-app',
-    code: 'M045',
     officialTitle: 'Создание Mini App для Telegram',
     displayTitle: 'Telegram Mini App',
     subtitle: 'Мини-приложения',
     description:
       'Знакомство с созданием мини-приложений для Telegram и проектированием небольших интерактивных цифровых продуктов.',
     category: 'web-mobile',
+    ageGroups: ['12-14'],
     illustrationKey: 'mobile',
     iconKey: 'smartphone',
     visualNotes: 'смартфон, Telegram-интерфейс, мини-приложение',
@@ -1262,13 +1445,14 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-php-sql',
-    code: 'M046',
-    officialTitle: 'PHP+SQL',
+    officialTitle:
+      'PHP + SQL. Основы backend-разработки и управления большими данными',
     displayTitle: 'PHP + SQL',
     subtitle: 'Сервер и БД',
     description:
-      'Знакомство с PHP и SQL, основами серверной логики и взаимодействия программ с базами данных.',
+      'Знакомство с PHP и SQL, основами серверной backend-разработки и взаимодействия программ с базами данных.',
     category: 'web-mobile',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'database',
     iconKey: 'database',
     visualNotes: 'база данных, таблицы, PHP-код',
@@ -1284,13 +1468,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   // КАТЕГОРИЯ 7. ПРОДВИНУТОЕ ПРОГРАММИРОВАНИЕ И ТЕХНОЛОГИИ
   makeModule({
     id: 'module-testing-vibe-debug',
-    code: 'M047',
     officialTitle: 'Тестирование & Vibe Debug. Охотники за багами',
     displayTitle: 'Testing & Debug',
     subtitle: 'Поиск багов',
     description:
       'Знакомство с поиском ошибок, проверкой работы программ и исправлением обнаруженных проблем.',
     category: 'advanced-tech',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'testing',
     iconKey: 'bug',
     visualNotes: 'лупа, баг, окно кода, инструменты тестировщика',
@@ -1303,14 +1487,35 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
     badgeLabel: 'QA & Debug',
   }),
   makeModule({
+    id: 'module-vibe-debugging',
+    officialTitle:
+      'Тестирование & Vibe Debugging. Охотимся за багами сами и при помощи ИИ',
+    displayTitle: 'Vibe Debugging',
+    subtitle: 'Тестирование с ИИ',
+    description:
+      'Осваиваем важный этап создания IT-продуктов — тестирование и поиск ошибок. Учимся проверять код, находить и исправлять проблемы самостоятельно и с помощью современных ИИ-инструментов.',
+    category: 'advanced-tech',
+    ageGroups: ['9-11'],
+    illustrationKey: 'testing',
+    iconKey: 'bug',
+    visualNotes: 'тестирование кода, ИИ-отладка, поиск багов',
+    suggestedSkills: [
+      'skill-testing',
+      'skill-debugging',
+      'skill-ai-dev',
+      'skill-analytical',
+    ],
+    badgeLabel: 'Vibe Debug',
+  }),
+  makeModule({
     id: 'module-modern-tech-cloud',
-    code: 'M048',
-    officialTitle: 'Облачные технологии. Блокчейн. Data science. Современные технологии',
+    officialTitle: 'Современные технологии: облака, блокчейн и data science',
     displayTitle: 'Современные технологии',
     subtitle: 'Cloud, Data & Web3',
     description:
-      'Знакомство с современными цифровыми технологиями, облачными инструментами, блокчейном и анализом данных.',
+      'Используем технологии, которые прямо сейчас меняют цифровой мир: облачные сервисы, блокчейн и анализ данных. Разбираемся, как хранятся и обрабатываются большие объёмы информации.',
     category: 'advanced-tech',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'cloud',
     iconKey: 'cloud',
     visualNotes: 'облако, блокчейн-структура, диаграмма данных',
@@ -1324,13 +1529,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-ethical-hacking',
-    code: 'M049',
     officialTitle: 'Этичный хакинг & AI безопасность',
     displayTitle: 'Ethical Hacking',
     subtitle: 'Киберзащита & AI',
     description:
-      'Знакомство с принципами этичной проверки безопасности цифровых систем и ответственным использованием технологий.',
+      'Изучаем основы цифровой безопасности и учимся защищать свои данные в интернете. Разбираемся, как находить уязвимости, распознавать фейки и подозрительные действия самостоятельно и с помощью ИИ.',
     category: 'advanced-tech',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'security',
     iconKey: 'shield',
     visualNotes: 'щит, цифровой замок, защищённая система',
@@ -1344,13 +1549,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-csharp',
-    code: 'M050',
     officialTitle: 'Язык программирования C#',
     displayTitle: 'C#',
     subtitle: 'Разработка на C#',
     description:
-      'Знакомство с языком программирования C# и основами создания программ с помощью текстового кода.',
+      'Знакомимся с C# — профессиональным языком программирования, который используют в разработке desktop-приложений, видеоигр и современных программных систем. Развиваем алгоритмическое мышление.',
     category: 'advanced-tech',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'typescript',
     iconKey: 'terminal',
     visualNotes: 'C#, окно кода, программные конструкции',
@@ -1363,16 +1568,15 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
     ],
     badgeLabel: 'C#',
   }),
-  // NOTE: M051 (Unreal) & M052 (Godot) deduplicated cleanly via M014 & M015 filterCategories
   makeModule({
     id: 'module-olympiad-programming',
-    code: 'M053',
     officialTitle: 'Олимпиадное программирование',
     displayTitle: 'Олимпиадное программирование',
     subtitle: 'Алгоритмы PRO',
     description:
-      'Решение сложных алгоритмических задач и развитие навыков программирования в формате интеллектуальных соревнований.',
+      'Учимся решать задачи из блока по олимпиадному программированию, которые предлагают крупные IT-компании: находим нестандартные решения с помощью кода и решаем на скорость.',
     category: 'advanced-tech',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'olympiad',
     iconKey: 'trophy',
     visualNotes: 'код, кубок, математические и алгоритмические схемы',
@@ -1388,13 +1592,13 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   }),
   makeModule({
     id: 'module-olympiad-prep',
-    code: 'M054',
     officialTitle: 'Подготовка к олимпиадам',
     displayTitle: 'Подготовка к олимпиадам',
     subtitle: 'Практикум задач',
     description:
       'Практическая работа над задачами олимпиадного формата, развитие навыков анализа и самостоятельного поиска решений.',
     category: 'advanced-tech',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'olympiad',
     iconKey: 'trophy',
     visualNotes: 'олимпийская медаль, код, задача, таймер',
@@ -1411,13 +1615,14 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
   // КАТЕГОРИЯ 8. ФИНАНСОВАЯ ГРАМОТНОСТЬ
   makeModule({
     id: 'module-financial-intelligence',
-    code: 'M055',
-    officialTitle: 'Финансовый интеллект вместе с KIBERone. Эксклюзив от Ольги Гогаладзе',
+    officialTitle:
+      'Финансовый интеллект вместе с KIBERone. Эксклюзив от Ольги Гогаладзе',
     displayTitle: 'Финансовый интеллект',
     subtitle: 'Финансы и цели',
     description:
       'Знакомство с основами финансовой грамотности, осознанным отношением к деньгам и принципами принятия финансовых решений.',
     category: 'financial',
+    ageGroups: ['9-11', '12-14'],
     illustrationKey: 'finance',
     iconKey: 'wallet',
     visualNotes: 'кошелёк, монеты, графики, финансовая цель',
@@ -1434,15 +1639,15 @@ export const KIBERONE_CURRICULUM_MODULES: LibraryModule[] = [
 export const DEFAULT_GROUP_TEMPLATES: GroupCurriculumTemplate[] = [
   {
     id: 'gtpl-junior-start',
-    name: 'Старт и алгоритмы (8–10 лет)',
+    name: 'Старт и алгоритмы (6–8 лет)',
     description:
-      'Креативный инжиниринг, Scratch Junior и 3D-миры Kodu Game Lab для младшей группы.',
+      'Чертёжник и черепаха, Geometry Dash и 3D-дизайн в Spline для младшей группы.',
     ageCategory: '8-10',
     paletteId: 'kiber-classic',
     moduleIds: [
-      'module-creative-engineering',
-      'module-scratch-junior',
-      'module-kodu-game-lab',
+      'module-algorithms-turtle',
+      'module-geometry-dash',
+      'module-spline-3d',
     ],
     isBuiltIn: true,
     createdAt: '2026-09-01T10:00:00.000Z',
@@ -1450,7 +1655,7 @@ export const DEFAULT_GROUP_TEMPLATES: GroupCurriculumTemplate[] = [
   },
   {
     id: 'gtpl-gamedev-middle',
-    name: 'Геймдев и 3D (9–12 лет)',
+    name: 'Геймдев и 3D (9–11 лет)',
     description:
       'Minecraft Lua, Roblox и Blender 3D — классический игровой трек.',
     ageCategory: '11-13',
@@ -1466,15 +1671,15 @@ export const DEFAULT_GROUP_TEMPLATES: GroupCurriculumTemplate[] = [
   },
   {
     id: 'gtpl-python-ai',
-    name: 'Python & AI Lab (11–13 лет)',
+    name: 'Python & AI Lab (9–11 лет)',
     description:
-      'Промпт-инжиниринг, программирование на Python с AI и создание Telegram-бота.',
+      'Программирование на Python с AI, 2D-игра в PyGame и чат-бот VK на Python.',
     ageCategory: '11-13',
     paletteId: 'tech-cobalt',
     moduleIds: [
-      'module-prompt-engineering',
       'module-python-ai',
-      'module-python-telegram-bot',
+      'module-python-pygame',
+      'module-python-vk-bot',
     ],
     isBuiltIn: true,
     createdAt: '2026-09-01T10:00:00.000Z',
@@ -1482,14 +1687,14 @@ export const DEFAULT_GROUP_TEMPLATES: GroupCurriculumTemplate[] = [
   },
   {
     id: 'gtpl-web-pro',
-    name: 'Веб-продукты и TypeScript (14–15 лет)',
+    name: 'Веб-продукты и TypeScript (12–14 лет)',
     description:
-      'Figma, HTML+CSS и TypeScript + AI для старших резидентов.',
+      'HTML+CSS, JavaScript + AI и TypeScript для старших резидентов.',
     ageCategory: '14-15',
     paletteId: 'tech-cobalt',
     moduleIds: [
-      'module-web-design-figma',
       'module-html-css',
+      'module-javascript',
       'module-typescript-ai',
     ],
     isBuiltIn: true,
@@ -1498,71 +1703,26 @@ export const DEFAULT_GROUP_TEMPLATES: GroupCurriculumTemplate[] = [
   },
 ];
 
-const MODULE_AGE_MAP: Record<string, AgeCategory[]> = {
-  // 8–10 (Младшая группа)
-  'module-creative-engineering': ['8-10'],
-  'module-scratch-junior': ['8-10'],
-  'module-code-monkey': ['8-10'],
-  'module-run-marco': ['8-10'],
-  'module-piktomir': ['8-10'],
-  'module-blockly': ['8-10'],
-  'module-pixel-art-aseprite': ['8-10', '11-13'],
-  'module-tinkercad-3d': ['8-10', '11-13'],
-  'module-gif-animation': ['8-10', '11-13'],
-  'module-qr-tech': ['8-10', '11-13'],
-  'module-kodu-game-lab': ['8-10', '11-13'],
-  'module-scratch-advanced': ['8-10', '11-13'],
-  'module-lua-minecraft': ['8-10', '11-13'],
-  'module-roblox': ['8-10', '11-13'],
-  'module-pc-hardware': ['8-10', '11-13'],
-  'module-word-excel': ['8-10', '11-13'],
-  'module-powerpoint': ['8-10', '11-13'],
-  'module-yandex-services': ['8-10', '11-13'],
-  'module-ai-storytelling': ['8-10', '11-13'],
-  'module-thunkable': ['8-10', '11-13'],
-  'module-cybersecurity': ['8-10', '11-13', '14-15'],
-  'module-financial-intelligence': ['8-10', '11-13', '14-15'],
+const MODULE_AGE_MAP: Record<string, ModuleAgeGroup[]> = Object.fromEntries(
+  KIBERONE_CURRICULUM_MODULES.map((m) => [m.id, m.ageGroups])
+);
 
-  // 11–13 (Средняя группа)
-  'module-construct-2': ['11-13'],
-  'module-html-basics': ['11-13'],
-  'module-minecraft-mods': ['11-13', '14-15'],
-  'module-unity-2d': ['11-13', '14-15'],
-  'module-godot': ['11-13', '14-15'],
-  'module-prompt-engineering': ['11-13', '14-15'],
-  'module-neural-networks': ['11-13', '14-15'],
-  'module-vibe-coding': ['11-13', '14-15'],
-  'module-voice-assistant-alice': ['11-13', '14-15'],
-  'module-python-ai': ['11-13', '14-15'],
-  'module-web-design-figma': ['11-13', '14-15'],
-  'module-photoshop': ['11-13', '14-15'],
-  'module-blender-3d': ['11-13', '14-15'],
-  'module-motion-design': ['11-13', '14-15'],
-  'module-tilda-landing': ['11-13', '14-15'],
-  'module-html-css': ['11-13', '14-15'],
-  'module-javascript': ['11-13', '14-15'],
-  'module-python-telegram-bot': ['11-13', '14-15'],
-  'module-olympiad-programming': ['11-13', '14-15'],
-  'module-olympiad-prep': ['11-13', '14-15'],
+export function normalizeToModuleAgeGroup(
+  age?: AgeCategory | string
+): ModuleAgeGroup {
+  if (age === '6-8' || age === '8-10') return '6-8';
+  if (age === '12-14' || age === '14-15') return '12-14';
+  return '9-11';
+}
 
-  // 14–15 (Старшая группа)
-  'module-unreal-engine': ['14-15'],
-  'module-ai-product-lab': ['14-15'],
-  'module-python-ai-website': ['14-15'],
-  'module-ai-vk-store': ['14-15'],
-  'module-typescript-ai': ['14-15'],
-  'module-telegram-mini-app': ['14-15'],
-  'module-php-sql': ['14-15'],
-  'module-testing-vibe-debug': ['14-15'],
-  'module-modern-tech-cloud': ['14-15'],
-  'module-ethical-hacking': ['14-15'],
-  'module-csharp': ['14-15'],
-};
-
-export function getModuleAgeCategories(mod: LibraryModule): AgeCategory[] {
-  if (mod.ageCategories && mod.ageCategories.length > 0) {
-    return mod.ageCategories;
+export function getModuleAgeGroups(mod: LibraryModule): ModuleAgeGroup[] {
+  if (Array.isArray(mod.ageGroups) && mod.ageGroups.length > 0) {
+    return mod.ageGroups;
   }
-  return MODULE_AGE_MAP[mod.id] ?? ['8-10', '11-13', '14-15'];
+  return MODULE_AGE_MAP[mod.id] ?? ['6-8', '9-11', '12-14'];
+}
+
+export function getModuleAgeCategories(mod: LibraryModule): ModuleAgeGroup[] {
+  return getModuleAgeGroups(mod);
 }
 

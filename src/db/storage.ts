@@ -1,5 +1,6 @@
 import {
   DEFAULT_GROUP_TEMPLATES,
+  getModuleAgeGroups,
   KIBERONE_CURRICULUM_MODULES,
   MODULE_CATEGORIES,
   UNIFIED_SKILLS_CATALOG,
@@ -280,17 +281,52 @@ function normalizeResident(
 }
 
 function normalizeLibraryModule(mod: LibraryModule): LibraryModule {
+  const legacy = mod as LibraryModule & {
+    code?: string;
+    ageCategories?: unknown;
+  };
+  const { code: _removedCode, ageCategories: _removedAgeCats, ...clean } = legacy;
+  const shortTitle = clean.shortTitle || clean.displayTitle || clean.title;
+  const officialTitle = clean.officialTitle || clean.title || shortTitle;
+  const category = clean.category || clean.categoryId || 'algorithms';
+  const illustrationType =
+    clean.illustrationType ||
+    (clean.visualMode === 'image' && clean.customImageUrl ? 'image' : 'svg');
+  const illustrationValue =
+    clean.illustrationValue ||
+    (illustrationType === 'image' && clean.customImageUrl
+      ? clean.customImageUrl
+      : clean.illustrationKey || 'algorithms');
+  const ageGroups = getModuleAgeGroups({
+    ...clean,
+    shortTitle,
+    officialTitle,
+    title: officialTitle,
+    category,
+    categoryId: category,
+    ageGroups: clean.ageGroups ?? [],
+    illustrationType,
+    illustrationValue,
+  } as LibraryModule);
+
   return {
-    ...mod,
-    officialTitle: mod.officialTitle || mod.title,
-    displayTitle: mod.displayTitle || mod.title,
-    category: mod.category || 'algorithms',
-    iconKey: mod.iconKey || 'blocks',
-    visualMode: mod.visualMode || (mod.customImageUrl ? 'image' : 'illustration'),
-    suggestedSkills: mod.suggestedSkills ?? [],
-    relatedSkills: mod.relatedSkills ?? [],
-    isActive: mod.isActive !== undefined ? mod.isActive : true,
-    isEditable: mod.isEditable !== undefined ? mod.isEditable : true,
+    ...clean,
+    officialTitle,
+    displayTitle: shortTitle,
+    shortTitle,
+    title: officialTitle,
+    category,
+    categoryId: category,
+    ageGroups,
+    illustrationType,
+    illustrationValue,
+    iconKey: clean.iconKey || 'blocks',
+    visualMode:
+      clean.visualMode || (clean.customImageUrl ? 'image' : 'illustration'),
+    suggestedSkills: clean.suggestedSkills ?? [],
+    relatedSkills: clean.relatedSkills ?? [],
+    isActive: clean.isActive !== undefined ? clean.isActive : true,
+    isEditable: clean.isEditable !== undefined ? clean.isEditable : true,
   };
 }
 
@@ -426,6 +462,13 @@ const LEGACY_V2_STUB_IDS = new Set([
   'lib-web',
 ]);
 
+const OFFICIAL_MODULE_ORDER = new Map(
+  KIBERONE_CURRICULUM_MODULES.map((m, idx) => [m.id, idx])
+);
+const OFFICIAL_MODULE_BY_ID = new Map(
+  KIBERONE_CURRICULUM_MODULES.map((m) => [m.id, m])
+);
+
 export async function getAllLibraryModules(): Promise<LibraryModule[]> {
   const existing = await readStore<LibraryModule>(STORE_MODULE_LIBRARY);
   if (existing.length === 0) {
@@ -435,12 +478,7 @@ export async function getAllLibraryModules(): Promise<LibraryModule[]> {
     return [...KIBERONE_CURRICULUM_MODULES];
   }
 
-  const existingIds = new Set(existing.map((m) => m.id));
   const isPureLegacyV2Seed = existing.every((m) => LEGACY_V2_STUB_IDS.has(m.id));
-  const missingOfficial = KIBERONE_CURRICULUM_MODULES.filter(
-    (m) => !existingIds.has(m.id)
-  );
-
   if (isPureLegacyV2Seed) {
     await Promise.all([
       ...existing.map((m) => deleteItem(STORE_MODULE_LIBRARY, m.id)),
@@ -449,17 +487,60 @@ export async function getAllLibraryModules(): Promise<LibraryModule[]> {
     return [...KIBERONE_CURRICULUM_MODULES];
   }
 
-  if (missingOfficial.length > 0) {
+  const existingIds = new Set(existing.map((m) => m.id));
+  const missingOfficial = KIBERONE_CURRICULUM_MODULES.filter(
+    (m) => !existingIds.has(m.id)
+  );
+
+  const migratedToSave: LibraryModule[] = [...missingOfficial];
+  const syncedExisting = existing.map((raw) => {
+    const rawAny = raw as LibraryModule & { code?: string };
+    const official = OFFICIAL_MODULE_BY_ID.get(raw.id);
+    const needsCatalogSync =
+      Boolean(official) &&
+      ('code' in rawAny ||
+        !Array.isArray(rawAny.ageGroups) ||
+        rawAny.ageGroups.length === 0 ||
+        raw.updatedAt === '2026-09-01T10:00:00.000Z');
+
+    if (official && needsCatalogSync) {
+      const synced: LibraryModule = {
+        ...official,
+        imageMediaId: raw.imageMediaId ?? official.imageMediaId,
+        customImageUrl: raw.customImageUrl ?? official.customImageUrl,
+        visualMode: raw.customImageUrl
+          ? raw.visualMode || 'image'
+          : raw.visualMode || official.visualMode,
+        isActive: raw.isActive !== undefined ? raw.isActive : official.isActive,
+      };
+      migratedToSave.push(synced);
+      return synced;
+    }
+
+    const normalized = normalizeLibraryModule(raw);
+    if ('code' in rawAny || !Array.isArray(rawAny.ageGroups)) {
+      migratedToSave.push(normalized);
+    }
+    return normalized;
+  });
+
+  if (migratedToSave.length > 0) {
     await Promise.all(
-      missingOfficial.map((m) => putItem(STORE_MODULE_LIBRARY, m))
+      migratedToSave.map((m) => putItem(STORE_MODULE_LIBRARY, m))
     );
   }
 
-  const merged = [...existing.map(normalizeLibraryModule), ...missingOfficial];
+  const merged = [...syncedExisting, ...missingOfficial];
   return merged.sort((a, b) => {
-    const codeA = a.code || 'M999';
-    const codeB = b.code || 'M999';
-    return codeA.localeCompare(codeB, 'ru');
+    const orderA = OFFICIAL_MODULE_ORDER.get(a.id);
+    const orderB = OFFICIAL_MODULE_ORDER.get(b.id);
+    if (orderA !== undefined && orderB !== undefined) return orderA - orderB;
+    if (orderA !== undefined) return -1;
+    if (orderB !== undefined) return 1;
+    return (a.officialTitle || a.title).localeCompare(
+      b.officialTitle || b.title,
+      'ru'
+    );
   });
 }
 

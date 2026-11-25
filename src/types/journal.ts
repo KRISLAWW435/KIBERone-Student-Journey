@@ -1,4 +1,10 @@
-export type AgeCategory = '8-10' | '11-13' | '14-15';
+export type ModuleAgeGroup = '6-8' | '9-11' | '12-14';
+
+export type AgeCategory =
+  | ModuleAgeGroup
+  | '8-10'
+  | '11-13'
+  | '14-15';
 
 export type JournalStatus =
   | 'not_started'
@@ -221,7 +227,6 @@ export interface ResidentInfo {
 export interface ModuleItem {
   id: string;
   libraryModuleId?: string;
-  code?: string;
   officialTitle?: string;
   title: string;
   subtitle: string;
@@ -463,14 +468,18 @@ export interface ResidentRecord {
 
 export interface LibraryModule {
   id: string;
-  code?: string;
   officialTitle: string;
   displayTitle: string;
+  shortTitle: string;
   title: string;
   subtitle: string;
   description: string;
   category: ModuleCategoryId;
+  categoryId: ModuleCategoryId;
   filterCategories?: ModuleCategoryId[];
+  ageGroups: ModuleAgeGroup[];
+  illustrationType: 'svg' | 'image';
+  illustrationValue: string;
   illustrationKey: ModuleIllustrationKey;
   iconKey: ModuleLucideIconKey;
   visualMode?: ModuleVisualMode;
@@ -482,12 +491,13 @@ export interface LibraryModule {
   suggestedSkills: string[];
   relatedSkills: string[];
   badgeLabel?: string;
-  ageCategories?: AgeCategory[];
   isActive: boolean;
   isEditable: boolean;
   createdAt: string;
   updatedAt: string;
 }
+
+export type Module = LibraryModule;
 
 export interface GroupCurriculumTemplate {
   id: string;

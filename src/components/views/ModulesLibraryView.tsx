@@ -18,6 +18,10 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import {
+  getModuleAgeGroups,
+  MODULE_AGE_GROUP_OPTIONS,
+} from '../../data/curriculumCatalog';
 import { DESIGN_PALETTES } from '../../data/presets';
 import {
   AgeCategory,
@@ -25,6 +29,7 @@ import {
   LibraryModule,
   MediaAsset,
   MediaCategory,
+  ModuleAgeGroup,
   ModuleCategoryConfig,
   ModuleIllustrationKey,
   ModuleLucideIconKey,
@@ -105,6 +110,7 @@ export function ModulesLibraryView({
   const [subTab, setSubTab] = useState<CurriculumSubTab>('catalog');
   const [search, setSearch] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
+  const [selectedAgeGroup, setSelectedAgeGroup] = useState<'all' | ModuleAgeGroup>('all');
   const [showHidden, setShowHidden] = useState(true);
 
   // Module Editor state (used in 'editor' tab or quick edit jump)
@@ -173,13 +179,19 @@ export function ModulesLibraryView({
     return modules.filter((m) => {
       if (!showHidden && !m.isActive) return false;
       if (!moduleMatchesCategory(m, selectedCategoryId)) return false;
+      if (
+        selectedAgeGroup !== 'all' &&
+        !getModuleAgeGroups(m).includes(selectedAgeGroup)
+      ) {
+        return false;
+      }
       if (!q) return true;
       const skillLabels = resolveModuleSkills(m)
         .map((s) => s.label.toLowerCase())
         .join(' ');
       return (
-        (m.code || '').toLowerCase().includes(q) ||
         m.officialTitle.toLowerCase().includes(q) ||
+        (m.shortTitle || '').toLowerCase().includes(q) ||
         m.displayTitle.toLowerCase().includes(q) ||
         m.title.toLowerCase().includes(q) ||
         m.subtitle.toLowerCase().includes(q) ||
@@ -187,7 +199,14 @@ export function ModulesLibraryView({
         skillLabels.includes(q)
       );
     });
-  }, [modules, search, selectedCategoryId, showHidden, skillById]);
+  }, [
+    modules,
+    search,
+    selectedCategoryId,
+    selectedAgeGroup,
+    showHidden,
+    skillById,
+  ]);
 
   const moduleCountByCategory = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -196,6 +215,20 @@ export function ModulesLibraryView({
     });
     return counts;
   }, [modules, categories]);
+
+  const moduleCountByAgeGroup = useMemo(() => {
+    const counts: Record<ModuleAgeGroup, number> = {
+      '6-8': 0,
+      '9-11': 0,
+      '12-14': 0,
+    };
+    modules.forEach((m) => {
+      getModuleAgeGroups(m).forEach((ag) => {
+        counts[ag] = (counts[ag] ?? 0) + 1;
+      });
+    });
+    return counts;
+  }, [modules]);
 
   const moduleCountBySkillId = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -213,14 +246,18 @@ export function ModulesLibraryView({
     const catColor = categoryById.get(defaultCat)?.accentColor ?? '#C9F3EE';
     return {
       id: `module-${Date.now()}`,
-      code: `M${String(modules.length + 1).padStart(3, '0')}`,
       officialTitle: 'Новый учебный модуль KIBERone',
       displayTitle: 'Новый модуль',
-      title: 'Новый модуль',
+      shortTitle: 'Новый модуль',
+      title: 'Новый учебный модуль KIBERone',
       subtitle: 'Технологии и практика',
       description: 'Краткое понятное описание освоенных инструментов и результатов.',
       category: defaultCat,
+      categoryId: defaultCat,
       filterCategories: [],
+      ageGroups: ['9-11'],
+      illustrationType: 'svg',
+      illustrationValue: 'algorithms',
       illustrationKey: 'algorithms',
       iconKey: 'rocket',
       visualMode: 'illustration',
@@ -239,7 +276,12 @@ export function ModulesLibraryView({
   };
 
   const openModuleInEditor = (mod: LibraryModule) => {
-    setEditingModule({ ...mod });
+    setEditingModule({
+      ...mod,
+      ageGroups: getModuleAgeGroups(mod),
+      shortTitle: mod.shortTitle || mod.displayTitle,
+      categoryId: mod.categoryId || mod.category,
+    });
     setSubTab('editor');
   };
 
@@ -249,11 +291,27 @@ export function ModulesLibraryView({
     const syncedLabels = editingModule.suggestedSkills.map(
       (sid) => skillById.get(sid)?.label ?? sid
     );
+    const shortTitle = editingModule.displayTitle.trim();
+    const officialTitle =
+      editingModule.officialTitle.trim() || shortTitle;
+    const isImage =
+      editingModule.visualMode === 'image' &&
+      Boolean(editingModule.customImageUrl);
     const saved: LibraryModule = {
       ...editingModule,
-      title: editingModule.displayTitle.trim(),
-      officialTitle:
-        editingModule.officialTitle.trim() || editingModule.displayTitle.trim(),
+      shortTitle,
+      displayTitle: shortTitle,
+      title: officialTitle,
+      officialTitle,
+      categoryId: editingModule.category,
+      ageGroups:
+        editingModule.ageGroups.length > 0
+          ? editingModule.ageGroups
+          : ['9-11'],
+      illustrationType: isImage ? 'image' : 'svg',
+      illustrationValue: isImage
+        ? editingModule.customImageUrl || ''
+        : editingModule.illustrationKey,
       relatedSkills: syncedLabels,
       updatedAt: new Date().toISOString(),
     };
@@ -411,7 +469,7 @@ export function ModulesLibraryView({
                     type="text"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Поиск по коду (M028), названию, описанию или навыкам..."
+                    placeholder="Поиск по названию, описанию или навыкам..."
                     className="w-full pl-9 pr-3 py-2 rounded-lg bg-[#F9F9F7] border border-zinc-200 text-xs focus:outline-none focus:border-[#0D9488]"
                   />
                 </div>
@@ -431,8 +489,43 @@ export function ModulesLibraryView({
                 </div>
               </div>
 
+              {/* Age Group Filter Strip */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[11px] font-semibold text-zinc-500 mr-1">
+                  Возраст:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedAgeGroup('all')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                    selectedAgeGroup === 'all'
+                      ? 'bg-[#0D9488] text-white border-[#0D9488]'
+                      : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'
+                  }`}
+                >
+                  Все возрасты ({modules.length})
+                </button>
+                {MODULE_AGE_GROUP_OPTIONS.map((ag) => (
+                  <button
+                    key={ag.id}
+                    type="button"
+                    onClick={() => setSelectedAgeGroup(ag.id)}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                      selectedAgeGroup === ag.id
+                        ? 'bg-[#0D9488] text-white border-[#0D9488]'
+                        : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'
+                    }`}
+                  >
+                    <span>{ag.label}</span>
+                    <span className="font-mono text-[10px] opacity-75">
+                      {moduleCountByAgeGroup[ag.id] ?? 0}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
               {/* 8 Category Filter Strip */}
-              <div className="flex flex-wrap gap-1.5 pt-1">
+              <div className="flex flex-wrap gap-1.5 pt-1 border-t border-zinc-100">
                 <button
                   type="button"
                   onClick={() => setSelectedCategoryId('all')}
@@ -472,6 +565,7 @@ export function ModulesLibraryView({
               {filteredModules.map((mod) => {
                 const cat = categoryById.get(mod.category);
                 const resolvedSkills = resolveModuleSkills(mod);
+                const modAges = getModuleAgeGroups(mod);
                 return (
                   <div
                     key={mod.id}
@@ -494,8 +588,8 @@ export function ModulesLibraryView({
 
                       <div>
                         <div className="flex items-start justify-between gap-2">
-                          <h2 className="text-base font-bold text-zinc-900 leading-snug">
-                            {mod.displayTitle}
+                          <h2 className="text-sm font-bold text-zinc-900 leading-snug">
+                            {mod.officialTitle || mod.title}
                           </h2>
                           {mod.badgeLabel && (
                             <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[#F6F6F3] border border-zinc-200 text-zinc-600 shrink-0">
@@ -503,13 +597,24 @@ export function ModulesLibraryView({
                             </span>
                           )}
                         </div>
-                        {mod.officialTitle !== mod.displayTitle && (
-                          <div className="text-[11px] text-zinc-400 mt-0.5 line-clamp-1">
-                            {mod.officialTitle}
+                        {(mod.shortTitle || mod.displayTitle) !==
+                          (mod.officialTitle || mod.title) && (
+                          <div className="text-[11px] text-zinc-500 mt-0.5">
+                            Карточка: {mod.shortTitle || mod.displayTitle}
                           </div>
                         )}
                         <div className="text-xs font-medium text-[#0D9488] mt-1">
                           {mod.subtitle} {cat ? `· ${cat.shortName}` : ''}
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {modAges.map((ag) => (
+                            <span
+                              key={ag}
+                              className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#F0FDFA] text-[#0F766E] border border-[#99F6E4]"
+                            >
+                              {ag} лет
+                            </span>
+                          ))}
                         </div>
                         <p className="text-xs text-zinc-600 mt-1.5 line-clamp-2">
                           {mod.description}
@@ -571,9 +676,9 @@ export function ModulesLibraryView({
                             onSaveModule({
                               ...mod,
                               id: `module-${Date.now()}`,
-                              code: `${mod.code || 'MOD'}-C`,
                               displayTitle: `${mod.displayTitle} (копия)`,
-                              title: `${mod.displayTitle} (копия)`,
+                              shortTitle: `${mod.shortTitle || mod.displayTitle} (копия)`,
+                              title: `${mod.officialTitle || mod.title} (копия)`,
                               officialTitle: `${mod.officialTitle} (копия)`,
                               createdAt: now,
                               updatedAt: now,
@@ -1005,7 +1110,7 @@ export function ModulesLibraryView({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <label className="block">
                         <span className="font-semibold text-zinc-700">
-                          Короткое название (для карточки)
+                          Короткое название (для карточки в журнале)
                         </span>
                         <input
                           type="text"
@@ -1015,7 +1120,7 @@ export function ModulesLibraryView({
                             setEditingModule({
                               ...editingModule,
                               displayTitle: e.target.value,
-                              title: e.target.value,
+                              shortTitle: e.target.value,
                             })
                           }
                           className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-1.5 font-semibold"
@@ -1050,6 +1155,7 @@ export function ModulesLibraryView({
                           setEditingModule({
                             ...editingModule,
                             officialTitle: e.target.value,
+                            title: e.target.value,
                           })
                         }
                         className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-1.5"
@@ -1084,6 +1190,7 @@ export function ModulesLibraryView({
                             setEditingModule({
                               ...editingModule,
                               category: e.target.value,
+                              categoryId: e.target.value,
                             })
                           }
                           className="mt-1 w-full rounded-lg border border-zinc-200 px-2.5 py-1.5 bg-white"
@@ -1112,6 +1219,44 @@ export function ModulesLibraryView({
                           className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-1.5"
                         />
                       </label>
+                    </div>
+
+                    {/* Age Groups Checkboxes */}
+                    <div className="space-y-1.5">
+                      <span className="font-semibold text-zinc-700 block">
+                        Возрастные группы (из программы обучения)
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {MODULE_AGE_GROUP_OPTIONS.map((ag) => {
+                          const currentAges = getModuleAgeGroups(editingModule);
+                          const checked = currentAges.includes(ag.id);
+                          return (
+                            <label
+                              key={ag.id}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border cursor-pointer text-xs font-medium ${
+                                checked
+                                  ? 'border-[#0D9488] bg-[#F0FDFA] text-[#0F766E]'
+                                  : 'border-zinc-200 bg-white text-zinc-700'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {
+                                  const nextAges = checked
+                                    ? currentAges.filter((id) => id !== ag.id)
+                                    : [...currentAges, ag.id];
+                                  setEditingModule({
+                                    ...editingModule,
+                                    ageGroups: nextAges,
+                                  });
+                                }}
+                              />
+                              <span>{ag.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     {/* Visual Settings */}

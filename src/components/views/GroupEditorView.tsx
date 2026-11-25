@@ -47,8 +47,10 @@ import {
   X,
 } from 'lucide-react';
 import {
-  getModuleAgeCategories,
+  getModuleAgeGroups,
+  MODULE_AGE_GROUP_OPTIONS,
   MODULE_CATEGORIES,
+  normalizeToModuleAgeGroup,
   UNIFIED_SKILLS_CATALOG,
 } from '../../data/curriculumCatalog';
 import {
@@ -75,6 +77,7 @@ import {
   LibraryModule,
   MediaAsset,
   MediaCategory,
+  ModuleAgeGroup,
   ModuleCategoryConfig,
   ModuleItem,
   ModuleLucideIconKey,
@@ -272,6 +275,9 @@ export function GroupEditorView({
   // Per-student curriculum override UI state
   const [individualModPickerOpen, setIndividualModPickerOpen] = useState(false);
   const [individualModSearch, setIndividualModSearch] = useState('');
+  const [individualModAgeFilter, setIndividualModAgeFilter] = useState<
+    'all' | ModuleAgeGroup
+  >('all');
   const [customIndividualModTitle, setCustomIndividualModTitle] = useState('');
   const [customIndividualModSub, setCustomIndividualModSub] = useState('');
   const [newIndividualSkill, setNewIndividualSkill] = useState('');
@@ -281,8 +287,8 @@ export function GroupEditorView({
   const [modulesModalOpen, setModulesModalOpen] = useState(false);
   const [modalModSearch, setModalModSearch] = useState('');
   const [modalModCategory, setModalModCategory] = useState<string>('all');
-  const [modalAgeFilter, setModalAgeFilter] = useState<'group' | 'all'>(
-    'group'
+  const [modalAgeFilter, setModalAgeFilter] = useState<'all' | ModuleAgeGroup>(
+    () => normalizeToModuleAgeGroup(group.ageCategory)
   );
   const [draftModalModuleIds, setDraftModalModuleIds] = useState<string[]>([]);
 
@@ -1594,9 +1600,8 @@ export function GroupEditorView({
       .map((lib, idx) => ({
         id: `grp-mod-${lib.id}-${idx}`,
         libraryModuleId: lib.id,
-        code: lib.code,
         officialTitle: lib.officialTitle || lib.title,
-        title: lib.displayTitle || lib.title,
+        title: lib.shortTitle || lib.displayTitle || lib.title,
         subtitle: lib.subtitle,
         description: lib.description,
         category: lib.category,
@@ -1674,9 +1679,9 @@ export function GroupEditorView({
     const q = modalModSearch.trim().toLowerCase();
     return libraryModules.filter((m) => {
       if (m.isActive === false) return false;
-      if (modalAgeFilter === 'group') {
-        const ages = getModuleAgeCategories(m);
-        if (!ages.includes(groupDraft.ageCategory)) return false;
+      if (modalAgeFilter !== 'all') {
+        const ages = getModuleAgeGroups(m);
+        if (!ages.includes(modalAgeFilter)) return false;
       }
       const matchesCat =
         modalModCategory === 'all' ||
@@ -1685,16 +1690,15 @@ export function GroupEditorView({
       if (!matchesCat) return false;
       if (!q) return true;
       return (
-        m.displayTitle.toLowerCase().includes(q) ||
-        m.officialTitle.toLowerCase().includes(q) ||
-        (m.code || '').toLowerCase().includes(q) ||
-        m.subtitle.toLowerCase().includes(q)
+        (m.shortTitle || m.displayTitle).toLowerCase().includes(q) ||
+        (m.officialTitle || m.title).toLowerCase().includes(q) ||
+        m.subtitle.toLowerCase().includes(q) ||
+        m.description.toLowerCase().includes(q)
       );
     });
   }, [
     libraryModules,
     modalAgeFilter,
-    groupDraft.ageCategory,
     modalModCategory,
     modalModSearch,
   ]);
@@ -1704,7 +1708,7 @@ export function GroupEditorView({
       .map((m) => m.libraryModuleId)
       .filter((id): id is string => Boolean(id));
     setDraftModalModuleIds(existingIds);
-    setModalAgeFilter('group');
+    setModalAgeFilter(normalizeToModuleAgeGroup(groupDraft.ageCategory));
     setModalModCategory('all');
     setModalModSearch('');
     setModulesModalOpen(true);
@@ -1730,9 +1734,8 @@ export function GroupEditorView({
       selectedFromLib.push({
         id: `grp-mod-${lib.id}-${Date.now()}-${selectedFromLib.length}`,
         libraryModuleId: lib.id,
-        code: lib.code,
         officialTitle: lib.officialTitle || lib.title,
-        title: lib.displayTitle || lib.title,
+        title: lib.shortTitle || lib.displayTitle || lib.title,
         subtitle: lib.subtitle,
         description: lib.description,
         category: lib.category,
@@ -1850,14 +1853,19 @@ export function GroupEditorView({
     const q = individualModSearch.trim().toLowerCase();
     return libraryModules.filter((m) => {
       if (m.isActive === false) return false;
+      if (individualModAgeFilter !== 'all') {
+        if (!getModuleAgeGroups(m).includes(individualModAgeFilter)) {
+          return false;
+        }
+      }
       if (!q) return true;
       return (
-        (m.displayTitle || m.title).toLowerCase().includes(q) ||
-        m.subtitle.toLowerCase().includes(q) ||
-        (m.code || '').toLowerCase().includes(q)
+        (m.shortTitle || m.displayTitle || m.title).toLowerCase().includes(q) ||
+        (m.officialTitle || m.title).toLowerCase().includes(q) ||
+        m.subtitle.toLowerCase().includes(q)
       );
     });
-  }, [libraryModules, individualModSearch]);
+  }, [libraryModules, individualModSearch, individualModAgeFilter]);
 
   const handleToggleStudentModule = (modId: string) => {
     if (!activeDoc) return;
@@ -1881,9 +1889,8 @@ export function GroupEditorView({
     const nextMod: ModuleItem = {
       id: `ind-mod-${lib.id}-${Date.now()}`,
       libraryModuleId: lib.id,
-      code: lib.code,
       officialTitle: lib.officialTitle || lib.title,
-      title: lib.displayTitle || lib.title,
+      title: lib.shortTitle || lib.displayTitle || lib.title,
       subtitle: lib.subtitle,
       description: lib.description,
       category: lib.category,
@@ -7552,9 +7559,14 @@ export function GroupEditorView({
                                   {!individualModPickerOpen ? (
                                     <button
                                       type="button"
-                                      onClick={() =>
-                                        setIndividualModPickerOpen(true)
-                                      }
+                                      onClick={() => {
+                                        setIndividualModAgeFilter(
+                                          normalizeToModuleAgeGroup(
+                                            groupDraft.ageCategory
+                                          )
+                                        );
+                                        setIndividualModPickerOpen(true);
+                                      }}
                                       className="w-full inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-md bg-[#F4F4F5] border border-dashed border-zinc-300 hover:border-[#0D9488] hover:bg-[#F0FDFA] text-[#0F766E] text-[11px] font-semibold transition-colors"
                                     >
                                       <Plus className="w-3.5 h-3.5" />
@@ -7579,6 +7591,38 @@ export function GroupEditorView({
                                         </button>
                                       </div>
 
+                                      <div className="flex flex-wrap items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setIndividualModAgeFilter('all')
+                                          }
+                                          className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                                            individualModAgeFilter === 'all'
+                                              ? 'bg-zinc-900 text-white border-zinc-900'
+                                              : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
+                                          }`}
+                                        >
+                                          Все
+                                        </button>
+                                        {MODULE_AGE_GROUP_OPTIONS.map((age) => (
+                                          <button
+                                            key={age.id}
+                                            type="button"
+                                            onClick={() =>
+                                              setIndividualModAgeFilter(age.id)
+                                            }
+                                            className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                                              individualModAgeFilter === age.id
+                                                ? 'bg-[#0D9488] text-white border-[#0D9488]'
+                                                : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
+                                            }`}
+                                          >
+                                            {age.id}
+                                          </button>
+                                        ))}
+                                      </div>
+
                                       <div className="relative">
                                         <Search className="w-3 h-3 text-zinc-400 absolute left-2 top-1/2 -translate-y-1/2" />
                                         <input
@@ -7594,9 +7638,9 @@ export function GroupEditorView({
                                         />
                                       </div>
 
-                                      <div className="max-h-32 overflow-y-auto divide-y divide-zinc-100 pr-0.5">
+                                      <div className="max-h-36 overflow-y-auto divide-y divide-zinc-100 pr-0.5">
                                         {filteredIndividualCatalog
-                                          .slice(0, 12)
+                                          .slice(0, 16)
                                           .map((lib) => (
                                             <button
                                               key={lib.id}
@@ -7609,7 +7653,7 @@ export function GroupEditorView({
                                               className="w-full text-left py-1.5 px-1 hover:bg-[#F0FDFA] flex items-center justify-between gap-2"
                                             >
                                               <span className="text-[11px] font-semibold text-zinc-900 truncate">
-                                                {lib.displayTitle || lib.title}
+                                                {lib.officialTitle || lib.title}
                                               </span>
                                               <Plus className="w-3 h-3 text-[#0D9488] shrink-0" />
                                             </button>
@@ -8526,7 +8570,7 @@ export function GroupEditorView({
                   Выбор модулей программы
                 </h3>
                 <p className="text-[11px] text-zinc-500">
-                  По умолчанию показаны модули для возраста группы ({groupDraft.ageCategory} лет)
+                  Возраст группы: {groupDraft.ageCategory} лет (фильтр по программе {normalizeToModuleAgeGroup(groupDraft.ageCategory)} лет)
                 </p>
               </div>
               <button
@@ -8538,51 +8582,59 @@ export function GroupEditorView({
               </button>
             </div>
 
-            <div className="shrink-0 px-5 py-3 border-b border-zinc-100 bg-[#FCFCFA] flex flex-col sm:flex-row gap-2">
-              <div className="relative flex-1">
-                <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  autoFocus
-                  value={modalModSearch}
-                  onChange={(e) => setModalModSearch(e.target.value)}
-                  placeholder="Поиск модуля (Python, Kodu, Roblox...)"
-                  className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-zinc-200 bg-white focus:outline-none focus:border-[#0D9488]"
-                />
+            <div className="shrink-0 px-5 py-3 border-b border-zinc-100 bg-[#FCFCFA] flex flex-col gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    autoFocus
+                    value={modalModSearch}
+                    onChange={(e) => setModalModSearch(e.target.value)}
+                    placeholder="Поиск модуля по официальному названию или теме..."
+                    className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-zinc-200 bg-white focus:outline-none focus:border-[#0D9488]"
+                  />
+                </div>
+
+                <select
+                  value={modalModCategory}
+                  onChange={(e) => setModalModCategory(e.target.value)}
+                  className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5"
+                >
+                  <option value="all">Все категории</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.shortName}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <select
-                value={modalModCategory}
-                onChange={(e) => setModalModCategory(e.target.value)}
-                className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5"
-              >
-                <option value="all">Все категории</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.shortName}
-                  </option>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-zinc-500 mr-1">
+                  Возрастная группа:
+                </span>
+                {MODULE_AGE_GROUP_OPTIONS.map((ageOpt) => (
+                  <button
+                    key={ageOpt.id}
+                    type="button"
+                    onClick={() => setModalAgeFilter(ageOpt.id)}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-colors ${
+                      modalAgeFilter === ageOpt.id
+                        ? 'bg-[#0D9488] text-white border-[#0D9488]'
+                        : 'bg-white text-zinc-600 border-zinc-200 hover:text-zinc-900'
+                    }`}
+                  >
+                    {ageOpt.label}
+                  </button>
                 ))}
-              </select>
-
-              <div className="flex items-center p-0.5 rounded-lg border border-zinc-200 bg-white shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setModalAgeFilter('group')}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                    modalAgeFilter === 'group'
-                      ? 'bg-[#0D9488] text-white'
-                      : 'text-zinc-600 hover:text-zinc-900'
-                  }`}
-                >
-                  {groupDraft.ageCategory} лет
-                </button>
                 <button
                   type="button"
                   onClick={() => setModalAgeFilter('all')}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-colors ${
                     modalAgeFilter === 'all'
-                      ? 'bg-zinc-900 text-white'
-                      : 'text-zinc-600 hover:text-zinc-900'
+                      ? 'bg-zinc-900 text-white border-zinc-900'
+                      : 'bg-white text-zinc-600 border-zinc-200 hover:text-zinc-900'
                   }`}
                 >
                   Все возрасты
@@ -8594,7 +8646,7 @@ export function GroupEditorView({
               {modalFilteredModules.length === 0 ? (
                 <div className="py-12 text-center text-zinc-500 space-y-2">
                   <p>Модули по текущему фильтру не найдены.</p>
-                  {modalAgeFilter === 'group' && (
+                  {modalAgeFilter !== 'all' && (
                     <button
                       type="button"
                       onClick={() => setModalAgeFilter('all')}
@@ -8608,7 +8660,9 @@ export function GroupEditorView({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {modalFilteredModules.map((lib) => {
                     const checked = draftModalModuleIds.includes(lib.id);
-                    const ages = getModuleAgeCategories(lib);
+                    const ages = getModuleAgeGroups(lib);
+                    const shortLabel = lib.shortTitle || lib.displayTitle;
+                    const officialLabel = lib.officialTitle || lib.title;
                     return (
                       <label
                         key={lib.id}
@@ -8631,20 +8685,28 @@ export function GroupEditorView({
                           className="mt-0.5 rounded border-zinc-300 text-[#0D9488] shrink-0"
                         />
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span
-                              className={`font-bold truncate ${
-                                checked ? 'text-[#0F766E]' : 'text-zinc-900'
-                              }`}
-                            >
-                              {lib.displayTitle || lib.title}
-                            </span>
+                          <div
+                            className={`font-bold leading-snug ${
+                              checked ? 'text-[#0F766E]' : 'text-zinc-900'
+                            }`}
+                          >
+                            {officialLabel}
                           </div>
                           <div className="text-[11px] text-zinc-500 truncate mt-0.5">
+                            {shortLabel !== officialLabel
+                              ? `Карточка: ${shortLabel} · `
+                              : ''}
                             {lib.subtitle}
                           </div>
-                          <div className="text-[10px] text-zinc-400 mt-1">
-                            Возраст: {ages.join(', ')} лет
+                          <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                            {ages.map((age) => (
+                              <span
+                                key={age}
+                                className="px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600 text-[10px] font-medium"
+                              >
+                                {age} лет
+                              </span>
+                            ))}
                           </div>
                         </div>
                       </label>
