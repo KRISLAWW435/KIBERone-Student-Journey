@@ -485,11 +485,6 @@ export function ModulesLibraryView({
                         className="h-28 rounded-xl border border-black/10 overflow-hidden flex items-center justify-center p-2 relative"
                       >
                         {renderCardVisual(mod)}
-                        {mod.code && (
-                          <span className="absolute top-2 left-2 font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/90 border border-black/10 text-zinc-800">
-                            {mod.code}
-                          </span>
-                        )}
                         {!mod.isActive && (
                           <span className="absolute top-2 right-2 text-[10px] font-semibold px-2 py-0.5 rounded bg-zinc-900/80 text-white">
                             Скрыт
@@ -811,7 +806,7 @@ export function ModulesLibraryView({
                   [
                     { id: 'auto', label: 'Как в модуле' },
                     { id: 'illustration', label: 'SVG-иллюстрации' },
-                    { id: 'icon', label: 'Lucide-иконки' },
+                    { id: 'icon', label: 'Иконки (SVG)' },
                     { id: 'image', label: 'Картинки из медиатеки' },
                   ] as const
                 ).map((m) => (
@@ -929,11 +924,6 @@ export function ModulesLibraryView({
                       <span className="font-bold text-zinc-900 truncate">
                         {m.displayTitle}
                       </span>
-                      {m.code && (
-                        <span className="font-mono text-[10px] text-zinc-400">
-                          {m.code}
-                        </span>
-                      )}
                     </div>
                     <div className="text-[11px] text-zinc-500 truncate">
                       {m.subtitle}
@@ -1012,21 +1002,7 @@ export function ModulesLibraryView({
                   </div>
 
                   <div className="space-y-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-[90px_1fr_1fr] gap-3">
-                      <label className="block">
-                        <span className="font-semibold text-zinc-700">Код</span>
-                        <input
-                          type="text"
-                          value={editingModule.code || ''}
-                          onChange={(e) =>
-                            setEditingModule({
-                              ...editingModule,
-                              code: e.target.value,
-                            })
-                          }
-                          className="mt-1 w-full rounded-lg border border-zinc-200 px-2.5 py-1.5 font-mono"
-                        />
-                      </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <label className="block">
                         <span className="font-semibold text-zinc-700">
                           Короткое название (для карточки)
@@ -1791,7 +1767,7 @@ export function ModulesLibraryView({
                               {m.displayTitle}
                             </div>
                             <div className="text-[10px] text-zinc-500 truncate">
-                              {m.code} · {m.subtitle}
+                              {m.subtitle}
                             </div>
                           </div>
                           {active && (

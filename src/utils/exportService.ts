@@ -123,7 +123,7 @@ export function runPreflightChecks(doc: JournalDocument): PreflightResult {
     ...Object.entries(doc.page2.objectLayouts || {}),
   ];
   const shiftedFar = allTransforms.filter(
-    ([, t]) => Math.abs(t.x) > 180 || Math.abs(t.y) > 220
+    ([, t]) => Math.abs(t.x) > 420 || Math.abs(t.y) > 520
   );
   if (shiftedFar.length > 0) {
     issues.push({
@@ -181,16 +181,76 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
+const GOOGLE_FONTS_CSS_URL =
+  'https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Golos+Text:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Rubik:wght@500;600;700;800&display=swap';
+
+let cachedFontCssPromise: Promise<string> | null = null;
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () =>
+      typeof reader.result === 'string'
+        ? resolve(reader.result)
+        : reject(new Error('Failed to encode font blob'));
+    reader.onerror = () => reject(reader.error ?? new Error('FileReader error'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function getEmbeddedFontCss(): Promise<string> {
+  if (cachedFontCssPromise) {
+    return cachedFontCssPromise;
+  }
+
+  cachedFontCssPromise = (async () => {
+    try {
+      const linkEl = document.querySelector<HTMLLinkElement>(
+        'link[rel="stylesheet"][href*="fonts.googleapis.com"]'
+      );
+      const cssUrl = linkEl?.href || GOOGLE_FONTS_CSS_URL;
+      const res = await fetch(cssUrl, { mode: 'cors' });
+      if (!res.ok) return '';
+      let cssText = await res.text();
+
+      const matches = Array.from(
+        new Set(cssText.match(/url\((["']?)(https?:\/\/[^)"']+)\1\)/g) ?? [])
+      );
+      await Promise.all(
+        matches.map(async (rawMatch) => {
+          const urlMatch = /url\((["']?)(https?:\/\/[^)"']+)\1\)/.exec(rawMatch);
+          if (!urlMatch?.[2]) return;
+          try {
+            const fontRes = await fetch(urlMatch[2], { mode: 'cors' });
+            if (!fontRes.ok) return;
+            const dataUrl = await blobToDataUrl(await fontRes.blob());
+            cssText = cssText.split(rawMatch).join(`url("${dataUrl}")`);
+          } catch {
+            // Skip unreachable font binary without triggering SecurityError
+          }
+        })
+      );
+      return cssText;
+    } catch {
+      return '';
+    }
+  })();
+
+  return cachedFontCssPromise;
+}
+
 async function renderNodeToPng(node: HTMLElement): Promise<string> {
   if (document.fonts && document.fonts.ready) {
     await document.fonts.ready;
   }
+  const fontEmbedCSS = await getEmbeddedFontCss();
   return toPng(node, {
     width: 794,
     height: 1123,
     pixelRatio: 2.4,
     cacheBust: true,
     backgroundColor: '#ffffff',
+    fontEmbedCSS,
   });
 }
 

@@ -1,18 +1,28 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  ActiveTextFieldTarget,
   CanvasObjectTransform,
+  DecorElement,
   EditorSectionTarget,
   JournalDocument,
   MediaAsset,
+  ModuleItem,
+  Page1Config,
+  ProjectItem,
+  SkillItem,
 } from '../../types/journal';
 import { CoverSection } from './CoverSection';
 import {
   DecorLayer,
   DraggableDesignWrapper,
+  EMPTY_SNAP_LINES,
   PageGridOverlay,
+  SmartGuidesOverlay,
+  SnapLinesState,
 } from './DecorLayer';
 import { ModuleCard } from './ModuleCard';
-import { ProjectCard } from './ProjectCard';
+import { PageBackdropArtwork } from './PageBackdropArtwork';
+import { ProjectsSection } from './ProjectsSection';
 import { SkillTag } from './SkillTag';
 
 interface JournalPageOneProps {
@@ -21,9 +31,19 @@ interface JournalPageOneProps {
   designMode?: boolean;
   scaleFactor?: number;
   activeTarget?: EditorSectionTarget;
+  activeTextField?: ActiveTextFieldTarget;
   onSelectTarget?: (target: EditorSectionTarget) => void;
+  onSelectTextField?: (target: ActiveTextFieldTarget) => void;
   onUpdateTransform?: (blockId: string, next: CanvasObjectTransform) => void;
   onMoveDecor?: (decorId: string, x: number, y: number) => void;
+  onUpdateDecor?: (decorId: string, patch: Partial<DecorElement>) => void;
+  onUpdateDecorText?: (decorId: string, text: string) => void;
+  onUpdatePage1?: (patch: Partial<Page1Config>) => void;
+  onUpdateModule?: (moduleId: string, patch: Partial<ModuleItem>) => void;
+  onUpdateSkill?: (skillId: string, patch: Partial<SkillItem>) => void;
+  onUpdateProject?: (projectId: string, patch: Partial<ProjectItem>) => void;
+  onInteractionStart?: () => void;
+  onInteractionEnd?: () => void;
 }
 
 export function JournalPageOne({
@@ -32,20 +52,43 @@ export function JournalPageOne({
   designMode = false,
   scaleFactor = 1,
   activeTarget,
+  activeTextField,
   onSelectTarget,
+  onSelectTextField,
   onUpdateTransform,
   onMoveDecor,
+  onUpdateDecor,
+  onUpdateDecorText,
+  onUpdatePage1,
+  onUpdateModule,
+  onUpdateSkill,
+  onUpdateProject,
+  onInteractionStart,
+  onInteractionEnd,
 }: JournalPageOneProps) {
-  const { page1, resident } = doc;
+  const [snapLines, setSnapLines] = useState<SnapLinesState>(EMPTY_SNAP_LINES);
+  const { page1, page2, resident } = doc;
   const visibleModules = [...page1.modules]
     .filter((m) => !m.hidden)
     .sort((a, b) => a.order - b.order);
   const visibleProjects = page1.projects.filter((p) => !p.hidden);
-  const visibleSkills = page1.skills.filter((s) => !s.hidden);
+  const visibleSkills = page1.skills.filter((s) => !s.hidden).slice(0, 8);
 
   const isCompactModules = visibleModules.length > 3;
   const isCompactProjects = visibleProjects.length > 3;
+  const isCompactSkills = visibleSkills.length > 4 || isCompactModules;
   const layouts = page1.objectLayouts ?? {};
+
+  const skillsGridColsClass =
+    visibleSkills.length === 1
+      ? 'grid-cols-1'
+      : visibleSkills.length === 2
+      ? 'grid-cols-2'
+      : visibleSkills.length === 3
+      ? 'grid-cols-3'
+      : visibleSkills.length <= 6 && visibleSkills.length >= 5
+      ? 'grid-cols-3'
+      : 'grid-cols-4';
 
   return (
     <article
@@ -66,13 +109,23 @@ export function JournalPageOne({
         flexShrink: 0,
         backgroundColor: page1.background?.color || '#ffffff',
       }}
-      className="a4-canvas shrink-0 relative overflow-hidden"
+      className="a4-canvas shrink-0 relative overflow-hidden isolate"
       aria-label="Страница 1: Мой путь в мире технологий"
     >
       {/* Background Grid */}
       <PageGridOverlay background={page1.background} />
 
-      {/* Decorative Layer */}
+      {/* Editorial Background Graphics (Waves, Stars, Sparkles, Dot Grids) */}
+      <PageBackdropArtwork
+        page={1}
+        accentTeal={page1.coverBgStart || '#38C8D4'}
+        accentYellow={page2.headerYellowColor || '#FFE14D'}
+      />
+
+      {/* Smart Alignment Guides */}
+      {designMode && <SmartGuidesOverlay lines={snapLines} />}
+
+      {/* Decorative Layer (Free-positioned Text, Images, Vector Icons, Stickers) */}
       <DecorLayer
         elements={page1.decorElements ?? []}
         designMode={designMode}
@@ -84,17 +137,25 @@ export function JournalPageOne({
         }
         onSelectDecor={
           onSelectTarget
-            ? (id) => onSelectTarget({ page: 1, block: 'decor', itemId: id })
+            ? (id) => {
+                onSelectTarget({ page: 1, block: 'decor', itemId: id });
+                const el = (page1.decorElements ?? []).find((d) => d.id === id);
+                if (el?.kind === 'text' && onSelectTextField) {
+                  onSelectTextField({ page: 1, field: 'decorText', itemId: id });
+                }
+              }
             : undefined
         }
         onMoveDecor={onMoveDecor}
+        onUpdateDecor={onUpdateDecor}
+        onUpdateDecorText={onUpdateDecorText}
+        onSnapLinesChange={setSnapLines}
+        onInteractionStart={onInteractionStart}
+        onInteractionEnd={onInteractionEnd}
       />
 
-      <div
-        style={{ width: '794px', height: '1123px' }}
-        className="relative z-10 flex flex-col overflow-hidden"
-      >
-        {/* 1. COVER SECTION (strict 794x336px) */}
+      <div style={{ width: '794px', height: '1123px' }} className="flex flex-col">
+        {/* 1. COVER SECTION (strict 794x316px) */}
         <DraggableDesignWrapper
           id="cover"
           transform={layouts.cover}
@@ -111,25 +172,38 @@ export function JournalPageOne({
               ? (next) => onUpdateTransform('cover', next)
               : undefined
           }
+          onSnapLinesChange={setSnapLines}
+          onInteractionStart={onInteractionStart}
+          onInteractionEnd={onInteractionEnd}
           className="shrink-0"
         >
           <CoverSection
             resident={resident}
             config={page1}
             ageCategory={resident.ageCategory}
+            designMode={designMode}
+            scaleFactor={scaleFactor}
+            bearTransform={layouts.coverBear}
+            logoTransform={layouts.logo}
             activeTarget={activeTarget}
+            activeTextField={activeTextField}
             onSelectTarget={onSelectTarget}
+            onSelectTextField={onSelectTextField}
+            onUpdateTransform={onUpdateTransform}
+            onUpdateFields={onUpdatePage1}
+            onSnapLinesChange={setSnapLines}
+            onInteractionStart={onInteractionStart}
+            onInteractionEnd={onInteractionEnd}
           />
         </DraggableDesignWrapper>
 
-        {/* MAIN BODY (strict 794px width, fixed padding & pixel gaps) */}
+        {/* MAIN BODY (balanced flow within 807px, never clipping ProjectsSection) */}
         <div
           style={{
             width: '794px',
-            height: '787px',
-            gap: isCompactModules ? '14px' : '16px',
+            height: '807px',
           }}
-          className="px-[40px] pt-[16px] pb-[18px] flex flex-col shrink-0 overflow-hidden"
+          className="px-[40px] pt-[12px] pb-[14px] flex flex-col justify-start gap-[16px] shrink-0 overflow-visible"
         >
           {/* 2. МОИ ОТКРЫТИЯ */}
           {page1.showModules && visibleModules.length > 0 && (
@@ -152,17 +226,20 @@ export function JournalPageOne({
                   ? (next) => onUpdateTransform('modulesBlock', next)
                   : undefined
               }
+              onSnapLinesChange={setSnapLines}
+              onInteractionStart={onInteractionStart}
+              onInteractionEnd={onInteractionEnd}
               className="shrink-0"
             >
               <section style={{ width: '714px' }}>
-                <h2 className="font-extrabold text-[18.5px] tracking-tight uppercase text-[#111827] mb-[10px]">
+                <h2 className="font-extrabold text-[17px] leading-[20px] tracking-tight uppercase text-[#111827] mb-[6px]">
                   МОИ ОТКРЫТИЯ
                 </h2>
                 <div
                   style={{
                     width: visibleModules.length === 1 ? '260px' : '714px',
                   }}
-                  className={`grid items-stretch auto-rows-fr gap-[14px] ${
+                  className={`grid items-stretch auto-rows-fr gap-[12px] ${
                     visibleModules.length === 1
                       ? 'grid-cols-1'
                       : visibleModules.length === 2 || visibleModules.length === 4
@@ -171,19 +248,18 @@ export function JournalPageOne({
                   }`}
                 >
                   {visibleModules.slice(0, 6).map((mod, idx) => (
-                    <ModuleCard
+                    <DraggableDesignWrapper
                       key={mod.id}
-                      module={mod}
-                      index={idx}
-                      mediaAssets={mediaAssets}
-                      compact={isCompactModules}
-                      ageCategory={resident.ageCategory}
+                      id={`module-${mod.id}`}
+                      transform={layouts[`module-${mod.id}`]}
+                      designMode={designMode}
+                      scaleFactor={scaleFactor}
                       isActive={
                         activeTarget?.page === 1 &&
                         activeTarget.block === 'module' &&
                         activeTarget.itemId === mod.id
                       }
-                      onClick={
+                      onSelect={
                         onSelectTarget
                           ? () =>
                               onSelectTarget({
@@ -193,7 +269,49 @@ export function JournalPageOne({
                               })
                           : undefined
                       }
-                    />
+                      onUpdateTransform={
+                        onUpdateTransform
+                          ? (next) =>
+                              onUpdateTransform(`module-${mod.id}`, next)
+                          : undefined
+                      }
+                      onSnapLinesChange={setSnapLines}
+                      onInteractionStart={onInteractionStart}
+                      onInteractionEnd={onInteractionEnd}
+                      className="h-full"
+                    >
+                      <ModuleCard
+                        module={mod}
+                        index={idx}
+                        mediaAssets={mediaAssets}
+                        compact={isCompactModules}
+                        ageCategory={resident.ageCategory}
+                        isActive={
+                          activeTarget?.page === 1 &&
+                          activeTarget.block === 'module' &&
+                          activeTarget.itemId === mod.id
+                        }
+                        activeTextField={activeTextField}
+                        onSelectTextField={onSelectTextField}
+                        onClick={
+                          onSelectTarget
+                            ? () =>
+                                onSelectTarget({
+                                  page: 1,
+                                  block: 'module',
+                                  itemId: mod.id,
+                                })
+                            : undefined
+                        }
+                        onUpdateField={
+                          onUpdateModule
+                            ? (patch) => onUpdateModule(mod.id, patch)
+                            : undefined
+                        }
+                        onBeginEdit={onInteractionStart}
+                        onEndEdit={onInteractionEnd}
+                      />
+                    </DraggableDesignWrapper>
                   ))}
                 </div>
               </section>
@@ -220,18 +338,42 @@ export function JournalPageOne({
                   ? (next) => onUpdateTransform('skills', next)
                   : undefined
               }
+              onSnapLinesChange={setSnapLines}
+              onInteractionStart={onInteractionStart}
+              onInteractionEnd={onInteractionEnd}
               className="shrink-0"
             >
-              <section style={{ width: '714px' }} className="py-[2px]">
-                <h2 className="font-extrabold text-[18.5px] tracking-tight uppercase text-[#111827] mb-[8px]">
-                  ЧЕМУ Я НАУЧИЛСЯ
-                </h2>
-                <div className="flex flex-wrap items-center gap-[10px]">
-                  {visibleSkills.slice(0, 8).map((skill) => (
+              <section style={{ width: '714px' }}>
+                <div className="mb-[4px] flex items-baseline gap-[10px]">
+                  <h2 className="font-extrabold text-[17px] leading-[20px] tracking-tight uppercase text-[#111827]">
+                    ЧЕМУ Я НАУЧИЛСЯ
+                  </h2>
+                  <span className="text-[12px] font-medium text-[#52525B] leading-none">
+                    Важные навыки
+                  </span>
+                </div>
+                <div
+                  style={{
+                    width: visibleSkills.length === 1 ? '220px' : '714px',
+                  }}
+                  className={`grid items-stretch gap-x-[12px] gap-y-[6px] ${skillsGridColsClass}`}
+                >
+                  {visibleSkills.map((skill, idx) => (
                     <SkillTag
                       key={skill.id}
                       skill={skill}
+                      index={idx}
+                      compact={isCompactSkills}
                       ageCategory={resident.ageCategory}
+                      activeTextField={activeTextField}
+                      onSelectTextField={onSelectTextField}
+                      onChangeLabel={
+                        onUpdateSkill
+                          ? (label) => onUpdateSkill(skill.id, { label })
+                          : undefined
+                      }
+                      onBeginEdit={onInteractionStart}
+                      onEndEdit={onInteractionEnd}
                     />
                   ))}
                 </div>
@@ -239,72 +381,24 @@ export function JournalPageOne({
             </DraggableDesignWrapper>
           )}
 
-          {/* 4. МОИ РЕЗУЛЬТАТЫ */}
-          {page1.showProjects && visibleProjects.length > 0 && (
-            <DraggableDesignWrapper
-              id="projectsBlock"
-              transform={layouts.projectsBlock}
+          {/* 4. МОИ РЕЗУЛЬТАТЫ (Dedicated ProjectsSection component) */}
+          {page1.showProjects !== false && (
+            <ProjectsSection
+              projects={page1.projects}
+              layouts={layouts}
+              compact={isCompactProjects || isCompactModules}
               designMode={designMode}
               scaleFactor={scaleFactor}
-              isActive={
-                activeTarget?.page === 1 &&
-                activeTarget.block === 'projectsBlock'
-              }
-              onSelect={
-                onSelectTarget
-                  ? () => onSelectTarget({ page: 1, block: 'projectsBlock' })
-                  : undefined
-              }
-              onUpdateTransform={
-                onUpdateTransform
-                  ? (next) => onUpdateTransform('projectsBlock', next)
-                  : undefined
-              }
-              className="shrink-0"
-            >
-              <section style={{ width: '714px' }}>
-                <h2 className="font-extrabold text-[18.5px] tracking-tight uppercase text-[#111827] mb-[10px]">
-                  МОИ РЕЗУЛЬТАТЫ
-                </h2>
-                <div
-                  style={{
-                    width: visibleProjects.length === 1 ? '260px' : '714px',
-                  }}
-                  className={`grid items-stretch auto-rows-fr gap-[14px] ${
-                    visibleProjects.length === 1
-                      ? 'grid-cols-1'
-                      : visibleProjects.length === 2
-                      ? 'grid-cols-2'
-                      : visibleProjects.length === 4
-                      ? 'grid-cols-4'
-                      : 'grid-cols-3'
-                  }`}
-                >
-                  {visibleProjects.slice(0, 4).map((proj) => (
-                    <ProjectCard
-                      key={proj.id}
-                      project={proj}
-                      compact={isCompactProjects || isCompactModules}
-                      isActive={
-                        activeTarget?.page === 1 &&
-                        activeTarget.block === 'project' &&
-                        activeTarget.itemId === proj.id
-                      }
-                      onClick={
-                        onSelectTarget
-                          ? () =>
-                              onSelectTarget({
-                                page: 1,
-                                block: 'project',
-                                itemId: proj.id,
-                              })
-                          : undefined
-                      }
-                    />
-                  ))}
-                </div>
-              </section>
-            </DraggableDesignWrapper>
+              activeTarget={activeTarget}
+              activeTextField={activeTextField}
+              onSelectTarget={onSelectTarget}
+              onSelectTextField={onSelectTextField}
+              onUpdateTransform={onUpdateTransform}
+              onUpdateProject={onUpdateProject}
+              onSnapLinesChange={setSnapLines}
+              onInteractionStart={onInteractionStart}
+              onInteractionEnd={onInteractionEnd}
+            />
           )}
         </div>
       </div>

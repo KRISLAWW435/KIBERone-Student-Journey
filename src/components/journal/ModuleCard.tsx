@@ -1,5 +1,11 @@
 import React from 'react';
-import { AgeCategory, MediaAsset, ModuleItem } from '../../types/journal';
+import {
+  ActiveTextFieldTarget,
+  AgeCategory,
+  MediaAsset,
+  ModuleItem,
+} from '../../types/journal';
+import { InlineEditableText } from './DecorLayer';
 import { ModuleSvgIllustration, ModuleVectorIcon } from './JournalArtwork';
 
 interface ModuleCardProps {
@@ -9,7 +15,12 @@ interface ModuleCardProps {
   mediaAssets?: MediaAsset[];
   compact?: boolean;
   isActive?: boolean;
+  activeTextField?: ActiveTextFieldTarget;
+  onSelectTextField?: (target: ActiveTextFieldTarget) => void;
   onClick?: () => void;
+  onUpdateField?: (patch: Partial<ModuleItem>) => void;
+  onBeginEdit?: () => void;
+  onEndEdit?: () => void;
 }
 
 export function ModuleCard({
@@ -19,6 +30,8 @@ export function ModuleCard({
   mediaAssets,
   compact = false,
   isActive = false,
+  activeTextField,
+  onSelectTextField,
   onClick,
 }: ModuleCardProps) {
   const tiltDeg =
@@ -52,16 +65,18 @@ export function ModuleCard({
         onClick();
       }}
       style={{ transform: `rotate(${tiltDeg}deg)` }}
-      className={`bg-white border-[1.5px] border-[#18181B] rounded-xl p-[12px] shadow-[0_4px_10px_rgba(0,0,0,0.08)] flex flex-col self-stretch ${
+      className={`bg-white border-[1.5px] border-[#18181B] rounded-xl ${
+        compact ? 'p-[8px]' : 'p-[10px]'
+      } shadow-[0_4px_10px_rgba(0,0,0,0.08)] flex flex-col self-stretch ${
         onClick ? 'editable-block' : ''
       } ${isActive ? 'editable-block-active' : ''}`}
     >
       {/* Badge-top variant header */}
       {variant === 'badge-top' && (
-        <div className="flex items-center justify-between px-[4px] mb-[6px] shrink-0">
+        <div className="flex items-center justify-between px-[4px] mb-[5px] shrink-0">
           <span
             style={{ backgroundColor: module.cardBgColor }}
-            className="text-[10px] font-bold px-[8px] py-[2px] rounded-full border border-black/15 text-[#111827]"
+            className="text-[10px] font-bold px-[8px] py-[1.5px] rounded-full border border-black/15 text-[#111827]"
           >
             {module.subtitle || 'Модуль'}
           </span>
@@ -76,9 +91,9 @@ export function ModuleCard({
         <div
           style={{
             backgroundColor: module.cardBgColor,
-            height: compact ? '70px' : '82px',
+            height: compact ? '48px' : '64px',
           }}
-          className="self-stretch rounded-lg border border-black/10 overflow-hidden flex items-center justify-center mb-[10px] shrink-0 relative"
+          className="self-stretch rounded-lg border border-black/10 overflow-hidden flex items-center justify-center mb-[6px] shrink-0 relative"
         >
           {effectiveMode === 'image' && resolvedImageUrl ? (
             <img
@@ -99,12 +114,12 @@ export function ModuleCard({
             >
               <div
                 className={`${
-                  compact ? 'w-[54px] h-[54px]' : 'w-[62px] h-[62px]'
+                  compact ? 'w-[42px] h-[42px]' : 'w-[52px] h-[52px]'
                 } rounded-2xl bg-white/65 border-[1.5px] border-[#18181B]/15 shadow-[0_3px_10px_rgba(24,24,27,0.08)] flex items-center justify-center`}
               >
                 <ModuleVectorIcon
                   iconKey={module.iconKey}
-                  className={compact ? 'w-[38px] h-[38px]' : 'w-[44px] h-[44px]'}
+                  className={compact ? 'w-[30px] h-[30px]' : 'w-[38px] h-[38px]'}
                 />
               </div>
             </div>
@@ -122,26 +137,77 @@ export function ModuleCard({
       )}
 
       {/* Text Content (print-legible body copy, stretched card baseline) */}
-      <div className="text-center px-[4px] flex-1 flex flex-col justify-start">
-        <h3
+      <div className="text-center px-[3px] flex-1 flex flex-col justify-start">
+        <InlineEditableText
+          value={module.title}
+          onSelectText={
+            onSelectTextField
+              ? () =>
+                  onSelectTextField({
+                    page: 1,
+                    field: 'moduleTitle',
+                    itemId: module.id,
+                  })
+              : undefined
+          }
+          isSelected={
+            activeTextField?.page === 1 &&
+            activeTextField.field === 'moduleTitle' &&
+            activeTextField.itemId === module.id
+          }
+          as="h3"
           className={`font-extrabold ${
-            compact ? 'text-[14px]' : 'text-[15px]'
-          } leading-[1.18] text-[#111827]`}
-        >
-          {module.title}
-        </h3>
-        {variant !== 'badge-top' && module.subtitle && (
-          <div className="font-bold text-[12px] leading-tight text-[#111827]/90 mt-[3px]">
-            {module.subtitle}
-          </div>
+            compact ? 'text-[12.5px]' : 'text-[14px]'
+          } leading-[1.15] text-[#111827] block`}
+        />
+        {variant !== 'badge-top' && (module.subtitle || onSelectTextField) && (
+          <InlineEditableText
+            value={module.subtitle}
+            placeholder="Подзаголовок"
+            onSelectText={
+              onSelectTextField
+                ? () =>
+                    onSelectTextField({
+                      page: 1,
+                      field: 'moduleSubtitle',
+                      itemId: module.id,
+                    })
+                : undefined
+            }
+            isSelected={
+              activeTextField?.page === 1 &&
+              activeTextField.field === 'moduleSubtitle' &&
+              activeTextField.itemId === module.id
+            }
+            as="div"
+            className="font-bold text-[10.5px] leading-tight text-[#111827]/90 mt-[2px] block"
+          />
         )}
-        <p
+        <InlineEditableText
+          value={module.description}
+          placeholder="Описание модуля"
+          onSelectText={
+            onSelectTextField
+              ? () =>
+                  onSelectTextField({
+                    page: 1,
+                    field: 'moduleDescription',
+                    itemId: module.id,
+                  })
+              : undefined
+          }
+          isSelected={
+            activeTextField?.page === 1 &&
+            activeTextField.field === 'moduleDescription' &&
+            activeTextField.itemId === module.id
+          }
+          as="p"
           className={`${
-            compact ? 'text-[11.5px] leading-[1.34]' : 'text-[12px] leading-[1.38]'
-          } text-[#27272A] mt-[5px] line-clamp-3`}
-        >
-          {module.description}
-        </p>
+            compact
+              ? 'text-[10.5px] leading-[1.24] line-clamp-2'
+              : 'text-[11px] leading-[1.28] line-clamp-3'
+          } text-[#27272A] mt-[3px] block`}
+        />
       </div>
     </div>
   );

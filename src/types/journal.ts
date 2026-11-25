@@ -66,6 +66,8 @@ export type ModuleIllustrationKey =
 
 export type ModuleLucideIconKey =
   | 'python'
+  | 'minecraft'
+  | 'vrar'
   | 'cube3d'
   | 'robots'
   | 'lightbulb'
@@ -166,13 +168,26 @@ export type DecorElementKind =
   | 'dots'
   | 'star'
   | 'sticker'
-  | 'icon';
+  | 'icon'
+  | 'text'
+  | 'image';
 
 export interface DecorElement {
   id: string;
   kind: DecorElementKind;
   label?: string;
   stickerText?: string;
+  text?: string;
+  fontSize?: number;
+  fontWeight?: 'normal' | 'bold' | 'extrabold';
+  fontFamily?: 'journal' | 'handwriting';
+  textAlign?: 'left' | 'center' | 'right';
+  bgColor?: string;
+  imageUrl?: string;
+  cropEnabled?: boolean;
+  cropPosX?: number;
+  cropPosY?: number;
+  iconKey?: ModuleLucideIconKey;
   x: number;
   y: number;
   width: number;
@@ -513,3 +528,28 @@ export type EditorSectionTarget =
   | { page: 2; block: 'decor'; itemId: string }
   | { page: 2; block: 'background' }
   | null;
+
+export type ActiveTextFieldTarget =
+  | { page: 1; field: 'coverTitle' }
+  | { page: 1; field: 'coverSubtitle' }
+  | { page: 1; field: 'moduleTitle'; itemId: string }
+  | { page: 1; field: 'moduleSubtitle'; itemId: string }
+  | { page: 1; field: 'moduleDescription'; itemId: string }
+  | { page: 1; field: 'skillLabel'; itemId: string }
+  | { page: 1; field: 'projectTitle'; itemId: string }
+  | { page: 1; field: 'projectCaption'; itemId: string }
+  | { page: 1; field: 'projectDescription'; itemId: string }
+  | { page: 1; field: 'decorText'; itemId: string }
+  | { page: 2; field: 'page2HeaderTitle' }
+  | { page: 2; field: 'strengthTitle'; itemId: string }
+  | { page: 2; field: 'strengthExample'; itemId: string }
+  | { page: 2; field: 'prideTitle' }
+  | { page: 2; field: 'prideText' }
+  | { page: 2; field: 'mentorGreeting' }
+  | { page: 2; field: 'mentorBody' }
+  | { page: 2; field: 'mentorSignature' }
+  | { page: 2; field: 'nextChapterTitle' }
+  | { page: 2; field: 'nextTopicTitle'; itemId: string }
+  | { page: 2; field: 'decorText'; itemId: string }
+  | null;
+

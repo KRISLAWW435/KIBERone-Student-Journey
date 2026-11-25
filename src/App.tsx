@@ -88,6 +88,10 @@ export default function App() {
 
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [editorEntryTarget, setEditorEntryTarget] = useState<{
+    tab: 'common' | 'individual';
+    journalId: string | null;
+  }>({ tab: 'common', journalId: null });
   const [createGroupSignal, setCreateGroupSignal] = useState(0);
   const [saveState, setSaveState] = useState<'saved' | 'saving'>('saved');
   const [loading, setLoading] = useState(true);
@@ -629,6 +633,7 @@ export default function App() {
   const handleOpenGroupEditor = (groupId: string) => {
     setActiveGroupId(groupId);
     setActiveId(null);
+    setEditorEntryTarget({ tab: 'common', journalId: null });
     setRoute('groupEditor');
   };
 
@@ -669,6 +674,7 @@ export default function App() {
     await saveGroup(newGroup);
     setGroups((prev) => [newGroup, ...prev]);
     setActiveGroupId(newGroup.id);
+    setEditorEntryTarget({ tab: 'common', journalId: null });
     setRoute('groupEditor');
     showToast(`Создана группа по шаблону «${tpl.name}»`);
   };
@@ -1005,6 +1011,8 @@ export default function App() {
             saveState={saveState}
             batchProgress={batchProgress}
             activeJournalId={activeId}
+            initialTab={editorEntryTarget.tab}
+            initialJournalId={editorEntryTarget.journalId}
             onSelectActiveJournal={(journalId) => setActiveId(journalId)}
             onChangeJournal={handleUpdateJournal}
             onSaveGroupAndApplyCommon={handleSaveGroupAndApplyCommon}
@@ -1014,6 +1022,7 @@ export default function App() {
             onBackHome={() => setRoute('home')}
             onOpenPreview={(journalId) => {
               setActiveId(journalId);
+              setEditorEntryTarget({ tab: 'individual', journalId });
               setRoute('preview');
             }}
             onPrint={() => window.print()}
@@ -1039,9 +1048,20 @@ export default function App() {
           <PreviewView
             doc={activeDoc}
             mediaAssets={mediaAssets}
-            onBackToEditor={() =>
-              setRoute(activeGroupId ? 'groupEditor' : 'home')
-            }
+            onBackToEditor={() => {
+              const targetGroupId = activeDoc.groupId || activeGroupId;
+              if (targetGroupId) {
+                setActiveGroupId(targetGroupId);
+                setActiveId(activeDoc.id);
+                setEditorEntryTarget({
+                  tab: 'individual',
+                  journalId: activeDoc.id,
+                });
+                setRoute('groupEditor');
+              } else {
+                setRoute('home');
+              }
+            }}
             onBackHome={() => setRoute('home')}
             onPrint={() => window.print()}
             onExportSuccess={() =>

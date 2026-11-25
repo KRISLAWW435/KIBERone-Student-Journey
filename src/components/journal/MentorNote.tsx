@@ -1,98 +1,217 @@
 import React from 'react';
-import { EditorSectionTarget, Page2Config } from '../../types/journal';
+import {
+  ActiveTextFieldTarget,
+  EditorSectionTarget,
+  Page2Config,
+} from '../../types/journal';
+import { InlineEditableText } from './DecorLayer';
 
 interface MentorNoteProps {
   config: Page2Config;
   activeTarget?: EditorSectionTarget;
+  activeTextField?: ActiveTextFieldTarget;
   onSelectTarget?: (target: EditorSectionTarget) => void;
+  onSelectTextField?: (target: ActiveTextFieldTarget) => void;
+  onUpdateMentorNote?: (patch: Partial<Page2Config['mentorNote']>) => void;
+  onBeginEdit?: () => void;
+  onEndEdit?: () => void;
 }
 
 export function MentorNote({
   config,
   activeTarget,
+  activeTextField,
   onSelectTarget,
+  onSelectTextField,
 }: MentorNoteProps) {
   const { mentorNote } = config;
-  const isActive = activeTarget?.page === 2 && activeTarget.block === 'mentorNote';
-  const isHandwriting = mentorNote.fontStyle === 'handwriting';
+  const isActive =
+    activeTarget?.page === 2 && activeTarget.block === 'mentorNote';
+  const isHandwriting = mentorNote.fontStyle !== 'sans';
   const resolvedFontSize = isHandwriting
-    ? Math.max(21, mentorNote.fontSize + 2)
-    : Math.max(14, mentorNote.fontSize - 3);
+    ? Math.max(18, Math.min(23, mentorNote.fontSize + 1))
+    : Math.max(12.5, mentorNote.fontSize - 4);
 
   return (
-    <section style={{ width: '378px' }} className="flex flex-col shrink-0">
-      <h3 className="font-extrabold text-[17px] leading-[24px] tracking-tight uppercase text-[#111827] mb-[10px] shrink-0">
+    <section
+      style={{ width: '345px' }}
+      className="shrink-0 flex flex-col h-full"
+    >
+      <h3 className="font-extrabold text-[17px] leading-[20px] tracking-tight uppercase text-[#111827] mb-[8px] shrink-0">
         СЛОВО НАСТАВНИКА
       </h3>
 
       <div
-        onClick={(e) => {
-          if (!onSelectTarget) return;
-          e.stopPropagation();
-          onSelectTarget({ page: 2, block: 'mentorNote' });
-        }}
-        style={{
-          width: '378px',
-          minHeight: '306px',
-          transform: `rotate(${mentorNote.tiltDeg}deg)`,
-        }}
-        className={`relative mentor-notebook-paper rounded-md border border-zinc-300 shadow-[0_6px_18px_rgba(0,0,0,0.1)] pl-[44px] pr-[20px] pt-[18px] pb-[18px] flex flex-col justify-between shrink-0 ${
-          onSelectTarget ? 'editable-block' : ''
-        } ${isActive ? 'editable-block-active' : ''}`}
+        style={{ width: '345px', minHeight: '376px' }}
+        className="relative flex-1 flex flex-col pt-[6px]"
       >
-        {/* Spiral Wire Binding on Left Edge matching reference */}
+        {/* Stacked striped notebook backing sheet matching reference */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -left-[8px] top-[12px] bottom-[12px] w-[28px] flex flex-col justify-between"
-        >
-          {Array.from({ length: 11 }).map((_, idx) => (
-            <div key={idx} className="flex items-center">
-              <span className="w-[16px] h-[4px] rounded-full bg-gradient-to-r from-zinc-500 via-zinc-300 to-zinc-600 shadow-xs block" />
-              <span className="w-[10px] h-[10px] rounded-full bg-[#D1D5DB] border border-zinc-500 -ml-[4px] block" />
-            </div>
-          ))}
-        </div>
-
-        {/* Letter Content locked strictly to 28px notebook rules */}
-        <div
           style={{
-            fontFamily: isHandwriting
-              ? 'var(--font-handwriting)'
-              : 'var(--font-journal)',
-            fontSize: `${resolvedFontSize}px`,
-            lineHeight: '28px',
+            transform: 'rotate(1.8deg) translate(4px, 4px)',
+            backgroundImage:
+              'repeating-linear-gradient(135deg, #D9F2F5 0px, #D9F2F5 6px, #FFFFFF 6px, #FFFFFF 12px)',
           }}
-          className="text-[#111827]"
-        >
-          <div className="font-semibold">{mentorNote.greeting}</div>
-          <p className="m-0 font-medium">{mentorNote.body}</p>
-        </div>
+          className="pointer-events-none absolute inset-0 top-[6px] rounded-md border-[1.5px] border-[#18181B]/75"
+        />
 
-        {/* Signature + Optional Mentor Photo */}
-        <div className="mt-[28px] flex items-end justify-between gap-[12px]">
-          <div
-            style={{
-              fontFamily: isHandwriting
-                ? 'var(--font-handwriting)'
-                : 'var(--font-journal)',
-              fontSize: isHandwriting ? `${resolvedFontSize}px` : '14px',
-              lineHeight: '28px',
-            }}
-            className="font-semibold text-[#111827]"
+        {/* Foreground Ruled Notebook Sheet */}
+        <div
+          onClick={(e) => {
+            if (!onSelectTarget) return;
+            e.stopPropagation();
+            onSelectTarget({ page: 2, block: 'mentorNote' });
+          }}
+          style={{
+            transform: `rotate(${mentorNote.tiltDeg ?? -0.8}deg)`,
+          }}
+          className={`relative flex-1 min-h-0 mentor-notebook-paper rounded-md border-[1.6px] border-[#18181B] shadow-[0_6px_16px_rgba(0,0,0,0.08)] px-[20px] pt-[22px] pb-[14px] flex flex-col justify-between ${
+            onSelectTarget ? 'editable-block' : ''
+          } ${isActive ? 'editable-block-active' : ''}`}
+        >
+          {/* Decorative Yellow Star Sticker at top-left edge */}
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 28 28"
+            className="pointer-events-none absolute -top-[12px] left-[16px] w-[26px] h-[26px] z-20"
+            fill="none"
           >
-            {mentorNote.signature}
+            <path
+              d="M14 2L17.4 9.5L25.5 10.6L19.5 16.2L21 24.2L14 20.3L7 24.2L8.5 16.2L2.5 10.6L10.6 9.5L14 2Z"
+              fill="#FFE14D"
+              stroke="#18181B"
+              strokeWidth="1.6"
+              strokeLinejoin="round"
+            />
+          </svg>
+
+          {/* Realistic Metal Paperclip Binding at top-right */}
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 26 52"
+            className="pointer-events-none absolute -top-[18px] right-[22px] w-[22px] h-[44px] z-20"
+            fill="none"
+          >
+            <path
+              d="M7 34V12C7 6.5 11.5 2 17 2C21.5 2 24 5.5 24 10V36C24 43 18.5 48 12 48C6.5 48 2 43.5 2 38V16"
+              stroke="#18181B"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+            />
+          </svg>
+
+          {/* Spiral / Perforation dots on left margin */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute left-[6px] top-[24px] bottom-[20px] flex flex-col justify-between opacity-35"
+          >
+            {Array.from({ length: 10 }).map((_, idx) => (
+              <span
+                key={idx}
+                className="w-[5px] h-[5px] rounded-full border border-[#18181B] bg-zinc-200 block"
+              />
+            ))}
           </div>
 
-          {mentorNote.mentorPhotoUrl && (
-            <div className="w-[74px] h-[74px] rounded-full overflow-hidden border-2 border-zinc-200 shadow-sm shrink-0 bg-zinc-100">
-              <img
-                src={mentorNote.mentorPhotoUrl}
-                alt={mentorNote.signature}
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover"
+          {/* Handwritten Letter Body aligned to 28px notebook lines */}
+          <div className="pl-[6px] flex-1 min-h-0 overflow-hidden">
+            <div className="font-bold text-[14px] leading-[28px] text-[#111827]">
+              Слово наставника:
+            </div>
+            <div
+              style={{
+                fontFamily: isHandwriting
+                  ? 'var(--font-handwriting)'
+                  : 'var(--font-journal)',
+                fontSize: `${resolvedFontSize}px`,
+                lineHeight: '28px',
+              }}
+              className="text-[#111827]"
+            >
+              {(mentorNote.greeting || onSelectTextField) && (
+                <InlineEditableText
+                  value={mentorNote.greeting}
+                  placeholder="Приветствие ученику…"
+                  onSelectText={
+                    onSelectTextField
+                      ? () =>
+                          onSelectTextField({
+                            page: 2,
+                            field: 'mentorGreeting',
+                          })
+                      : undefined
+                  }
+                  isSelected={
+                    activeTextField?.page === 2 &&
+                    activeTextField.field === 'mentorGreeting'
+                  }
+                  as="div"
+                  className="font-semibold block"
+                />
+              )}
+              <InlineEditableText
+                value={mentorNote.body}
+                placeholder="Нажмите, чтобы написать слово наставника…"
+                onSelectText={
+                  onSelectTextField
+                    ? () =>
+                        onSelectTextField({
+                          page: 2,
+                          field: 'mentorBody',
+                        })
+                    : undefined
+                }
+                isSelected={
+                  activeTextField?.page === 2 &&
+                  activeTextField.field === 'mentorBody'
+                }
+                as="p"
+                className="m-0 font-medium block"
               />
             </div>
-          )}
+          </div>
+
+          {/* Handwritten Signature + Optional Mentor Photo */}
+          <div className="mt-[8px] pl-[6px] flex items-end justify-between gap-[10px] shrink-0">
+            <InlineEditableText
+              value={mentorNote.signature}
+              placeholder="Подпись наставника"
+              onSelectText={
+                onSelectTextField
+                  ? () =>
+                      onSelectTextField({
+                        page: 2,
+                        field: 'mentorSignature',
+                      })
+                  : undefined
+              }
+              isSelected={
+                activeTextField?.page === 2 &&
+                activeTextField.field === 'mentorSignature'
+              }
+              as="div"
+              style={{
+                fontFamily: isHandwriting
+                  ? 'var(--font-handwriting)'
+                  : 'var(--font-journal)',
+                fontSize: isHandwriting ? `${resolvedFontSize}px` : '13px',
+                lineHeight: '26px',
+              }}
+              className="font-semibold text-[#111827] block"
+            />
+
+            {mentorNote.mentorPhotoUrl && (
+              <div className="w-[56px] h-[56px] rounded-full overflow-hidden border-2 border-zinc-300 shadow-xs shrink-0 bg-zinc-100">
+                <img
+                  src={mentorNote.mentorPhotoUrl}
+                  alt={mentorNote.signature}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </section>

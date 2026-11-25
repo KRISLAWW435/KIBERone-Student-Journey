@@ -161,9 +161,9 @@ export function buildDefaultCommonData(
     nextChapterTitle: 'Что интересного впереди?',
     nextChapterDescription: 'Тебя ждут новые интересные модули:',
     nextChapterTopics: [
-      { id: 'nt-1', title: 'Разработка 3D-игр', iconKey: 'gamepad' },
-      { id: 'nt-2', title: 'Продвинутый Python', iconKey: 'python' },
-      { id: 'nt-3', title: '3D-моделирование', iconKey: 'cube3d' },
+      { id: 'nt-1', title: 'Python', iconKey: 'python' },
+      { id: 'nt-2', title: 'Minecraft', iconKey: 'minecraft' },
+      { id: 'nt-3', title: 'VR/AR', iconKey: 'vrar' },
     ],
   };
 }
@@ -245,17 +245,17 @@ export function createStudentJournal(
       projects: [
         {
           id: `proj-${resident.id}-1`,
-          title: '',
-          caption: '',
-          description: '',
+          title: 'Мой первый проект',
+          caption: 'Игровая сцена и алгоритмы модуля',
+          description: 'Создана собственная сцена и проверена логика работы.',
           fallbackTheme: 'game3d',
           isRealScreenshot: false,
         },
         {
           id: `proj-${resident.id}-2`,
-          title: '',
-          caption: '',
-          description: '',
+          title: 'Учебный мини-проект',
+          caption: 'Практическая работа на занятии',
+          description: 'Закрепление основных приёмов программирования.',
           fallbackTheme: 'python',
           isRealScreenshot: false,
         },
@@ -271,7 +271,7 @@ export function createStudentJournal(
       headerYellowColor: palette.p2Yellow,
       showHeaderDecor: true,
       showStrengths: true,
-      strengthsColumns: 2,
+      strengthsColumns: 3,
       strengths: [],
       showPride: true,
       prideTitle: 'А вот чем ты можешь гордиться!',

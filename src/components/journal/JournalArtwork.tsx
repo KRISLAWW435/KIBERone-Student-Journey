@@ -41,6 +41,8 @@ export const MODULE_LUCIDE_ICON_OPTIONS: Array<{
   label: string;
 }> = [
   { key: 'python', label: 'Python' },
+  { key: 'minecraft', label: 'Minecraft' },
+  { key: 'vrar', label: 'VR / AR' },
   { key: 'cube3d', label: '3D-куб / Blender' },
   { key: 'globe', label: 'Web / Сайты' },
   { key: 'sparkles', label: 'ИИ и нейросети' },
@@ -99,6 +101,75 @@ export function ModuleVectorIcon({
             strokeLinejoin="round"
           />
           <circle cx="23.6" cy="30.6" r="1.4" fill="#FFFFFF" stroke="#18181B" strokeWidth="1" />
+        </svg>
+      );
+
+    case 'minecraft':
+      return (
+        <svg viewBox="0 0 40 40" className={className} fill="none">
+          <rect
+            x="6"
+            y="6"
+            width="28"
+            height="28"
+            rx="4"
+            fill="#86EFAC"
+            stroke="#18181B"
+            strokeWidth="1.8"
+          />
+          <path
+            d="M6.8 13.5H33.2"
+            stroke="#18181B"
+            strokeWidth="1.2"
+            strokeDasharray="3 2"
+            opacity="0.35"
+          />
+          <rect x="11" y="13" width="6" height="6" rx="1" fill="#18181B" />
+          <rect x="23" y="13" width="6" height="6" rx="1" fill="#18181B" />
+          <rect x="17" y="19" width="6" height="5" fill="#18181B" />
+          <rect x="14" y="22" width="12" height="5" fill="#18181B" />
+          <rect x="14" y="25" width="4" height="5" fill="#18181B" />
+          <rect x="22" y="25" width="4" height="5" fill="#18181B" />
+        </svg>
+      );
+
+    case 'vrar':
+      return (
+        <svg viewBox="0 0 40 40" className={className} fill="none">
+          <path
+            d="M7 18C7 14 10 11 14 11H26C30 11 33 14 33 18"
+            stroke="#18181B"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
+          <rect
+            x="5.5"
+            y="16"
+            width="29"
+            height="15"
+            rx="5.5"
+            fill="#A5B4FC"
+            stroke="#18181B"
+            strokeWidth="1.8"
+          />
+          <path
+            d="M11 25C11 22.8 12.8 21.5 15 21.5H17.2L18.8 24L20 26L21.2 24L22.8 21.5H25C27.2 21.5 29 22.8 29 25V26.5C29 28.4 27.4 29.5 25.5 29.5H21.8L20 27L18.2 29.5H14.5C12.6 29.5 11 28.4 11 26.5V25Z"
+            fill="#60A5FA"
+            stroke="#18181B"
+            strokeWidth="1.4"
+            strokeLinejoin="round"
+          />
+          <text
+            x="20"
+            y="25.2"
+            textAnchor="middle"
+            fill="#18181B"
+            fontSize="6.5"
+            fontWeight="800"
+            fontFamily="monospace"
+          >
+            VR
+          </text>
         </svg>
       );
 
@@ -746,7 +817,7 @@ export function ProjectFallbackGraphic({
 
 export function StrengthLineIcon({
   type,
-  size = 34,
+  size = 40,
 }: {
   type: StrengthIconKey;
   size?: number;
@@ -754,71 +825,91 @@ export function StrengthLineIcon({
   switch (type) {
     case 'fastlearn':
       return (
-        <svg width={size} height={size} viewBox="0 0 26 26" fill="none">
-          <path d="M13 4L3 9.5L13 15L23 9.5L13 4Z" stroke="#18181B" strokeWidth="1.7" strokeLinejoin="round" />
-          <path d="M7 12.2V18.5C7 19.8 9.7 21 13 21C16.3 21 19 19.8 19 18.5V12.2" stroke="#18181B" strokeWidth="1.7" strokeLinecap="round" />
-          <path d="M21.5 10.5V16.5" stroke="#18181B" strokeWidth="1.7" strokeLinecap="round" />
+        <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+          <path
+            d="M15.5 7.5C11.5 7.5 8.5 10.2 8.5 14C8.5 15.8 9.2 17.2 10.2 18.2C9.5 19.3 9.5 21.4 11 22.8C12.1 23.8 14 24 15.5 23.4V7.5Z"
+            fill="#FDA4AF"
+            stroke="#18181B"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M16.5 7.5C20.5 7.5 23.5 10.2 23.5 14C23.5 15.8 22.8 17.2 21.8 18.2C22.5 19.3 22.5 21.4 21 22.8C19.9 23.8 18 24 16.5 23.4V7.5Z"
+            fill="#FB7185"
+            stroke="#18181B"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+          <path d="M11 13C12.5 13 13.5 14 13.5 15.3" stroke="#18181B" strokeWidth="1.4" strokeLinecap="round" />
+          <path d="M21 13C19.5 13 18.5 14 18.5 15.3" stroke="#18181B" strokeWidth="1.4" strokeLinecap="round" />
         </svg>
       );
     case 'curiosity':
       return (
-        <svg width={size} height={size} viewBox="0 0 26 26" fill="none">
-          <circle cx="13" cy="13" r="9" stroke="#18181B" strokeWidth="1.7" />
-          <circle cx="10.5" cy="10" r="1.4" fill="#18181B" />
-          <circle cx="15" cy="9.5" r="1.4" fill="#18181B" />
-          <circle cx="16.8" cy="13.5" r="1.4" fill="#18181B" />
-          <circle cx="11.5" cy="15.5" r="1.8" stroke="#18181B" strokeWidth="1.5" />
+        <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+          <circle cx="14" cy="14" r="8" fill="#BAE6FD" stroke="#18181B" strokeWidth="1.7" />
+          <circle cx="14" cy="14" r="5" fill="#E0F2FE" stroke="#18181B" strokeWidth="1.2" />
+          <path d="M11.5 12C12.2 11 13.4 10.5 14.5 10.7" stroke="#FFFFFF" strokeWidth="1.5" strokeLinecap="round" />
+          <path d="M20 20L26.5 26.5" stroke="#18181B" strokeWidth="3.2" strokeLinecap="round" />
+          <path d="M20 20L26.5 26.5" stroke="#64748B" strokeWidth="1.6" strokeLinecap="round" />
         </svg>
       );
     case 'analytics':
       return (
-        <svg width={size} height={size} viewBox="0 0 26 26" fill="none">
-          <path d="M13 6C9.5 6 7 8.5 7 11.5C7 13.5 8 15 9.5 16V19.5H16.5V16C18 15 19 13.5 19 11.5C19 8.5 16.5 6 13 6Z" stroke="#18181B" strokeWidth="1.7" strokeLinejoin="round" />
-          <path d="M13 6V16" stroke="#18181B" strokeWidth="1.5" />
-          <path d="M9.5 10.5C10.5 10.5 11.5 11.2 12 12" stroke="#18181B" strokeWidth="1.4" strokeLinecap="round" />
-          <path d="M16.5 10.5C15.5 10.5 14.5 11.2 14 12" stroke="#18181B" strokeWidth="1.4" strokeLinecap="round" />
+        <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+          <circle cx="12.5" cy="18" r="6" fill="#FACC15" stroke="#18181B" strokeWidth="1.6" />
+          <circle cx="12.5" cy="18" r="2.2" fill="#FFFFFF" stroke="#18181B" strokeWidth="1.4" />
+          <path d="M12.5 10.2V12M12.5 24V25.8M4.7 18H6.5M18.5 18H20.3M7.2 12.7L8.5 14M16.5 22L17.8 23.3M17.8 12.7L16.5 14M8.5 22L7.2 23.3" stroke="#18181B" strokeWidth="1.7" strokeLinecap="round" />
+          <circle cx="22.5" cy="11" r="4.2" fill="#94A3B8" stroke="#18181B" strokeWidth="1.5" />
+          <circle cx="22.5" cy="11" r="1.4" fill="#FFFFFF" stroke="#18181B" strokeWidth="1.2" />
         </svg>
       );
     case 'creativity':
       return (
-        <svg width={size} height={size} viewBox="0 0 26 26" fill="none">
-          <path d="M13 5.5C9.9 5.5 7.5 7.9 7.5 10.9C7.5 12.9 8.6 14.3 9.8 15.6C10.4 16.2 10.8 17 10.8 17.8H15.2C15.2 17 15.6 16.2 16.2 15.6C17.4 14.3 18.5 12.9 18.5 10.9C18.5 7.9 16.1 5.5 13 5.5Z" stroke="#18181B" strokeWidth="1.7" />
-          <line x1="11" y1="20.5" x2="15" y2="20.5" stroke="#18181B" strokeWidth="1.7" strokeLinecap="round" />
-          <line x1="13" y1="2.2" x2="13" y2="3.6" stroke="#18181B" strokeWidth="1.6" strokeLinecap="round" />
-          <line x1="5" y1="7" x2="6.3" y2="7.8" stroke="#18181B" strokeWidth="1.6" strokeLinecap="round" />
-          <line x1="21" y1="7" x2="19.7" y2="7.8" stroke="#18181B" strokeWidth="1.6" strokeLinecap="round" />
+        <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+          <path
+            d="M16 6.5C11.9 6.5 8.8 9.6 8.8 13.4C8.8 15.9 10.2 17.7 11.7 19.2C12.4 19.9 12.8 20.9 12.8 22H19.2C19.2 20.9 19.6 19.9 20.3 19.2C21.8 17.7 23.2 15.9 23.2 13.4C23.2 9.6 20.1 6.5 16 6.5Z"
+            fill="#FDE047"
+            stroke="#18181B"
+            strokeWidth="1.7"
+          />
+          <rect x="13" y="22.5" width="6" height="3.2" rx="1.4" fill="#94A3B8" stroke="#18181B" strokeWidth="1.5" />
+          <line x1="16" y1="2.5" x2="16" y2="4.4" stroke="#18181B" strokeWidth="1.7" strokeLinecap="round" />
+          <line x1="5.5" y1="9" x2="7.2" y2="10" stroke="#18181B" strokeWidth="1.7" strokeLinecap="round" />
+          <line x1="26.5" y1="9" x2="24.8" y2="10" stroke="#18181B" strokeWidth="1.7" strokeLinecap="round" />
         </svg>
       );
     case 'persistence':
       return (
-        <svg width={size} height={size} viewBox="0 0 26 26" fill="none">
-          <path d="M5 19L11 11L15 14.5L21 7" stroke="#18181B" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M17 7H21V11" stroke="#18181B" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+        <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+          <rect x="4.5" y="5.5" width="23" height="21" rx="5" fill="#DDD6FE" stroke="#18181B" strokeWidth="1.6" />
+          <path d="M8 22L14 14L18 17.5L24 10" stroke="#18181B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M19.5 10H24V14.5" stroke="#18181B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case 'autonomy':
       return (
-        <svg width={size} height={size} viewBox="0 0 26 26" fill="none">
-          <circle cx="13" cy="13" r="9" stroke="#18181B" strokeWidth="1.7" />
-          <path d="M13 7.5L15.4 13L13 18.5L10.6 13L13 7.5Z" stroke="#18181B" strokeWidth="1.6" strokeLinejoin="round" />
+        <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="16" r="10.5" fill="#A5F3FC" stroke="#18181B" strokeWidth="1.7" />
+          <path d="M16 8.5L19 16L16 23.5L13 16L16 8.5Z" fill="#FACC15" stroke="#18181B" strokeWidth="1.5" strokeLinejoin="round" />
         </svg>
       );
     case 'communication':
       return (
-        <svg width={size} height={size} viewBox="0 0 26 26" fill="none">
-          <path d="M5 6.5H21V17.5H11L6.5 21V17.5H5V6.5Z" stroke="#18181B" strokeWidth="1.7" strokeLinejoin="round" />
-          <circle cx="10" cy="12" r="1.3" fill="#18181B" />
-          <circle cx="13" cy="12" r="1.3" fill="#18181B" />
-          <circle cx="16" cy="12" r="1.3" fill="#18181B" />
+        <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+          <path d="M6 8H26V21H14L8.5 25.5V21H6V8Z" fill="#FED7AA" stroke="#18181B" strokeWidth="1.7" strokeLinejoin="round" />
+          <circle cx="12" cy="14.5" r="1.5" fill="#18181B" />
+          <circle cx="16" cy="14.5" r="1.5" fill="#18181B" />
+          <circle cx="20" cy="14.5" r="1.5" fill="#18181B" />
         </svg>
       );
     case 'logic':
     default:
       return (
-        <svg width={size} height={size} viewBox="0 0 26 26" fill="none">
-          <rect x="4" y="4" width="7" height="7" rx="1.5" stroke="#18181B" strokeWidth="1.7" />
-          <rect x="15" y="15" width="7" height="7" rx="1.5" stroke="#18181B" strokeWidth="1.7" />
-          <path d="M11 7.5H18.5V15" stroke="#18181B" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+          <rect x="5" y="5" width="8.5" height="8.5" rx="2" fill="#86EFAC" stroke="#18181B" strokeWidth="1.7" />
+          <rect x="18.5" y="18.5" width="8.5" height="8.5" rx="2" fill="#93C5FD" stroke="#18181B" strokeWidth="1.7" />
+          <path d="M13.5 9.2H22.8V18.5" stroke="#18181B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
   }
@@ -832,4 +923,189 @@ export function NextTopicLineIcon({
   className?: string;
 }) {
   return <ModuleVectorIcon iconKey={type} className={className} />;
+}
+
+export function SkillCircleIcon({
+  label,
+  index = 0,
+  className = 'w-[22px] h-[22px]',
+}: {
+  label: string;
+  index?: number;
+  className?: string;
+}) {
+  const lower = label.toLowerCase();
+
+  let kind: 'flowchart' | 'terminal' | 'brain' | 'target' | 'palette' | 'sparkles' =
+    index % 4 === 0
+      ? 'flowchart'
+      : index % 4 === 1
+      ? 'terminal'
+      : index % 4 === 2
+      ? 'brain'
+      : 'target';
+
+  if (/алгоритм|схем|структур/.test(lower)) {
+    kind = 'flowchart';
+  } else if (/код|python|программ|разраб|сайт|html|css|js|ts|web/.test(lower)) {
+    kind = 'terminal';
+  } else if (/логик|мышл|анализ|вниман|память/.test(lower)) {
+    kind = 'brain';
+  } else if (/задач|цель|решен|самостоятел|результат|итог/.test(lower)) {
+    kind = 'target';
+  } else if (/дизайн|творч|креатив|3d|рису|анимац|игр|blender/.test(lower)) {
+    kind = 'palette';
+  } else if (/ии|нейросет|ai|чат|бот/.test(lower)) {
+    kind = 'sparkles';
+  }
+
+  switch (kind) {
+    case 'flowchart':
+      return (
+        <svg viewBox="0 0 28 28" className={className} fill="none">
+          <rect
+            x="10.5"
+            y="3.5"
+            width="7"
+            height="5.5"
+            rx="1.5"
+            fill="#FACC15"
+            stroke="#18181B"
+            strokeWidth="1.6"
+          />
+          <path
+            d="M14 9V13M7 13H21M7 13V17.5M14 13V17.5M21 13V17.5"
+            stroke="#18181B"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+          <rect
+            x="4"
+            y="17.5"
+            width="6"
+            height="6"
+            rx="1.4"
+            fill="#4ADE80"
+            stroke="#18181B"
+            strokeWidth="1.5"
+          />
+          <rect
+            x="11"
+            y="17.5"
+            width="6"
+            height="6"
+            rx="1.4"
+            fill="#60A5FA"
+            stroke="#18181B"
+            strokeWidth="1.5"
+          />
+          <rect
+            x="18"
+            y="17.5"
+            width="6"
+            height="6"
+            rx="1.4"
+            fill="#FB7185"
+            stroke="#18181B"
+            strokeWidth="1.5"
+          />
+        </svg>
+      );
+
+    case 'terminal':
+      return (
+        <svg viewBox="0 0 28 28" className={className} fill="none">
+          <rect
+            x="4"
+            y="5.5"
+            width="20"
+            height="17"
+            rx="3.2"
+            fill="#5EEAD4"
+            stroke="#18181B"
+            strokeWidth="1.7"
+          />
+          <path d="M4 10H24" stroke="#18181B" strokeWidth="1.5" />
+          <path
+            d="M8.5 14L11.8 16.5L8.5 19"
+            stroke="#18181B"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <line
+            x1="13.5"
+            y1="19"
+            x2="18.5"
+            y2="19"
+            stroke="#18181B"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+
+    case 'brain':
+      return (
+        <svg viewBox="0 0 28 28" className={className} fill="none">
+          <path
+            d="M13.5 6C10.2 6 7.8 8.3 7.8 11.4C7.8 12.8 8.3 14 9.1 14.9C8.4 15.9 8.5 17.8 9.8 19C10.7 19.9 12.2 20.1 13.5 19.6V6Z"
+            fill="#6EE7B7"
+            stroke="#18181B"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M14.5 6C17.8 6 20.2 8.3 20.2 11.4C20.2 12.8 19.7 14 18.9 14.9C19.6 15.9 19.5 17.8 18.2 19C17.3 19.9 15.8 20.1 14.5 19.6V6Z"
+            fill="#5EEAD4"
+            stroke="#18181B"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+          <path d="M10.2 11C11.4 11 12 11.8 12 12.8" stroke="#18181B" strokeWidth="1.3" strokeLinecap="round" />
+          <path d="M17.8 11C16.6 11 16 11.8 16 12.8" stroke="#18181B" strokeWidth="1.3" strokeLinecap="round" />
+        </svg>
+      );
+
+    case 'palette':
+      return (
+        <svg viewBox="0 0 28 28" className={className} fill="none">
+          <path
+            d="M14 5C8.5 5 4.5 9 4.5 14C4.5 18.8 8.2 22.2 13 22.2C14.7 22.2 15.8 21.1 15.5 19.7C15.3 18.7 16 17.9 17.1 17.9H19.4C21.8 17.9 23.5 16.2 23.5 13.8C23.5 8.8 19.3 5 14 5Z"
+            fill="#FDE047"
+            stroke="#18181B"
+            strokeWidth="1.6"
+          />
+          <circle cx="9.5" cy="11.5" r="1.6" fill="#FB7185" />
+          <circle cx="13.8" cy="9" r="1.6" fill="#60A5FA" />
+          <circle cx="18.2" cy="11.2" r="1.6" fill="#34D399" />
+        </svg>
+      );
+
+    case 'sparkles':
+      return (
+        <svg viewBox="0 0 28 28" className={className} fill="none">
+          <path
+            d="M14 4.5L16.3 11.2L23 13.5L16.3 15.8L14 22.5L11.7 15.8L5 13.5L11.7 11.2L14 4.5Z"
+            fill="#FACC15"
+            stroke="#18181B"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+          <circle cx="21" cy="7" r="1.8" fill="#60A5FA" stroke="#18181B" strokeWidth="1.2" />
+        </svg>
+      );
+
+    case 'target':
+    default:
+      return (
+        <svg viewBox="0 0 28 28" className={className} fill="none">
+          <circle cx="14" cy="14.5" r="8.5" fill="#FB7185" stroke="#18181B" strokeWidth="1.6" />
+          <circle cx="14" cy="14.5" r="5.3" fill="#FFFFFF" stroke="#18181B" strokeWidth="1.4" />
+          <circle cx="14" cy="14.5" r="2.2" fill="#FB7185" stroke="#18181B" strokeWidth="1.3" />
+          <path d="M15 13.5L22 6.5" stroke="#18181B" strokeWidth="1.7" strokeLinecap="round" />
+          <path d="M20 5.5L23 6.5L22 9.5" stroke="#18181B" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+  }
 }

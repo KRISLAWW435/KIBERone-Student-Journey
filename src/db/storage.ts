@@ -132,6 +132,28 @@ function normalizeJournal(doc: JournalDocument): JournalDocument {
     ? 'Локация 2'
     : doc.resident.branch;
 
+  const starterProjects =
+    Array.isArray(p1.projects) && p1.projects.length > 0
+      ? p1.projects
+      : [
+          {
+            id: `proj-norm-${doc.id}-1`,
+            title: 'Мой первый проект',
+            caption: 'Практическая работа на модуле',
+            description: 'Создание игровой сцены и проверка алгоритмов.',
+            fallbackTheme: 'game3d' as const,
+            isRealScreenshot: false,
+          },
+          {
+            id: `proj-norm-${doc.id}-2`,
+            title: 'Учебный мини-проект',
+            caption: 'Самостоятельное задание в группе',
+            description: 'Закрепление основных навыков модуля.',
+            fallbackTheme: 'python' as const,
+            isRealScreenshot: false,
+          },
+        ];
+
   const normalized: JournalDocument = {
     ...doc,
     status: doc.status || 'draft',
@@ -142,6 +164,8 @@ function normalizeJournal(doc: JournalDocument): JournalDocument {
     },
     page1: {
       ...p1,
+      showProjects: p1.showProjects !== false,
+      projects: starterProjects,
       footerWebsite: '',
       confirmedSkills,
       suggestedSkillsPool: p1.suggestedSkillsPool ?? [],

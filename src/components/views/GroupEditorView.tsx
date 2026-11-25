@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Columns2,
+  Crop,
   Eye,
   EyeOff,
   FolderArchive,
@@ -20,19 +21,25 @@ import {
   Layers,
   Lightbulb,
   Loader2,
+  Lock,
   MapPin,
   Maximize2,
   Paintbrush,
   Palette,
   PenLine,
   Plus,
+  Redo2,
   RotateCcw,
   Search,
   SlidersHorizontal,
+  Smile,
   Sparkles,
   Square,
   Trash2,
   Trophy,
+  Type,
+  Undo2,
+  Unlock,
   Upload,
   User,
   UserPlus,
@@ -52,8 +59,11 @@ import {
   STRENGTH_LIBRARY,
 } from '../../data/presets';
 import {
+  ActiveTextFieldTarget,
   AgeCategory,
   Branch,
+  CanvasObjectTransform,
+  DecorElement,
   EditorSectionTarget,
   GroupCommonCurriculum,
   GroupCurriculumTemplate,
@@ -123,6 +133,8 @@ interface GroupEditorViewProps {
     groupName: string;
   } | null;
   activeJournalId: string | null;
+  initialTab?: EditorTab;
+  initialJournalId?: string | null;
   onSelectActiveJournal: (journalId: string) => void;
   onChangeJournal: (updated: JournalDocument) => void;
   onSaveGroupAndApplyCommon: (
@@ -175,8 +187,10 @@ export function GroupEditorView({
   saveState,
   batchProgress,
   activeJournalId,
+  initialTab = 'common',
+  initialJournalId = null,
   onSelectActiveJournal,
-  onChangeJournal,
+  onChangeJournal: onCommitJournalToStore,
   onSaveGroupAndApplyCommon,
   onQuickAddStudent,
   onUpdateStudent,
@@ -189,7 +203,7 @@ export function GroupEditorView({
   getExportPageElements,
   onOpenMediaPicker,
 }: GroupEditorViewProps) {
-  const [editorTab, setEditorTab] = useState<EditorTab>('common');
+  const [editorTab, setEditorTab] = useState<EditorTab>(initialTab);
   const [pageFocus, setPageFocus] = useState<PageFocus>(1);
   const [zoom, setZoom] = useState<'auto' | number>('auto');
   const [autoScale, setAutoScale] = useState(0.68);
@@ -210,6 +224,12 @@ export function GroupEditorView({
 
   // Right Inspector state (Figma-style: Content vs Design tab + 5-step icon tab stepper)
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>('content');
+  const [activeTarget, setActiveTarget] = useState<EditorSectionTarget>(null);
+  const [activeTextField, setActiveTextField] =
+    useState<ActiveTextFieldTarget>(null);
+  const textEditorRef = useRef<HTMLTextAreaElement | null>(null);
+  const [designTargetPage, setDesignTargetPage] = useState<1 | 2>(1);
+  const [designIconPickerOpen, setDesignIconPickerOpen] = useState(false);
   const [activeInspectorStep, setActiveInspectorStep] =
     useState<IndividualSection>('profile');
   const [editingModuleVisual, setEditingModuleVisual] = useState<{
@@ -308,10 +328,57 @@ export function GroupEditorView({
     [journals]
   );
 
-  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
+  const resolveStudentIdForJournal = useCallback(
+    (jId: string | null | undefined): string => {
+      if (!jId) return '';
+      const matchedJournal = journals.find((j) => j.id === jId);
+      const matchedStudent = allGroupStudents.find(
+        (s) =>
+          s.journalId === jId ||
+          (matchedJournal?.residentId && s.id === matchedJournal.residentId)
+      );
+      return matchedStudent?.id ?? '';
+    },
+    [allGroupStudents, journals]
+  );
+
+  const [selectedStudentId, setSelectedStudentId] = useState<string>(() =>
+    initialTab === 'individual'
+      ? resolveStudentIdForJournal(initialJournalId ?? activeJournalId)
+      : ''
+  );
   const [expandedStudentIds, setExpandedStudentIds] = useState<
     Record<string, boolean>
   >({});
+
+  const lastAppliedEntryRef = useRef<string>(
+    `${initialTab}:${initialJournalId ?? ''}`
+  );
+
+  useEffect(() => {
+    const entryKey = `${initialTab}:${initialJournalId ?? ''}`;
+    if (lastAppliedEntryRef.current === entryKey) return;
+    lastAppliedEntryRef.current = entryKey;
+    if (initialTab === 'individual') {
+      setEditorTab('individual');
+      const targetStudentId = resolveStudentIdForJournal(
+        initialJournalId ?? activeJournalId
+      );
+      if (targetStudentId) {
+        setSelectedStudentId(targetStudentId);
+        const matched = allGroupStudents.find((s) => s.id === targetStudentId);
+        if (matched && normalizeStudentStatus(matched.status) !== 'active') {
+          setOnlyActive(false);
+        }
+      }
+    }
+  }, [
+    initialTab,
+    initialJournalId,
+    activeJournalId,
+    resolveStudentIdForJournal,
+    allGroupStudents,
+  ]);
 
   useEffect(() => {
     if (
@@ -335,6 +402,162 @@ export function GroupEditorView({
       onSelectActiveJournal(activeDoc.id);
     }
   }, [activeDoc, activeJournalId, onSelectActiveJournal]);
+
+  useEffect(() => {
+    setActiveTextField(null);
+    setActiveTarget(null);
+  }, [activeDoc?.id]);
+
+  const activeTextKey = activeTextField
+    ? `${activeTextField.page}:${activeTextField.field}:${
+        'itemId' in activeTextField ? activeTextField.itemId : ''
+      }`
+    : '';
+
+  useEffect(() => {
+    if (!activeTextKey) return;
+    const raf = window.requestAnimationFrame(() => {
+      const el = textEditorRef.current;
+      if (el) {
+        el.focus();
+        const len = el.value.length;
+        el.setSelectionRange(len, len);
+      }
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [activeTextKey]);
+
+  // Per-journal Undo / Redo history stack (up to 50 steps, coalesces drags & typing)
+  const activeDocRef = useRef<JournalDocument | null>(activeDoc);
+  activeDocRef.current = activeDoc;
+  const historyRef = useRef<
+    Record<string, { past: JournalDocument[]; future: JournalDocument[] }>
+  >({});
+  const [, setHistoryVersion] = useState(0);
+  const gestureActiveRef = useRef(false);
+  const gestureSnapshotRef = useRef<JournalDocument | null>(null);
+  const lastHistoryPushRef = useRef<{ docId: string; ts: number }>({
+    docId: '',
+    ts: 0,
+  });
+
+  const onChangeJournal = useCallback(
+    (updated: JournalDocument) => {
+      const current = activeDocRef.current;
+      if (gestureActiveRef.current) {
+        activeDocRef.current = updated;
+        onCommitJournalToStore(updated);
+        return;
+      }
+
+      if (current && current.id === updated.id) {
+        const now = Date.now();
+        const bucket =
+          historyRef.current[current.id] ??
+          (historyRef.current[current.id] = { past: [], future: [] });
+        const shouldCoalesce =
+          lastHistoryPushRef.current.docId === current.id &&
+          now - lastHistoryPushRef.current.ts < 420 &&
+          bucket.past.length > 0;
+
+        if (!shouldCoalesce) {
+          bucket.past = [...bucket.past, current].slice(-50);
+        }
+        bucket.future = [];
+        lastHistoryPushRef.current = { docId: current.id, ts: now };
+        setHistoryVersion((v) => v + 1);
+      }
+
+      activeDocRef.current = updated;
+      onCommitJournalToStore(updated);
+    },
+    [onCommitJournalToStore]
+  );
+
+  const handleBeginCanvasGesture = useCallback(() => {
+    gestureActiveRef.current = true;
+    gestureSnapshotRef.current = activeDocRef.current;
+  }, []);
+
+  const handleEndCanvasGesture = useCallback(() => {
+    const startSnap = gestureSnapshotRef.current;
+    gestureActiveRef.current = false;
+    gestureSnapshotRef.current = null;
+    const current = activeDocRef.current;
+    if (startSnap && current && startSnap.id === current.id && startSnap !== current) {
+      const bucket =
+        historyRef.current[current.id] ??
+        (historyRef.current[current.id] = { past: [], future: [] });
+      bucket.past = [...bucket.past, startSnap].slice(-50);
+      bucket.future = [];
+      lastHistoryPushRef.current = { docId: '', ts: 0 };
+      setHistoryVersion((v) => v + 1);
+    }
+  }, []);
+
+  const currentHistory = activeDoc
+    ? historyRef.current[activeDoc.id]
+    : undefined;
+  const canUndo = Boolean(currentHistory && currentHistory.past.length > 0);
+  const canRedo = Boolean(currentHistory && currentHistory.future.length > 0);
+
+  const handleUndo = useCallback(() => {
+    const current = activeDocRef.current;
+    if (!current) return;
+    const bucket = historyRef.current[current.id];
+    if (!bucket || bucket.past.length === 0) return;
+    const previous = bucket.past[bucket.past.length - 1];
+    bucket.past = bucket.past.slice(0, -1);
+    bucket.future = [current, ...bucket.future].slice(0, 50);
+    lastHistoryPushRef.current = { docId: '', ts: 0 };
+    setHistoryVersion((v) => v + 1);
+    activeDocRef.current = previous;
+    onCommitJournalToStore(previous);
+  }, [onCommitJournalToStore]);
+
+  const handleRedo = useCallback(() => {
+    const current = activeDocRef.current;
+    if (!current) return;
+    const bucket = historyRef.current[current.id];
+    if (!bucket || bucket.future.length === 0) return;
+    const next = bucket.future[0];
+    bucket.future = bucket.future.slice(1);
+    bucket.past = [...bucket.past, current].slice(-50);
+    lastHistoryPushRef.current = { docId: '', ts: 0 };
+    setHistoryVersion((v) => v + 1);
+    activeDocRef.current = next;
+    onCommitJournalToStore(next);
+  }, [onCommitJournalToStore]);
+
+  // Keyboard shortcuts Ctrl+Z / Cmd+Z (Undo) and Ctrl+Y / Cmd+Shift+Z (Redo)
+  useEffect(() => {
+    if (editorTab !== 'individual' || !activeDoc?.id) return;
+    const isTypingTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+      const tag = target.tagName;
+      return (
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        target.isContentEditable
+      );
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      if (isTypingTarget(e.target) || isTypingTarget(document.activeElement)) {
+        return;
+      }
+      if (e.code === 'KeyZ' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      } else if (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey)) {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [editorTab, activeDoc?.id, handleUndo, handleRedo]);
 
   // Common group data draft state
   const [groupDraft, setGroupDraft] = useState<StudentGroup>(() => ({
@@ -809,8 +1032,298 @@ export function GroupEditorView({
     reader.readAsDataURL(file);
   };
 
+  const effectiveDesignPage: 1 | 2 =
+    pageFocus === 'spread'
+      ? activeTarget?.page ?? designTargetPage
+      : pageFocus;
+
+  const getBlockIdFromTarget = (target: EditorSectionTarget): string | null => {
+    if (!target || target.block === 'background' || target.block === 'decor') {
+      return null;
+    }
+    if (target.block === 'module') return `module-${target.itemId}`;
+    if (target.block === 'project') return `project-${target.itemId}`;
+    return target.block;
+  };
+
+  const getDefaultZForBlock = (blockId: string): number => {
+    if (
+      blockId === 'coverBear' ||
+      blockId === 'prideBear' ||
+      blockId === 'nextBear'
+    ) {
+      return 20;
+    }
+    return 10;
+  };
+
+  const handleUpdatePageTransform = (
+    page: 1 | 2,
+    blockId: string,
+    next: CanvasObjectTransform
+  ) => {
+    if (!activeDoc) return;
+    if (page === 1) {
+      onChangeJournal({
+        ...activeDoc,
+        page1: {
+          ...activeDoc.page1,
+          objectLayouts: {
+            ...(activeDoc.page1.objectLayouts ?? {}),
+            [blockId]: next,
+          },
+        },
+      });
+    } else {
+      onChangeJournal({
+        ...activeDoc,
+        page2: {
+          ...activeDoc.page2,
+          objectLayouts: {
+            ...(activeDoc.page2.objectLayouts ?? {}),
+            [blockId]: next,
+          },
+        },
+      });
+    }
+  };
+
+  const handleMoveDecor = (page: 1 | 2, decorId: string, x: number, y: number) => {
+    if (!activeDoc) return;
+    if (page === 1) {
+      onChangeJournal({
+        ...activeDoc,
+        page1: {
+          ...activeDoc.page1,
+          decorElements: (activeDoc.page1.decorElements ?? []).map((el) =>
+            el.id === decorId ? { ...el, x, y } : el
+          ),
+        },
+      });
+    } else {
+      onChangeJournal({
+        ...activeDoc,
+        page2: {
+          ...activeDoc.page2,
+          decorElements: (activeDoc.page2.decorElements ?? []).map((el) =>
+            el.id === decorId ? { ...el, x, y } : el
+          ),
+        },
+      });
+    }
+  };
+
+  const handleUpdateDecor = (
+    page: 1 | 2,
+    decorId: string,
+    patch: Partial<DecorElement>
+  ) => {
+    if (!activeDoc) return;
+    if (page === 1) {
+      onChangeJournal({
+        ...activeDoc,
+        page1: {
+          ...activeDoc.page1,
+          decorElements: (activeDoc.page1.decorElements ?? []).map((el) =>
+            el.id === decorId ? { ...el, ...patch } : el
+          ),
+        },
+      });
+    } else {
+      onChangeJournal({
+        ...activeDoc,
+        page2: {
+          ...activeDoc.page2,
+          decorElements: (activeDoc.page2.decorElements ?? []).map((el) =>
+            el.id === decorId ? { ...el, ...patch } : el
+          ),
+        },
+      });
+    }
+  };
+
+  const handleDeleteDecor = (page: 1 | 2, decorId: string) => {
+    if (!activeDoc) return;
+    if (page === 1) {
+      onChangeJournal({
+        ...activeDoc,
+        page1: {
+          ...activeDoc.page1,
+          decorElements: (activeDoc.page1.decorElements ?? []).filter(
+            (el) => el.id !== decorId
+          ),
+        },
+      });
+    } else {
+      onChangeJournal({
+        ...activeDoc,
+        page2: {
+          ...activeDoc.page2,
+          decorElements: (activeDoc.page2.decorElements ?? []).filter(
+            (el) => el.id !== decorId
+          ),
+        },
+      });
+    }
+    lastHistoryPushRef.current.ts = 0;
+    if (
+      activeTarget?.page === page &&
+      activeTarget.block === 'decor' &&
+      activeTarget.itemId === decorId
+    ) {
+      setActiveTarget(null);
+    }
+  };
+
+  const getNextMaxZIndex = (page: 1 | 2): number => {
+    if (!activeDoc) return 25;
+    const layouts =
+      page === 1
+        ? activeDoc.page1.objectLayouts ?? {}
+        : activeDoc.page2.objectLayouts ?? {};
+    const decors =
+      page === 1
+        ? activeDoc.page1.decorElements ?? []
+        : activeDoc.page2.decorElements ?? [];
+    const values = [
+      10,
+      20,
+      ...Object.values(layouts).map((t) => t.zIndex ?? 10),
+      ...decors.map((d) => d.zIndex ?? 20),
+    ];
+    return Math.max(...values) + 1;
+  };
+
+  const handleAddDecorElement = (
+    page: 1 | 2,
+    partial: Omit<DecorElement, 'id' | 'zIndex'>
+  ) => {
+    if (!activeDoc) return;
+    const id = `decor-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const nextEl: DecorElement = {
+      ...partial,
+      id,
+      zIndex: getNextMaxZIndex(page),
+    };
+    if (page === 1) {
+      onChangeJournal({
+        ...activeDoc,
+        page1: {
+          ...activeDoc.page1,
+          decorElements: [...(activeDoc.page1.decorElements ?? []), nextEl],
+        },
+      });
+    } else {
+      onChangeJournal({
+        ...activeDoc,
+        page2: {
+          ...activeDoc.page2,
+          decorElements: [...(activeDoc.page2.decorElements ?? []), nextEl],
+        },
+      });
+    }
+    lastHistoryPushRef.current.ts = 0;
+    setActiveTarget({ page, block: 'decor', itemId: id });
+    if (partial.kind === 'text') {
+      setActiveTextField({ page, field: 'decorText', itemId: id });
+    }
+  };
+
+  const handleAddTextElement = (page: 1 | 2) => {
+    handleAddDecorElement(page, {
+      kind: 'text',
+      label: 'Текстовый блок',
+      text: 'Новый текстовый блок',
+      x: 240,
+      y: 430,
+      width: 240,
+      height: 64,
+      rotation: 0,
+      opacity: 1,
+      color: '#111827',
+      bgColor: 'rgba(255,255,255,0.92)',
+      fontSize: 18,
+      fontWeight: 'bold',
+      fontFamily: 'journal',
+      textAlign: 'left',
+    });
+  };
+
+  const handleAddImageElement = (page: 1 | 2) => {
+    onOpenMediaPicker('decor', (url, asset) => {
+      const insertWithSize = (w: number, h: number) => {
+        handleAddDecorElement(page, {
+          kind: 'image',
+          label: asset?.name || 'Изображение',
+          imageUrl: url,
+          cropEnabled: false,
+          x: Math.round((794 - w) / 2),
+          y: 360,
+          width: w,
+          height: h,
+          rotation: 0,
+          opacity: 1,
+          color: '#111827',
+        });
+      };
+
+      const probe = new window.Image();
+      probe.onload = () => {
+        const nw = probe.naturalWidth || 200;
+        const nh = probe.naturalHeight || 200;
+        const maxSide = 220;
+        if (nw >= nh) {
+          insertWithSize(maxSide, Math.max(48, Math.round((nh / nw) * maxSide)));
+        } else {
+          insertWithSize(Math.max(48, Math.round((nw / nh) * maxSide)), maxSide);
+        }
+      };
+      probe.onerror = () => insertWithSize(200, 200);
+      probe.src = url;
+    });
+  };
+
+  const handleAddIconElement = (
+    page: 1 | 2,
+    iconKey: ModuleLucideIconKey,
+    label: string
+  ) => {
+    handleAddDecorElement(page, {
+      kind: 'icon',
+      iconKey,
+      label,
+      x: 330,
+      y: 440,
+      width: 84,
+      height: 84,
+      rotation: 0,
+      opacity: 1,
+      color: '#111827',
+      bgColor: '#FFFFFF',
+    });
+    setDesignIconPickerOpen(false);
+  };
+
+  const handleSelectTextField = (target: ActiveTextFieldTarget) => {
+    setActiveTextField(target);
+    if (target && (target.page === 1 || target.page === 2)) {
+      setDesignTargetPage(target.page);
+    }
+  };
+
   const handleSelectTargetOnA4 = (target: EditorSectionTarget) => {
     if (!target) return;
+    setActiveTarget(target);
+    if (target.block === 'background') {
+      setActiveTextField(null);
+      return;
+    }
+    if (target.page === 1 || target.page === 2) {
+      setDesignTargetPage(target.page);
+    }
+    if (inspectorMode === 'design') {
+      return;
+    }
     if (target.page === 1) {
       if (
         target.block === 'cover' ||
@@ -1433,6 +1946,33 @@ export function GroupEditorView({
               <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0D9488]" />
               <span>Сохранение...</span>
             </span>
+          )}
+
+          {editorTab === 'individual' && activeDoc && (
+            <div className="inline-flex items-center gap-1 mr-1 border border-zinc-200 rounded-lg p-0.5 bg-zinc-50/70 shrink-0">
+              <button
+                type="button"
+                disabled={!canUndo}
+                onClick={handleUndo}
+                title="Отменить последнее действие (Ctrl+Z)"
+                aria-label="Отменить"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-zinc-700 hover:bg-white hover:shadow-2xs disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:shadow-none transition-colors whitespace-nowrap"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+                <span className="hidden xl:inline">Отменить</span>
+              </button>
+              <button
+                type="button"
+                disabled={!canRedo}
+                onClick={handleRedo}
+                title="Вернуть действие (Ctrl+Y / Ctrl+Shift+Z)"
+                aria-label="Вернуть"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-zinc-700 hover:bg-white hover:shadow-2xs disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:shadow-none transition-colors whitespace-nowrap"
+              >
+                <Redo2 className="w-3.5 h-3.5" />
+                <span className="hidden xl:inline">Вернуть</span>
+              </button>
+            </div>
           )}
 
           {activeDoc && (
@@ -3328,8 +3868,65 @@ export function GroupEditorView({
                       <JournalPageOne
                         doc={activeDoc}
                         mediaAssets={mediaAssets}
+                        designMode={inspectorMode === 'design'}
+                        activeTarget={activeTarget}
+                        activeTextField={activeTextField}
                         scaleFactor={effectiveScale}
                         onSelectTarget={handleSelectTargetOnA4}
+                        onSelectTextField={handleSelectTextField}
+                        onUpdateTransform={(blockId, next) =>
+                          handleUpdatePageTransform(1, blockId, next)
+                        }
+                        onMoveDecor={(decorId, x, y) =>
+                          handleMoveDecor(1, decorId, x, y)
+                        }
+                        onUpdateDecor={(decorId, patch) =>
+                          handleUpdateDecor(1, decorId, patch)
+                        }
+                        onUpdateDecorText={(decorId, text) =>
+                          handleUpdateDecor(1, decorId, { text })
+                        }
+                        onUpdatePage1={(patch) =>
+                          onChangeJournal({
+                            ...activeDoc,
+                            page1: { ...activeDoc.page1, ...patch },
+                          })
+                        }
+                        onUpdateModule={(moduleId, patch) =>
+                          onChangeJournal({
+                            ...activeDoc,
+                            page1: {
+                              ...activeDoc.page1,
+                              modules: activeDoc.page1.modules.map((m) =>
+                                m.id === moduleId ? { ...m, ...patch } : m
+                              ),
+                            },
+                          })
+                        }
+                        onUpdateSkill={(skillId, patch) =>
+                          onChangeJournal({
+                            ...activeDoc,
+                            page1: {
+                              ...activeDoc.page1,
+                              skills: activeDoc.page1.skills.map((s) =>
+                                s.id === skillId ? { ...s, ...patch } : s
+                              ),
+                            },
+                          })
+                        }
+                        onUpdateProject={(projectId, patch) =>
+                          onChangeJournal({
+                            ...activeDoc,
+                            page1: {
+                              ...activeDoc.page1,
+                              projects: activeDoc.page1.projects.map((p) =>
+                                p.id === projectId ? { ...p, ...patch } : p
+                              ),
+                            },
+                          })
+                        }
+                        onInteractionStart={handleBeginCanvasGesture}
+                        onInteractionEnd={handleEndCanvasGesture}
                       />
                     </A4PageSlot>
                   )}
@@ -3338,8 +3935,82 @@ export function GroupEditorView({
                     <A4PageSlot className="shadow-[0_12px_36px_rgba(24,24,27,0.09)] rounded-xs">
                       <JournalPageTwo
                         doc={activeDoc}
+                        designMode={inspectorMode === 'design'}
+                        activeTarget={activeTarget}
+                        activeTextField={activeTextField}
                         scaleFactor={effectiveScale}
                         onSelectTarget={handleSelectTargetOnA4}
+                        onSelectTextField={handleSelectTextField}
+                        onUpdateTransform={(blockId, next) =>
+                          handleUpdatePageTransform(2, blockId, next)
+                        }
+                        onMoveDecor={(decorId, x, y) =>
+                          handleMoveDecor(2, decorId, x, y)
+                        }
+                        onUpdateDecor={(decorId, patch) =>
+                          handleUpdateDecor(2, decorId, patch)
+                        }
+                        onUpdateDecorText={(decorId, text) =>
+                          handleUpdateDecor(2, decorId, { text })
+                        }
+                        onUpdatePage2={(patch) =>
+                          onChangeJournal({
+                            ...activeDoc,
+                            page2: { ...activeDoc.page2, ...patch },
+                          })
+                        }
+                        onUpdateStrength={(strengthId, patch) =>
+                          onChangeJournal({
+                            ...activeDoc,
+                            page2: {
+                              ...activeDoc.page2,
+                              strengths: activeDoc.page2.strengths.map((s) =>
+                                s.id === strengthId ? { ...s, ...patch } : s
+                              ),
+                            },
+                          })
+                        }
+                        onUpdateMentorNote={(patch) =>
+                          onChangeJournal({
+                            ...activeDoc,
+                            page2: {
+                              ...activeDoc.page2,
+                              mentorNote: {
+                                ...activeDoc.page2.mentorNote,
+                                ...patch,
+                              },
+                            },
+                          })
+                        }
+                        onUpdateNextChapterTitle={(title) =>
+                          onChangeJournal({
+                            ...activeDoc,
+                            page2: {
+                              ...activeDoc.page2,
+                              nextChapter: {
+                                ...activeDoc.page2.nextChapter,
+                                title,
+                              },
+                            },
+                          })
+                        }
+                        onUpdateNextTopicTitle={(topicId, title) =>
+                          onChangeJournal({
+                            ...activeDoc,
+                            page2: {
+                              ...activeDoc.page2,
+                              nextChapter: {
+                                ...activeDoc.page2.nextChapter,
+                                topics: activeDoc.page2.nextChapter.topics.map(
+                                  (t) =>
+                                    t.id === topicId ? { ...t, title } : t
+                                ),
+                              },
+                            },
+                          })
+                        }
+                        onInteractionStart={handleBeginCanvasGesture}
+                        onInteractionEnd={handleEndCanvasGesture}
                       />
                     </A4PageSlot>
                   )}
@@ -3463,56 +4134,1166 @@ export function GroupEditorView({
                     </div>
                   </div>
 
-                  {/* Inspector Body */}
-                  {inspectorMode === 'design' ? (
-                    <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5 text-xs">
-                      <div className="pb-4 border-b border-zinc-100 space-y-2">
-                        <div className="flex items-center gap-2 font-bold text-zinc-900">
-                          <Palette className="w-4 h-4 text-[#0D9488]" />
-                          <span>Режим дизайна (в разработке)</span>
-                        </div>
-                        <p className="text-[11px] text-zinc-600 leading-relaxed">
-                          Здесь появятся персональные настройки оформления журнала: цвета обложки и секций, типографика заголовков, сетка и декоративные стикеры. Навигация по холсту (Space + рука и колесо зума) уже работает и в этом режиме.
-                        </p>
-                      </div>
+                  {/* Live Right-Panel Text Editor (Synced in Real Time with A4 Canvas) */}
+                  {activeTextField && (() => {
+                    let fieldLabel = 'Редактирование текста';
+                    let currentValue = '';
+                    let updateValue: (next: string) => void = () => {};
+                    let companionNode: React.ReactNode = null;
 
-                      <div className="space-y-3">
-                        <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-                          Текущая палитра группы
-                        </div>
-                        <div className="space-y-2.5">
-                          <div className="font-semibold text-zinc-900">
-                            {currentPalette.name}
-                          </div>
-                          <div className="flex gap-1.5">
-                            {[
-                              currentPalette.coverStart,
-                              currentPalette.p2Teal,
-                              currentPalette.p2Yellow,
-                              currentPalette.prideCoral,
-                              currentPalette.nextBg,
-                            ].map((hex, i) => (
-                              <span
-                                key={i}
-                                style={{ backgroundColor: hex }}
-                                className="h-4 flex-1 rounded-sm"
-                                title={hex}
-                              />
-                            ))}
+                    if (activeTextField.page === 1) {
+                      if (activeTextField.field === 'coverTitle') {
+                        fieldLabel = 'Обложка · Заголовок';
+                        currentValue = activeDoc.page1.coverTitle;
+                        updateValue = (val) =>
+                          onChangeJournal({
+                            ...activeDoc,
+                            page1: { ...activeDoc.page1, coverTitle: val },
+                          });
+                        companionNode = (
+                          <label className="block pt-1">
+                            <span className="text-[10px] text-zinc-500">
+                              Подзаголовок обложки
+                            </span>
+                            <input
+                              type="text"
+                              value={activeDoc.page1.coverSubtitle}
+                              onChange={(e) =>
+                                onChangeJournal({
+                                  ...activeDoc,
+                                  page1: {
+                                    ...activeDoc.page1,
+                                    coverSubtitle: e.target.value,
+                                  },
+                                })
+                              }
+                              className={flatInputClass}
+                            />
+                          </label>
+                        );
+                      } else if (activeTextField.field === 'coverSubtitle') {
+                        fieldLabel = 'Обложка · Подзаголовок';
+                        currentValue = activeDoc.page1.coverSubtitle;
+                        updateValue = (val) =>
+                          onChangeJournal({
+                            ...activeDoc,
+                            page1: { ...activeDoc.page1, coverSubtitle: val },
+                          });
+                      } else if (
+                        activeTextField.field === 'moduleTitle' ||
+                        activeTextField.field === 'moduleSubtitle' ||
+                        activeTextField.field === 'moduleDescription'
+                      ) {
+                        const mod = activeDoc.page1.modules.find(
+                          (m) => m.id === activeTextField.itemId
+                        );
+                        if (mod) {
+                          const patchMod = (patch: Partial<ModuleItem>) =>
+                            onChangeJournal({
+                              ...activeDoc,
+                              page1: {
+                                ...activeDoc.page1,
+                                modules: activeDoc.page1.modules.map((m) =>
+                                  m.id === mod.id ? { ...m, ...patch } : m
+                                ),
+                              },
+                            });
+                          if (activeTextField.field === 'moduleTitle') {
+                            fieldLabel = `Модуль «${mod.title || 'Без названия'}» · Заголовок`;
+                            currentValue = mod.title;
+                            updateValue = (val) => patchMod({ title: val });
+                          } else if (activeTextField.field === 'moduleSubtitle') {
+                            fieldLabel = `Модуль «${mod.title || 'Без названия'}» · Подзаголовок`;
+                            currentValue = mod.subtitle;
+                            updateValue = (val) => patchMod({ subtitle: val });
+                          } else {
+                            fieldLabel = `Модуль «${mod.title || 'Без названия'}» · Описание`;
+                            currentValue = mod.description;
+                            updateValue = (val) => patchMod({ description: val });
+                          }
+                        }
+                      } else if (activeTextField.field === 'skillLabel') {
+                        const sk = activeDoc.page1.skills.find(
+                          (s) => s.id === activeTextField.itemId
+                        );
+                        if (sk) {
+                          fieldLabel = 'Навык («Чему я научился»)';
+                          currentValue = sk.label;
+                          updateValue = (val) =>
+                            onChangeJournal({
+                              ...activeDoc,
+                              page1: {
+                                ...activeDoc.page1,
+                                skills: activeDoc.page1.skills.map((s) =>
+                                  s.id === sk.id ? { ...s, label: val } : s
+                                ),
+                              },
+                            });
+                        }
+                      } else if (
+                        activeTextField.field === 'projectTitle' ||
+                        activeTextField.field === 'projectCaption' ||
+                        activeTextField.field === 'projectDescription'
+                      ) {
+                        const proj = activeDoc.page1.projects.find(
+                          (p) => p.id === activeTextField.itemId
+                        );
+                        if (proj) {
+                          const patchProj = (patch: Partial<ProjectItem>) =>
+                            onChangeJournal({
+                              ...activeDoc,
+                              page1: {
+                                ...activeDoc.page1,
+                                projects: activeDoc.page1.projects.map((p) =>
+                                  p.id === proj.id ? { ...p, ...patch } : p
+                                ),
+                              },
+                            });
+                          if (activeTextField.field === 'projectTitle') {
+                            fieldLabel = `Проект «${proj.title || 'Без названия'}» · Название`;
+                            currentValue = proj.title;
+                            updateValue = (val) => patchProj({ title: val });
+                            companionNode = (
+                              <label className="block pt-1">
+                                <span className="text-[10px] text-zinc-500">
+                                  Подпись проекта
+                                </span>
+                                <input
+                                  type="text"
+                                  value={proj.caption || proj.description}
+                                  onChange={(e) =>
+                                    patchProj({ caption: e.target.value })
+                                  }
+                                  className={flatInputClass}
+                                />
+                              </label>
+                            );
+                          } else if (activeTextField.field === 'projectCaption') {
+                            fieldLabel = `Проект «${proj.title || 'Без названия'}» · Подпись`;
+                            currentValue = proj.caption;
+                            updateValue = (val) => patchProj({ caption: val });
+                          } else {
+                            fieldLabel = `Проект «${proj.title || 'Без названия'}» · Описание`;
+                            currentValue = proj.description;
+                            updateValue = (val) => patchProj({ description: val });
+                          }
+                        }
+                      } else if (activeTextField.field === 'decorText') {
+                        const dec = (activeDoc.page1.decorElements ?? []).find(
+                          (d) => d.id === activeTextField.itemId
+                        );
+                        if (dec) {
+                          fieldLabel = 'Свободный текстовый блок · Стр. 1';
+                          currentValue = dec.text ?? '';
+                          updateValue = (val) =>
+                            handleUpdateDecor(1, dec.id, { text: val });
+                        }
+                      }
+                    } else {
+                      if (activeTextField.field === 'page2HeaderTitle') {
+                        fieldLabel = 'Заголовок 2-й страницы';
+                        currentValue = activeDoc.page2.headerTitle;
+                        updateValue = (val) =>
+                          onChangeJournal({
+                            ...activeDoc,
+                            page2: { ...activeDoc.page2, headerTitle: val },
+                          });
+                      } else if (
+                        activeTextField.field === 'strengthTitle' ||
+                        activeTextField.field === 'strengthExample'
+                      ) {
+                        const st = activeDoc.page2.strengths.find(
+                          (s) => s.id === activeTextField.itemId
+                        );
+                        if (st) {
+                          const patchStrength = (patch: Partial<StrengthItem>) =>
+                            onChangeJournal({
+                              ...activeDoc,
+                              page2: {
+                                ...activeDoc.page2,
+                                strengths: activeDoc.page2.strengths.map((s) =>
+                                  s.id === st.id ? { ...s, ...patch } : s
+                                ),
+                              },
+                            });
+                          if (activeTextField.field === 'strengthTitle') {
+                            fieldLabel = 'Сильная сторона · Заголовок';
+                            currentValue = st.title;
+                            updateValue = (val) => patchStrength({ title: val });
+                          } else {
+                            fieldLabel = `Сильная сторона «${st.title}» · Описание`;
+                            currentValue = st.example;
+                            updateValue = (val) =>
+                              patchStrength({ example: val });
+                          }
+                        }
+                      } else if (activeTextField.field === 'prideTitle') {
+                        fieldLabel = 'Момент гордости · Заголовок';
+                        currentValue = activeDoc.page2.prideTitle;
+                        updateValue = (val) =>
+                          onChangeJournal({
+                            ...activeDoc,
+                            page2: { ...activeDoc.page2, prideTitle: val },
+                          });
+                      } else if (activeTextField.field === 'prideText') {
+                        fieldLabel = 'Момент гордости · Текст достижения';
+                        currentValue = activeDoc.page2.prideText;
+                        updateValue = (val) =>
+                          onChangeJournal({
+                            ...activeDoc,
+                            page2: { ...activeDoc.page2, prideText: val },
+                          });
+                      } else if (
+                        activeTextField.field === 'mentorGreeting' ||
+                        activeTextField.field === 'mentorBody' ||
+                        activeTextField.field === 'mentorSignature'
+                      ) {
+                        const patchNote = (
+                          patch: Partial<JournalDocument['page2']['mentorNote']>
+                        ) =>
+                          onChangeJournal({
+                            ...activeDoc,
+                            page2: {
+                              ...activeDoc.page2,
+                              mentorNote: {
+                                ...activeDoc.page2.mentorNote,
+                                ...patch,
+                              },
+                            },
+                          });
+                        if (activeTextField.field === 'mentorGreeting') {
+                          fieldLabel = 'Слово наставника · Приветствие';
+                          currentValue = activeDoc.page2.mentorNote.greeting;
+                          updateValue = (val) => patchNote({ greeting: val });
+                        } else if (activeTextField.field === 'mentorBody') {
+                          fieldLabel = 'Слово наставника · Основной текст';
+                          currentValue = activeDoc.page2.mentorNote.body;
+                          updateValue = (val) => patchNote({ body: val });
+                        } else {
+                          fieldLabel = 'Слово наставника · Подпись';
+                          currentValue = activeDoc.page2.mentorNote.signature;
+                          updateValue = (val) => patchNote({ signature: val });
+                        }
+                      } else if (activeTextField.field === 'nextChapterTitle') {
+                        fieldLabel = 'Карта будущего · Заголовок';
+                        currentValue = activeDoc.page2.nextChapter.title;
+                        updateValue = (val) =>
+                          onChangeJournal({
+                            ...activeDoc,
+                            page2: {
+                              ...activeDoc.page2,
+                              nextChapter: {
+                                ...activeDoc.page2.nextChapter,
+                                title: val,
+                              },
+                            },
+                          });
+                      } else if (activeTextField.field === 'nextTopicTitle') {
+                        const topic = activeDoc.page2.nextChapter.topics.find(
+                          (t) => t.id === activeTextField.itemId
+                        );
+                        if (topic) {
+                          fieldLabel = 'Карта будущего · Название темы';
+                          currentValue = topic.title;
+                          updateValue = (val) =>
+                            onChangeJournal({
+                              ...activeDoc,
+                              page2: {
+                                ...activeDoc.page2,
+                                nextChapter: {
+                                  ...activeDoc.page2.nextChapter,
+                                  topics: activeDoc.page2.nextChapter.topics.map(
+                                    (t) =>
+                                      t.id === topic.id
+                                        ? { ...t, title: val }
+                                        : t
+                                  ),
+                                },
+                              },
+                            });
+                        }
+                      } else if (activeTextField.field === 'decorText') {
+                        const dec = (activeDoc.page2.decorElements ?? []).find(
+                          (d) => d.id === activeTextField.itemId
+                        );
+                        if (dec) {
+                          fieldLabel = 'Свободный текстовый блок · Стр. 2';
+                          currentValue = dec.text ?? '';
+                          updateValue = (val) =>
+                            handleUpdateDecor(2, dec.id, { text: val });
+                        }
+                      }
+                    }
+
+                    return (
+                      <div className="shrink-0 border-b border-[#0D9488]/25 bg-[#F0FDFA]/70 px-3.5 py-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-[#0F766E]">
+                              Редактирование текста · Стр. {activeTextField.page}
+                            </div>
+                            <div className="text-xs font-bold text-zinc-900 truncate">
+                              {fieldLabel}
+                            </div>
                           </div>
                           <button
                             type="button"
-                            onClick={() => {
-                              setEditorTab('common');
-                              setCommonStep(1);
-                            }}
-                            className="text-[11px] font-semibold text-[#0D9488] hover:underline"
+                            onClick={() => setActiveTextField(null)}
+                            className="p-1 rounded-md text-zinc-400 hover:text-zinc-800 hover:bg-white transition-colors"
+                            title="Закрыть редактор текста"
                           >
-                            Сменить палитру в параметрах группы →
+                            <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
+                        <textarea
+                          ref={textEditorRef}
+                          rows={4}
+                          value={currentValue}
+                          onChange={(e) => updateValue(e.target.value)}
+                          placeholder="Введите текст — изменения сразу появятся на листе А4…"
+                          className="w-full rounded-lg border border-[#0D9488]/40 bg-white px-2.5 py-2 text-xs leading-relaxed text-zinc-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-[#0D9488]/25 focus:border-[#0D9488] resize-y"
+                        />
+                        {companionNode}
                       </div>
-                    </div>
+                    );
+                  })()}
+
+                  {/* Inspector Body */}
+                  {inspectorMode === 'design' ? (
+                    (() => {
+                      const pageCfg =
+                        effectiveDesignPage === 1
+                          ? activeDoc.page1
+                          : activeDoc.page2;
+                      const decors = pageCfg.decorElements ?? [];
+
+                      const selectedDecor =
+                        activeTarget?.block === 'decor'
+                          ? decors.find((d) => d.id === activeTarget.itemId) ??
+                            null
+                          : null;
+                      const selectedBlockId = getBlockIdFromTarget(activeTarget);
+                      const selectedBlockPage = activeTarget?.page ?? effectiveDesignPage;
+                      const selectedBlockLayouts =
+                        selectedBlockPage === 1
+                          ? activeDoc.page1.objectLayouts ?? {}
+                          : activeDoc.page2.objectLayouts ?? {};
+                      const selectedBlockTransform: CanvasObjectTransform | null =
+                        selectedBlockId
+                          ? selectedBlockLayouts[selectedBlockId] ?? {
+                              x: 0,
+                              y: 0,
+                              scale: 1,
+                              rotation: 0,
+                              zIndex: getDefaultZForBlock(selectedBlockId),
+                            }
+                          : null;
+
+                      const getBlockLabel = (t: EditorSectionTarget): string => {
+                        if (!t) return '';
+                        switch (t.block) {
+                          case 'cover':
+                            return 'Обложка (верхняя шапка)';
+                          case 'coverBear':
+                            return 'Мишка на обложке';
+                          case 'logo':
+                            return 'Логотип KIBERone';
+                          case 'modulesBlock':
+                            return 'Секция «Мои открытия»';
+                          case 'module':
+                            return (
+                              activeDoc.page1.modules.find(
+                                (m) => m.id === t.itemId
+                              )?.title || 'Карточка модуля'
+                            );
+                          case 'skills':
+                            return 'Блок «Чему я научился»';
+                          case 'projectsBlock':
+                            return 'Секция «Мои результаты»';
+                          case 'project':
+                            return (
+                              activeDoc.page1.projects.find(
+                                (p) => p.id === t.itemId
+                              )?.title || 'Карточка проекта'
+                            );
+                          case 'header':
+                            return 'Шапка «Мои достижения»';
+                          case 'strengths':
+                            return 'Секция «Мои сильные стороны»';
+                          case 'pride':
+                            return 'Блок «Мой момент гордости»';
+                          case 'prideBear':
+                            return 'Мишка в блоке гордости';
+                          case 'mentorNote':
+                            return 'Лист «Слово наставника»';
+                          case 'nextChapter':
+                            return 'Блок «Что интересного впереди?»';
+                          case 'nextBear':
+                            return 'Мишка внизу страницы 2';
+                          default:
+                            return 'Элемент макета';
+                        }
+                      };
+
+                      return (
+                        <div className="flex-1 min-h-0 overflow-y-auto p-3.5 space-y-4 text-xs bg-[#FBFBFA]">
+                          {/* Active Page Selector + Hint */}
+                          <div className="bg-white border border-zinc-200 rounded-lg p-3 space-y-2.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)]">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold text-zinc-900">
+                                Режим дизайна А4
+                              </span>
+                              <div className="inline-flex items-center p-0.5 rounded-md bg-zinc-100 text-[11px]">
+                                {([1, 2] as const).map((pg) => (
+                                  <button
+                                    key={pg}
+                                    type="button"
+                                    onClick={() => {
+                                      setDesignTargetPage(pg);
+                                      if (pageFocus !== 'spread') {
+                                        setPageFocus(pg);
+                                      }
+                                    }}
+                                    className={`px-2 py-0.5 rounded font-semibold transition-colors ${
+                                      effectiveDesignPage === pg
+                                        ? 'bg-white text-zinc-900 shadow-2xs'
+                                        : 'text-zinc-500 hover:text-zinc-900'
+                                    }`}
+                                  >
+                                    Стр. {pg}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <p className="text-[11px] text-zinc-500 leading-relaxed">
+                              Кликните на блок на листе А4, чтобы перемещать, масштабировать или вращать его. Нажмите на любой текст на листе — справа откроется окно его редактирования.
+                            </p>
+                          </div>
+
+                          {/* Add Elements Toolbar (+ Text, + Image, + Icon) */}
+                          <div className="bg-white border border-zinc-200 rounded-lg p-3 space-y-2.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)]">
+                            <div className="text-[11px] font-bold text-zinc-800">
+                              Добавить на страницу {effectiveDesignPage}
+                            </div>
+                            <div className="grid grid-cols-3 gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAddTextElement(effectiveDesignPage)
+                                }
+                                className="flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-lg border border-zinc-200 bg-zinc-50/70 hover:border-[#0D9488] hover:bg-[#F0FDFA] text-zinc-800 transition-colors"
+                              >
+                                <Type className="w-4 h-4 text-[#0D9488]" />
+                                <span className="text-[11px] font-semibold">
+                                  + Текст
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAddImageElement(effectiveDesignPage)
+                                }
+                                className="flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-lg border border-zinc-200 bg-zinc-50/70 hover:border-[#0D9488] hover:bg-[#F0FDFA] text-zinc-800 transition-colors"
+                              >
+                                <ImageIcon className="w-4 h-4 text-[#0D9488]" />
+                                <span className="text-[11px] font-semibold">
+                                  + Картинка
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setDesignIconPickerOpen((prev) => !prev)
+                                }
+                                className={`flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-lg border transition-colors ${
+                                  designIconPickerOpen
+                                    ? 'border-[#0D9488] bg-[#F0FDFA] text-[#0F766E]'
+                                    : 'border-zinc-200 bg-zinc-50/70 hover:border-[#0D9488] hover:bg-[#F0FDFA] text-zinc-800'
+                                }`}
+                              >
+                                <Smile className="w-4 h-4 text-[#0D9488]" />
+                                <span className="text-[11px] font-semibold">
+                                  + Иконка
+                                </span>
+                              </button>
+                            </div>
+
+                            {designIconPickerOpen && (
+                              <div className="pt-2 border-t border-zinc-100 space-y-1.5">
+                                <div className="flex items-center justify-between text-[10px] font-semibold text-zinc-500">
+                                  <span>Выберите SVG-иконку:</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDesignIconPickerOpen(false)}
+                                    className="text-zinc-400 hover:text-zinc-700"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                                <div className="grid grid-cols-5 gap-1.5 max-h-44 overflow-y-auto pr-0.5">
+                                  {MODULE_VECTOR_ICON_OPTIONS.map((opt) => (
+                                    <button
+                                      key={opt.key}
+                                      type="button"
+                                      onClick={() =>
+                                        handleAddIconElement(
+                                          effectiveDesignPage,
+                                          opt.key,
+                                          opt.label
+                                        )
+                                      }
+                                      title={opt.label}
+                                      className="p-1.5 rounded-lg border border-zinc-200 hover:border-[#0D9488] hover:bg-[#F0FDFA] flex flex-col items-center gap-1 transition-colors"
+                                    >
+                                      <ModuleVectorIcon
+                                        iconKey={opt.key}
+                                        className="w-7 h-7"
+                                      />
+                                      <span className="text-[9px] text-zinc-600 truncate w-full text-center">
+                                        {opt.label}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Selected Element Controls (Layers, Position, Properties) */}
+                          {selectedDecor && activeTarget ? (
+                            <div className="bg-white border border-[#0D9488]/40 rounded-lg p-3 space-y-3 shadow-[0_1px_2px_rgba(24,24,27,0.03)]">
+                              <div className="flex items-center justify-between gap-2 pb-2 border-b border-zinc-100">
+                                <div className="min-w-0">
+                                  <div className="text-[10px] font-semibold uppercase tracking-wider text-[#0D9488]">
+                                    Выбран элемент · Стр. {activeTarget.page}
+                                  </div>
+                                  <div className="text-xs font-bold text-zinc-900 truncate">
+                                    {selectedDecor.label ||
+                                      (selectedDecor.kind === 'text'
+                                        ? 'Текстовый блок'
+                                        : selectedDecor.kind === 'image'
+                                        ? 'Картинка'
+                                        : 'Иконка')}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdateDecor(
+                                        activeTarget.page,
+                                        selectedDecor.id,
+                                        { locked: !selectedDecor.locked }
+                                      )
+                                    }
+                                    className={`p-1.5 rounded-md border ${
+                                      selectedDecor.locked
+                                        ? 'border-amber-300 bg-amber-50 text-amber-700'
+                                        : 'border-zinc-200 text-zinc-500 hover:text-zinc-900'
+                                    }`}
+                                    title={
+                                      selectedDecor.locked
+                                        ? 'Разблокировать'
+                                        : 'Закрепить позицию'
+                                    }
+                                  >
+                                    {selectedDecor.locked ? (
+                                      <Lock className="w-3.5 h-3.5" />
+                                    ) : (
+                                      <Unlock className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleDeleteDecor(
+                                        activeTarget.page,
+                                        selectedDecor.id
+                                      )
+                                    }
+                                    className="p-1.5 rounded-md border border-zinc-200 text-zinc-400 hover:text-red-600 hover:border-red-200"
+                                    title="Удалить элемент"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Coordinates & Dimensions */}
+                              <div className="grid grid-cols-2 gap-2">
+                                <label className="block">
+                                  <span className="text-[10px] text-zinc-500">
+                                    X (px)
+                                  </span>
+                                  <input
+                                    type="number"
+                                    value={selectedDecor.x}
+                                    onChange={(e) =>
+                                      handleUpdateDecor(
+                                        activeTarget.page,
+                                        selectedDecor.id,
+                                        { x: Number(e.target.value) || 0 }
+                                      )
+                                    }
+                                    className={flatInputClass}
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="text-[10px] text-zinc-500">
+                                    Y (px)
+                                  </span>
+                                  <input
+                                    type="number"
+                                    value={selectedDecor.y}
+                                    onChange={(e) =>
+                                      handleUpdateDecor(
+                                        activeTarget.page,
+                                        selectedDecor.id,
+                                        { y: Number(e.target.value) || 0 }
+                                      )
+                                    }
+                                    className={flatInputClass}
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="text-[10px] text-zinc-500">
+                                    Ширина (px)
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min={32}
+                                    max={760}
+                                    value={selectedDecor.width}
+                                    onChange={(e) =>
+                                      handleUpdateDecor(
+                                        activeTarget.page,
+                                        selectedDecor.id,
+                                        {
+                                          width: Math.max(
+                                            32,
+                                            Number(e.target.value) || 80
+                                          ),
+                                        }
+                                      )
+                                    }
+                                    className={flatInputClass}
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="text-[10px] text-zinc-500">
+                                    Поворот (°)
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min={-180}
+                                    max={180}
+                                    value={selectedDecor.rotation}
+                                    onChange={(e) =>
+                                      handleUpdateDecor(
+                                        activeTarget.page,
+                                        selectedDecor.id,
+                                        { rotation: Number(e.target.value) || 0 }
+                                      )
+                                    }
+                                    className={flatInputClass}
+                                  />
+                                </label>
+                              </div>
+
+                              {/* Text-specific Controls */}
+                              {selectedDecor.kind === 'text' && (
+                                <div className="pt-2 border-t border-zinc-100 space-y-2.5">
+                                  <label className="block">
+                                    <span className="text-[10px] font-semibold text-zinc-600">
+                                      Текст блока
+                                    </span>
+                                    <textarea
+                                      rows={2}
+                                      value={selectedDecor.text ?? ''}
+                                      onChange={(e) =>
+                                        handleUpdateDecor(
+                                          activeTarget.page,
+                                          selectedDecor.id,
+                                          { text: e.target.value }
+                                        )
+                                      }
+                                      className="mt-1 w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs focus:outline-none focus:border-[#0D9488]"
+                                    />
+                                  </label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Шрифт
+                                      </span>
+                                      <select
+                                        value={
+                                          selectedDecor.fontFamily ?? 'journal'
+                                        }
+                                        onChange={(e) =>
+                                          handleUpdateDecor(
+                                            activeTarget.page,
+                                            selectedDecor.id,
+                                            {
+                                              fontFamily: e.target.value as
+                                                | 'journal'
+                                                | 'handwriting',
+                                            }
+                                          )
+                                        }
+                                        className={flatSelectClass}
+                                      >
+                                        <option value="journal">Основной</option>
+                                        <option value="handwriting">
+                                          Рукописный
+                                        </option>
+                                      </select>
+                                    </label>
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Размер (px)
+                                      </span>
+                                      <input
+                                        type="number"
+                                        min={10}
+                                        max={64}
+                                        value={selectedDecor.fontSize ?? 18}
+                                        onChange={(e) =>
+                                          handleUpdateDecor(
+                                            activeTarget.page,
+                                            selectedDecor.id,
+                                            {
+                                              fontSize: Math.max(
+                                                10,
+                                                Number(e.target.value) || 18
+                                              ),
+                                            }
+                                          )
+                                        }
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <label className="inline-flex items-center gap-1.5 text-[11px] text-zinc-600">
+                                      <span>Цвет:</span>
+                                      <input
+                                        type="color"
+                                        value={selectedDecor.color || '#111827'}
+                                        onChange={(e) =>
+                                          handleUpdateDecor(
+                                            activeTarget.page,
+                                            selectedDecor.id,
+                                            { color: e.target.value }
+                                          )
+                                        }
+                                        className="w-6 h-6 rounded border border-zinc-200 cursor-pointer"
+                                      />
+                                    </label>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleUpdateDecor(
+                                          activeTarget.page,
+                                          selectedDecor.id,
+                                          {
+                                            bgColor:
+                                              selectedDecor.bgColor &&
+                                              selectedDecor.bgColor !==
+                                                'transparent'
+                                                ? 'transparent'
+                                                : 'rgba(255,255,255,0.92)',
+                                          }
+                                        )
+                                      }
+                                      className="px-2 py-1 rounded border border-zinc-200 text-[10px] font-semibold text-zinc-700 hover:bg-zinc-50"
+                                    >
+                                      {selectedDecor.bgColor &&
+                                      selectedDecor.bgColor !== 'transparent'
+                                        ? 'Убрать плашку'
+                                        : 'Добавить плашку'}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Image-specific Controls (Contain default vs Crop frame) */}
+                              {selectedDecor.kind === 'image' && (
+                                <div className="pt-2 border-t border-zinc-100 space-y-2.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleUpdateDecor(
+                                          activeTarget.page,
+                                          selectedDecor.id,
+                                          {
+                                            cropEnabled:
+                                              !selectedDecor.cropEnabled,
+                                          }
+                                        )
+                                      }
+                                      className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[11px] font-semibold transition-colors ${
+                                        selectedDecor.cropEnabled
+                                          ? 'border-[#2563EB] bg-blue-50 text-[#1D4ED8]'
+                                          : 'border-zinc-200 bg-white hover:border-[#0D9488] text-zinc-700'
+                                      }`}
+                                    >
+                                      <Crop className="w-3.5 h-3.5" />
+                                      <span>
+                                        {selectedDecor.cropEnabled
+                                          ? 'Кадрирование вкл.'
+                                          : 'Кадрировать'}
+                                      </span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        onOpenMediaPicker(
+                                          'decor',
+                                          (url, asset) => {
+                                            handleUpdateDecor(
+                                              activeTarget.page,
+                                              selectedDecor.id,
+                                              {
+                                                imageUrl: url,
+                                                label:
+                                                  asset?.name ||
+                                                  selectedDecor.label,
+                                              }
+                                            );
+                                          }
+                                        )
+                                      }
+                                      className="px-2.5 py-1.5 rounded-md border border-zinc-200 hover:border-[#0D9488] text-[11px] font-semibold text-zinc-700"
+                                    >
+                                      Заменить
+                                    </button>
+                                  </div>
+
+                                  {selectedDecor.cropEnabled ? (
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <label className="block">
+                                        <span className="text-[10px] text-zinc-500">
+                                          Фокус X ({selectedDecor.cropPosX ?? 50}
+                                          %)
+                                        </span>
+                                        <input
+                                          type="range"
+                                          min={0}
+                                          max={100}
+                                          value={selectedDecor.cropPosX ?? 50}
+                                          onChange={(e) =>
+                                            handleUpdateDecor(
+                                              activeTarget.page,
+                                              selectedDecor.id,
+                                              {
+                                                cropPosX: Number(
+                                                  e.target.value
+                                                ),
+                                              }
+                                            )
+                                          }
+                                          className="w-full accent-[#2563EB] mt-1"
+                                        />
+                                      </label>
+                                      <label className="block">
+                                        <span className="text-[10px] text-zinc-500">
+                                          Фокус Y ({selectedDecor.cropPosY ?? 50}
+                                          %)
+                                        </span>
+                                        <input
+                                          type="range"
+                                          min={0}
+                                          max={100}
+                                          value={selectedDecor.cropPosY ?? 50}
+                                          onChange={(e) =>
+                                            handleUpdateDecor(
+                                              activeTarget.page,
+                                              selectedDecor.id,
+                                              {
+                                                cropPosY: Number(
+                                                  e.target.value
+                                                ),
+                                              }
+                                            )
+                                          }
+                                          className="w-full accent-[#2563EB] mt-1"
+                                        />
+                                      </label>
+                                    </div>
+                                  ) : (
+                                    <div className="text-[10px] text-zinc-500">
+                                      Картинка вписывается целиком без обрезки краёв.
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Icon-specific Controls */}
+                              {selectedDecor.kind === 'icon' && (
+                                <div className="pt-2 border-t border-zinc-100 flex items-center justify-between gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdateDecor(
+                                        activeTarget.page,
+                                        selectedDecor.id,
+                                        {
+                                          bgColor:
+                                            selectedDecor.bgColor &&
+                                            selectedDecor.bgColor !==
+                                              'transparent'
+                                              ? 'transparent'
+                                              : '#FFFFFF',
+                                        }
+                                      )
+                                    }
+                                    className="px-2.5 py-1.5 rounded-md border border-zinc-200 text-[10px] font-semibold text-zinc-700 hover:bg-zinc-50"
+                                  >
+                                    {selectedDecor.bgColor &&
+                                    selectedDecor.bgColor !== 'transparent'
+                                      ? 'Без рамки'
+                                      : 'Белая карточка'}
+                                  </button>
+                                  <span className="text-[10px] text-zinc-400">
+                                    Иконка: {selectedDecor.iconKey || 'custom'}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          ) : selectedBlockId &&
+                            selectedBlockTransform &&
+                            activeTarget ? (
+                            <div className="bg-white border border-[#0D9488]/40 rounded-lg p-3 space-y-3 shadow-[0_1px_2px_rgba(24,24,27,0.03)]">
+                              <div className="flex items-center justify-between gap-2 pb-2 border-b border-zinc-100">
+                                <div className="min-w-0">
+                                  <div className="text-[10px] font-semibold uppercase tracking-wider text-[#0D9488]">
+                                    Выбран блок · Стр. {activeTarget.page}
+                                  </div>
+                                  <div className="text-xs font-bold text-zinc-900 truncate">
+                                    {getBlockLabel(activeTarget)}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdatePageTransform(
+                                        activeTarget.page,
+                                        selectedBlockId,
+                                        {
+                                          ...selectedBlockTransform,
+                                          locked: !selectedBlockTransform.locked,
+                                        }
+                                      )
+                                    }
+                                    className={`p-1.5 rounded-md border ${
+                                      selectedBlockTransform.locked
+                                        ? 'border-amber-300 bg-amber-50 text-amber-700'
+                                        : 'border-zinc-200 text-zinc-500 hover:text-zinc-900'
+                                    }`}
+                                    title={
+                                      selectedBlockTransform.locked
+                                        ? 'Разблокировать блок'
+                                        : 'Закрепить блок'
+                                    }
+                                  >
+                                    {selectedBlockTransform.locked ? (
+                                      <Lock className="w-3.5 h-3.5" />
+                                    ) : (
+                                      <Unlock className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdatePageTransform(
+                                        activeTarget.page,
+                                        selectedBlockId,
+                                        {
+                                          x: 0,
+                                          y: 0,
+                                          scale: 1,
+                                          rotation: 0,
+                                          zIndex:
+                                            getDefaultZForBlock(selectedBlockId),
+                                          locked: false,
+                                        }
+                                      )
+                                    }
+                                    className="p-1.5 rounded-md border border-zinc-200 text-zinc-500 hover:text-zinc-900"
+                                    title="Сбросить позицию и слой"
+                                  >
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* X / Y / Scale / Rotation */}
+                              <div className="grid grid-cols-2 gap-2">
+                                <label className="block">
+                                  <span className="text-[10px] text-zinc-500">
+                                    Смещение X (px)
+                                  </span>
+                                  <input
+                                    type="number"
+                                    value={selectedBlockTransform.x}
+                                    onChange={(e) =>
+                                      handleUpdatePageTransform(
+                                        activeTarget.page,
+                                        selectedBlockId,
+                                        {
+                                          ...selectedBlockTransform,
+                                          x: Number(e.target.value) || 0,
+                                        }
+                                      )
+                                    }
+                                    className={flatInputClass}
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="text-[10px] text-zinc-500">
+                                    Смещение Y (px)
+                                  </span>
+                                  <input
+                                    type="number"
+                                    value={selectedBlockTransform.y}
+                                    onChange={(e) =>
+                                      handleUpdatePageTransform(
+                                        activeTarget.page,
+                                        selectedBlockId,
+                                        {
+                                          ...selectedBlockTransform,
+                                          y: Number(e.target.value) || 0,
+                                        }
+                                      )
+                                    }
+                                    className={flatInputClass}
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="text-[10px] text-zinc-500">
+                                    Масштаб ({selectedBlockTransform.scale.toFixed(2)}x)
+                                  </span>
+                                  <input
+                                    type="range"
+                                    min={0.5}
+                                    max={1.6}
+                                    step={0.05}
+                                    value={selectedBlockTransform.scale}
+                                    onChange={(e) =>
+                                      handleUpdatePageTransform(
+                                        activeTarget.page,
+                                        selectedBlockId,
+                                        {
+                                          ...selectedBlockTransform,
+                                          scale: Number(e.target.value),
+                                        }
+                                      )
+                                    }
+                                    className="w-full accent-[#0D9488] mt-1.5"
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="text-[10px] text-zinc-500">
+                                    Поворот (°)
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min={-180}
+                                    max={180}
+                                    value={selectedBlockTransform.rotation}
+                                    onChange={(e) =>
+                                      handleUpdatePageTransform(
+                                        activeTarget.page,
+                                        selectedBlockId,
+                                        {
+                                          ...selectedBlockTransform,
+                                          rotation: Number(e.target.value) || 0,
+                                        }
+                                      )
+                                    }
+                                    className={flatInputClass}
+                                  />
+                                </label>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="bg-white border border-dashed border-zinc-300 rounded-lg p-3 text-[11px] text-zinc-500 text-center">
+                              Нажмите на любой объект на листе А4, чтобы перемещать, масштабировать, поворачивать или менять его порядок наложения.
+                            </div>
+                          )}
+
+                          {/* Page Grid & Group Palette Shortcut */}
+                          <div className="bg-white border border-zinc-200 rounded-lg p-3 space-y-2.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)]">
+                            <label className="flex items-center justify-between gap-2 cursor-pointer">
+                              <span className="text-[11px] font-semibold text-zinc-700">
+                                Сетка выравнивания на А4
+                              </span>
+                              <input
+                                type="checkbox"
+                                checked={Boolean(pageCfg.background?.showGrid)}
+                                onChange={(e) => {
+                                  const nextShow = e.target.checked;
+                                  if (effectiveDesignPage === 1) {
+                                    onChangeJournal({
+                                      ...activeDoc,
+                                      page1: {
+                                        ...activeDoc.page1,
+                                        background: {
+                                          color:
+                                            activeDoc.page1.background?.color ||
+                                            '#FFFFFF',
+                                          gridStyle:
+                                            activeDoc.page1.background
+                                              ?.gridStyle || 'dots',
+                                          showGrid: nextShow,
+                                        },
+                                      },
+                                    });
+                                  } else {
+                                    onChangeJournal({
+                                      ...activeDoc,
+                                      page2: {
+                                        ...activeDoc.page2,
+                                        background: {
+                                          color:
+                                            activeDoc.page2.background?.color ||
+                                            '#FFFFFF',
+                                          gridStyle:
+                                            activeDoc.page2.background
+                                              ?.gridStyle || 'dots',
+                                          showGrid: nextShow,
+                                        },
+                                      },
+                                    });
+                                  }
+                                }}
+                                className="rounded border-zinc-300 text-[#0D9488]"
+                              />
+                            </label>
+                            <div className="pt-2 border-t border-zinc-100 flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <Palette className="w-3.5 h-3.5 text-[#0D9488]" />
+                                <span className="text-[11px] font-medium text-zinc-700 truncate">
+                                  {currentPalette.name}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditorTab('common');
+                                  setCommonStep(1);
+                                }}
+                                className="text-[11px] font-semibold text-[#0D9488] hover:underline shrink-0"
+                              >
+                                Палитра →
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()
                   ) : (
                     (() => {
                       const inspectorSteps: Array<{
@@ -5213,11 +6994,6 @@ export function GroupEditorView({
                             >
                               {lib.displayTitle || lib.title}
                             </span>
-                            {lib.code && (
-                              <span className="text-[10px] font-mono text-zinc-400 shrink-0">
-                                {lib.code}
-                              </span>
-                            )}
                           </div>
                           <div className="text-[11px] text-zinc-500 truncate mt-0.5">
                             {lib.subtitle}
