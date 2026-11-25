@@ -37,7 +37,7 @@ import {
 } from '../utils/journalProgress';
 
 const DB_NAME = 'kiberone_student_journey_db';
-const DB_VERSION = 4;
+const DB_VERSION = 7;
 
 const STORE_JOURNALS = 'journals';
 const STORE_MEDIA = 'media';
@@ -53,8 +53,19 @@ const STORE_GROUP_TEMPLATES = 'groupTemplates';
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result;
+      if (event.oldVersion > 0 && event.oldVersion < 7) {
+        for (const resetStore of [
+          STORE_MODULE_LIBRARY,
+          STORE_MODULE_CATEGORIES,
+          STORE_GROUP_TEMPLATES,
+        ]) {
+          if (db.objectStoreNames.contains(resetStore)) {
+            db.deleteObjectStore(resetStore);
+          }
+        }
+      }
       const stores = [
         STORE_JOURNALS,
         STORE_MEDIA,
@@ -201,6 +212,25 @@ function normalizeJournal(doc: JournalDocument): JournalDocument {
       ? nextChapterRaw.speechBubbleText
       : DEFAULT_SPEECH_BUBBLE_TEXT;
 
+  const normalizedModules = (p1.modules ?? []).map((mod) => {
+    const official = mod.libraryModuleId
+      ? OFFICIAL_MODULE_BY_ID.get(mod.libraryModuleId)
+      : undefined;
+    const hasUserUploadedImg =
+      Boolean(mod.imageMediaId) ||
+      Boolean(
+        mod.customImageUrl && !mod.customImageUrl.startsWith('/assets/modules/')
+      );
+    const resolvedCustomImageUrl = hasUserUploadedImg
+      ? mod.customImageUrl
+      : official?.customImageUrl ?? mod.customImageUrl;
+    return {
+      ...mod,
+      visualMode: 'image' as const,
+      customImageUrl: resolvedCustomImageUrl,
+    };
+  });
+
   const normalized: JournalDocument = {
     ...doc,
     status: doc.status || 'draft',
@@ -211,6 +241,7 @@ function normalizeJournal(doc: JournalDocument): JournalDocument {
     },
     page1: {
       ...p1,
+      modules: normalizedModules,
       decorElements: p1DecorElements,
       decorSeeded: true,
       coverSpeechBubbleText: resolvedCoverBubble,
@@ -289,14 +320,9 @@ function normalizeLibraryModule(mod: LibraryModule): LibraryModule {
   const shortTitle = clean.shortTitle || clean.displayTitle || clean.title;
   const officialTitle = clean.officialTitle || clean.title || shortTitle;
   const category = clean.category || clean.categoryId || 'algorithms';
-  const illustrationType =
-    clean.illustrationType ||
-    (clean.visualMode === 'image' && clean.customImageUrl ? 'image' : 'svg');
-  const illustrationValue =
-    clean.illustrationValue ||
-    (illustrationType === 'image' && clean.customImageUrl
-      ? clean.customImageUrl
-      : clean.illustrationKey || 'algorithms');
+  const cleanedCustomUrl = clean.customImageUrl || undefined;
+  const illustrationType = 'image' as const;
+  const illustrationValue = cleanedCustomUrl || clean.illustrationValue || '';
   const ageGroups = getModuleAgeGroups({
     ...clean,
     shortTitle,
@@ -320,9 +346,8 @@ function normalizeLibraryModule(mod: LibraryModule): LibraryModule {
     ageGroups,
     illustrationType,
     illustrationValue,
-    iconKey: clean.iconKey || 'blocks',
-    visualMode:
-      clean.visualMode || (clean.customImageUrl ? 'image' : 'illustration'),
+    customImageUrl: cleanedCustomUrl,
+    visualMode: 'image',
     suggestedSkills: clean.suggestedSkills ?? [],
     relatedSkills: clean.relatedSkills ?? [],
     isActive: clean.isActive !== undefined ? clean.isActive : true,
@@ -469,6 +494,33 @@ const OFFICIAL_MODULE_BY_ID = new Map(
   KIBERONE_CURRICULUM_MODULES.map((m) => [m.id, m])
 );
 
+function normalizeModuleTitleKey(value?: string): string {
+  return (value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+const OFFICIAL_MODULE_BY_TITLE = new Map<string, LibraryModule>();
+KIBERONE_CURRICULUM_MODULES.forEach((m) => {
+  OFFICIAL_MODULE_BY_TITLE.set(normalizeModuleTitleKey(m.officialTitle), m);
+  OFFICIAL_MODULE_BY_TITLE.set(normalizeModuleTitleKey(m.title), m);
+});
+
+function sameStringArray(a?: string[], b?: string[]): boolean {
+  const arrA = a ?? [];
+  const arrB = b ?? [];
+  if (arrA.length !== arrB.length) return false;
+  return arrA.every((val, idx) => val === arrB[idx]);
+}
+
+function isObsoleteBuiltinModule(raw: LibraryModule): boolean {
+  if (LEGACY_V2_STUB_IDS.has(raw.id)) return true;
+  if (raw.createdAt === '2026-09-01T10:00:00.000Z') return true;
+  if (raw.id.startsWith('module-') && !/^module-\d+$/.test(raw.id)) return true;
+  if (raw.createdAt && raw.createdAt < '2026-11-25T18:00:00.000Z' && !/^module-\d+$/.test(raw.id)) {
+    return true;
+  }
+  return false;
+}
+
 export async function getAllLibraryModules(): Promise<LibraryModule[]> {
   const existing = await readStore<LibraryModule>(STORE_MODULE_LIBRARY);
   if (existing.length === 0) {
@@ -487,50 +539,107 @@ export async function getAllLibraryModules(): Promise<LibraryModule[]> {
     return [...KIBERONE_CURRICULUM_MODULES];
   }
 
-  const existingIds = new Set(existing.map((m) => m.id));
-  const missingOfficial = KIBERONE_CURRICULUM_MODULES.filter(
-    (m) => !existingIds.has(m.id)
-  );
+  const idsToDelete: string[] = [];
+  const modulesToSave = new Map<string, LibraryModule>();
+  const resolvedById = new Map<string, LibraryModule>();
 
-  const migratedToSave: LibraryModule[] = [...missingOfficial];
-  const syncedExisting = existing.map((raw) => {
+  for (const raw of existing) {
     const rawAny = raw as LibraryModule & { code?: string };
-    const official = OFFICIAL_MODULE_BY_ID.get(raw.id);
-    const needsCatalogSync =
-      Boolean(official) &&
-      ('code' in rawAny ||
+    const matchedOfficial =
+      OFFICIAL_MODULE_BY_ID.get(raw.id) ??
+      OFFICIAL_MODULE_BY_TITLE.get(
+        normalizeModuleTitleKey(raw.officialTitle || raw.title)
+      ) ??
+      OFFICIAL_MODULE_BY_TITLE.get(normalizeModuleTitleKey(raw.title));
+
+    if (matchedOfficial) {
+      if (raw.id !== matchedOfficial.id) {
+        idsToDelete.push(raw.id);
+      }
+
+      const hasUserCustomImg =
+        Boolean(raw.imageMediaId) ||
+        Boolean(
+          raw.customImageUrl && !raw.customImageUrl.startsWith('/assets/modules/')
+        );
+
+      const needsCatalogReplace =
+        raw.id !== matchedOfficial.id ||
+        'code' in rawAny ||
         !Array.isArray(rawAny.ageGroups) ||
         rawAny.ageGroups.length === 0 ||
-        raw.updatedAt === '2026-09-01T10:00:00.000Z');
+        !sameStringArray(rawAny.ageGroups, matchedOfficial.ageGroups) ||
+        !sameStringArray(
+          rawAny.filterCategories,
+          matchedOfficial.filterCategories
+        ) ||
+        raw.title !== matchedOfficial.title ||
+        raw.officialTitle !== matchedOfficial.officialTitle ||
+        raw.shortTitle !== matchedOfficial.shortTitle ||
+        raw.displayTitle !== matchedOfficial.displayTitle ||
+        raw.category !== matchedOfficial.category ||
+        raw.categoryId !== matchedOfficial.categoryId ||
+        raw.description !== matchedOfficial.description ||
+        raw.badgeLabel !== matchedOfficial.badgeLabel ||
+        (!hasUserCustomImg &&
+          (raw.illustrationValue !== matchedOfficial.illustrationValue ||
+            raw.customImageUrl !== matchedOfficial.customImageUrl ||
+            raw.visualMode !== matchedOfficial.visualMode)) ||
+        raw.updatedAt !== matchedOfficial.updatedAt;
 
-    if (official && needsCatalogSync) {
-      const synced: LibraryModule = {
-        ...official,
-        imageMediaId: raw.imageMediaId ?? official.imageMediaId,
-        customImageUrl: raw.customImageUrl ?? official.customImageUrl,
-        visualMode: raw.customImageUrl
-          ? raw.visualMode || 'image'
-          : raw.visualMode || official.visualMode,
-        isActive: raw.isActive !== undefined ? raw.isActive : official.isActive,
-      };
-      migratedToSave.push(synced);
-      return synced;
+      if (needsCatalogReplace) {
+        const synced: LibraryModule = {
+          ...matchedOfficial,
+          imageMediaId: raw.imageMediaId ?? matchedOfficial.imageMediaId,
+          customImageUrl: hasUserCustomImg
+            ? raw.customImageUrl
+            : matchedOfficial.customImageUrl,
+          illustrationValue: hasUserCustomImg
+            ? raw.customImageUrl || ''
+            : matchedOfficial.illustrationValue,
+          visualMode: 'image',
+          cardBgColor: raw.cardBgColor || matchedOfficial.cardBgColor,
+          accentColor: raw.cardBgColor || matchedOfficial.accentColor,
+          isActive:
+            raw.isActive !== undefined ? raw.isActive : matchedOfficial.isActive,
+        };
+        resolvedById.set(synced.id, synced);
+        modulesToSave.set(synced.id, synced);
+      } else {
+        resolvedById.set(raw.id, raw);
+      }
+      continue;
+    }
+
+    if (isObsoleteBuiltinModule(raw)) {
+      idsToDelete.push(raw.id);
+      continue;
     }
 
     const normalized = normalizeLibraryModule(raw);
     if ('code' in rawAny || !Array.isArray(rawAny.ageGroups)) {
-      migratedToSave.push(normalized);
+      modulesToSave.set(normalized.id, normalized);
     }
-    return normalized;
-  });
-
-  if (migratedToSave.length > 0) {
-    await Promise.all(
-      migratedToSave.map((m) => putItem(STORE_MODULE_LIBRARY, m))
-    );
+    resolvedById.set(normalized.id, normalized);
   }
 
-  const merged = [...syncedExisting, ...missingOfficial];
+  for (const official of KIBERONE_CURRICULUM_MODULES) {
+    if (!resolvedById.has(official.id)) {
+      resolvedById.set(official.id, official);
+      modulesToSave.set(official.id, official);
+    }
+  }
+
+  if (idsToDelete.length > 0 || modulesToSave.size > 0) {
+    await Promise.all([
+      ...idsToDelete.map((id) => deleteItem(STORE_MODULE_LIBRARY, id)),
+      ...Array.from(modulesToSave.values()).map((m) =>
+        putItem(STORE_MODULE_LIBRARY, m)
+      ),
+    ]);
+  }
+
+  const merged = Array.from(resolvedById.values());
   return merged.sort((a, b) => {
     const orderA = OFFICIAL_MODULE_ORDER.get(a.id);
     const orderB = OFFICIAL_MODULE_ORDER.get(b.id);
@@ -558,12 +667,50 @@ export async function getAllCategories(): Promise<ModuleCategoryConfig[]> {
     );
     return [...MODULE_CATEGORIES];
   }
-  const existingIds = new Set(existing.map((c) => c.id));
-  const missing = MODULE_CATEGORIES.filter((c) => !existingIds.has(c.id));
-  if (missing.length > 0) {
-    await Promise.all(missing.map((c) => putItem(STORE_MODULE_CATEGORIES, c)));
+
+  const officialById = new Map(MODULE_CATEGORIES.map((c) => [c.id, c]));
+  const existingById = new Map(existing.map((c) => [c.id, c]));
+  const toSave: ModuleCategoryConfig[] = [];
+  const toDelete: string[] = [];
+  const resolved: ModuleCategoryConfig[] = [];
+
+  for (const cat of existing) {
+    const official = officialById.get(cat.id);
+    if (official) {
+      if (
+        cat.name !== official.name ||
+        cat.shortName !== official.shortName ||
+        cat.description !== official.description ||
+        cat.accentColor !== official.accentColor ||
+        cat.order !== official.order
+      ) {
+        toSave.push(official);
+        resolved.push(official);
+      } else {
+        resolved.push(cat);
+      }
+    } else if (cat.isBuiltIn || !cat.id.startsWith('cat-')) {
+      toDelete.push(cat.id);
+    } else {
+      resolved.push(cat);
+    }
   }
-  return [...existing, ...missing].sort((a, b) => a.order - b.order);
+
+  for (const official of MODULE_CATEGORIES) {
+    if (!existingById.has(official.id)) {
+      toSave.push(official);
+      resolved.push(official);
+    }
+  }
+
+  if (toDelete.length > 0 || toSave.length > 0) {
+    await Promise.all([
+      ...toDelete.map((id) => deleteItem(STORE_MODULE_CATEGORIES, id)),
+      ...toSave.map((c) => putItem(STORE_MODULE_CATEGORIES, c)),
+    ]);
+  }
+
+  return resolved.sort((a, b) => a.order - b.order);
 }
 
 export const saveCategory = (cat: ModuleCategoryConfig) =>
@@ -661,7 +808,7 @@ export async function exportFullBackupPayload(): Promise<FullBackupPayload> {
   ]);
 
   return {
-    version: 4,
+    version: 7,
     exportedAt: new Date().toISOString(),
     branches,
     journals,

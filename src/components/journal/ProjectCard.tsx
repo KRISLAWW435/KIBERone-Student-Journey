@@ -58,7 +58,7 @@ export function ProjectCard({
 
       {/* Edge-to-Edge Screenshot / Illustration */}
       <div
-        style={{ height: compact ? '78px' : '102px' }}
+        style={{ height: compact ? '66px' : '102px' }}
         className="self-stretch overflow-hidden border-b border-[#18181B]/12 bg-zinc-100 shrink-0"
       >
         {project.imageUrl ? (
@@ -77,7 +77,11 @@ export function ProjectCard({
       </div>
 
       {/* Print-Legible Project Title & Caption */}
-      <div className="px-[10px] py-[8px] text-center flex-1 flex flex-col justify-center">
+      <div
+        className={`${
+          compact ? 'px-[8px] py-[6px]' : 'px-[10px] py-[8px]'
+        } text-center flex-1 flex flex-col justify-center`}
+      >
         <InlineEditableText
           value={project.title}
           placeholder="Мой проект"

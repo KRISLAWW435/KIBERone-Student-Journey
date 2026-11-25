@@ -489,7 +489,10 @@ export function NextChapter({
                   : nextChapter.bearUrl
               }
               alt="Медведь KIBERone в VR-очках приглашает к новому этапу"
-              scale={(ageCategory === '8-10' ? 1.02 : 0.98) * nextChapter.bearScale}
+              scale={
+                (ageCategory === '6-8' || ageCategory === '8-10' ? 1.02 : 0.98) *
+                nextChapter.bearScale
+              }
               offsetX={nextChapter.bearOffsetX}
               offsetY={nextChapter.bearOffsetY}
               cropTop={false}

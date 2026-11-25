@@ -5,7 +5,7 @@ import {
   DecorElement,
   PageBackgroundConfig,
 } from '../../types/journal';
-import { ModuleVectorIcon } from './JournalArtwork';
+import { DecorVectorIcon } from './JournalArtwork';
 
 export interface SnapLine {
   pos: number;
@@ -1480,7 +1480,7 @@ function DecorGraphic({ element }: { element: DecorElement }) {
                 : ''
             }`}
           >
-            <ModuleVectorIcon
+            <DecorVectorIcon
               iconKey={element.iconKey}
               className="w-full h-full"
             />

@@ -82,14 +82,19 @@ export function CoverSection({
   const isBearActive = activeTarget?.page === 1 && activeTarget.block === 'coverBear';
 
   const bearSizeMultiplier =
-    ageCategory === '8-10' ? 1.03 : ageCategory === '14-15' ? 0.92 : 1;
+    ageCategory === '6-8' || ageCategory === '8-10'
+      ? 1.03
+      : ageCategory === '12-14' || ageCategory === '14-15'
+      ? 0.92
+      : 1;
   const boundedBearScale = Math.min(
     1.12,
     Math.max(0.75, (config.bearScale || 1) * bearSizeMultiplier)
   );
 
   const resolvedTitleSize =
-    config.coverTitleSize ?? (ageCategory === '14-15' ? 50 : 58);
+    config.coverTitleSize ??
+    (ageCategory === '12-14' || ageCategory === '14-15' ? 50 : 58);
   const resolvedTitleColor = config.coverTitleColor || '#FFFFFF';
   const resolvedSubtitleSize = config.coverSubtitleSize ?? 26;
   const resolvedSubtitleColor = config.coverSubtitleColor || '#111827';

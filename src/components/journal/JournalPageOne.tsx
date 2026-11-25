@@ -210,10 +210,12 @@ export function JournalPageOne({
             width: '794px',
             height: '807px',
           }}
-          className={`pointer-events-none relative z-[12] px-[40px] pb-[16px] flex flex-col justify-start shrink-0 overflow-visible ${
-            isCompactModules || isCompactSkills
-              ? 'pt-[28px] gap-[22px]'
-              : 'pt-[40px] gap-[30px]'
+          className={`pointer-events-none relative z-[12] px-[40px] flex flex-col justify-start shrink-0 overflow-visible ${
+            isCompactModules
+              ? 'pt-[16px] pb-[10px] gap-[12px]'
+              : isCompactSkills
+              ? 'pt-[24px] pb-[14px] gap-[18px]'
+              : 'pt-[34px] pb-[16px] gap-[26px]'
           }`}
         >
           {/* 2. МОИ ОТКРЫТИЯ */}
@@ -243,17 +245,30 @@ export function JournalPageOne({
               className="shrink-0"
             >
               <section style={{ width: '714px' }}>
-                <h2 className="font-journal-display font-black text-[17.5px] leading-[21px] tracking-tight uppercase text-[#111827] mb-[14px]">
+                <h2
+                  className={`font-journal-display font-black ${
+                    isCompactModules
+                      ? 'text-[16px] leading-[19px] mb-[9px]'
+                      : 'text-[17.5px] leading-[21px] mb-[13px]'
+                  } tracking-tight uppercase text-[#111827]`}
+                >
                   МОИ ОТКРЫТИЯ
                 </h2>
                 <div
                   style={{
-                    width: visibleModules.length === 1 ? '260px' : '714px',
+                    width:
+                      visibleModules.length === 1
+                        ? '240px'
+                        : visibleModules.length === 2
+                        ? '500px'
+                        : '714px',
                   }}
-                  className={`grid items-stretch auto-rows-fr gap-[14px] ${
+                  className={`grid items-stretch auto-rows-fr ${
+                    isCompactModules ? 'gap-[11px]' : 'gap-[14px]'
+                  } ${
                     visibleModules.length === 1
                       ? 'grid-cols-1'
-                      : visibleModules.length === 2 || visibleModules.length === 4
+                      : visibleModules.length === 2
                       ? 'grid-cols-2'
                       : 'grid-cols-3'
                   }`}
@@ -392,9 +407,9 @@ export function JournalPageOne({
             </DraggableDesignWrapper>
           )}
 
-          {/* 4. МОИ РЕЗУЛЬТАТЫ (Extra top breathing room after Skills) */}
+          {/* 4. МОИ РЕЗУЛЬТАТЫ */}
           {page1.showProjects !== false && (
-            <div className={isCompactModules || isCompactSkills ? 'mt-[8px]' : 'mt-[14px]'}>
+            <div className={isCompactModules ? 'mt-[2px]' : isCompactSkills ? 'mt-[8px]' : 'mt-[14px]'}>
               <ProjectsSection
                 projects={page1.projects}
                 layouts={layouts}

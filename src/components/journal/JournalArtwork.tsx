@@ -1,42 +1,12 @@
 import React from 'react';
 import {
-  ModuleIllustrationKey,
   ModuleLucideIconKey,
   NextTopicIconKey,
   ProjectItem,
   StrengthIconKey,
 } from '../../types/journal';
 
-export const MODULE_ILLUSTRATION_OPTIONS: Array<{
-  key: ModuleIllustrationKey;
-  label: string;
-  defaultColor: string;
-}> = [
-  { key: 'algorithms', label: 'Алгоритмы и блок-схемы', defaultColor: '#C9F3EE' },
-  { key: 'scratch', label: 'Scratch / Визуальные блоки', defaultColor: '#D1FAE5' },
-  { key: 'kodu', label: 'Kodu Game Lab', defaultColor: '#C9F3EE' },
-  { key: 'roblox', label: 'Roblox / Игровая логика', defaultColor: '#FFE4E6' },
-  { key: 'python', label: 'Python', defaultColor: '#FFE885' },
-  { key: 'web', label: 'Web / HTML / CSS', defaultColor: '#E0F2FE' },
-  { key: 'typescript', label: 'TypeScript / JS', defaultColor: '#DBEAFE' },
-  { key: 'ai', label: 'ИИ и нейросети', defaultColor: '#E9D5FF' },
-  { key: 'chatbot', label: 'Боты и Mini App', defaultColor: '#DDD6FE' },
-  { key: 'animaker', label: 'Анимация / Видео', defaultColor: '#DDD2FE' },
-  { key: 'blender', label: 'Blender 3D', defaultColor: '#DBEAFE' },
-  { key: 'design3d', label: 'Дизайн и 3D-графика', defaultColor: '#DDD6FE' },
-  { key: 'pixel', label: 'Пиксель-арт', defaultColor: '#FCE7F3' },
-  { key: 'mobile', label: 'Мобильная разработка', defaultColor: '#E0F2FE' },
-  { key: 'database', label: 'Базы данных и SQL', defaultColor: '#CFFAFE' },
-  { key: 'testing', label: 'Тестирование QA', defaultColor: '#D1FAE5' },
-  { key: 'cloud', label: 'Облачные технологии', defaultColor: '#E2E8F0' },
-  { key: 'security', label: 'Кибербезопасность', defaultColor: '#FEF08A' },
-  { key: 'office', label: 'Офис и документы', defaultColor: '#FEF3C7' },
-  { key: 'olympiad', label: 'Олимпиадные задачи', defaultColor: '#FDE68A' },
-  { key: 'finance', label: 'Финансовая грамотность', defaultColor: '#D1FAE5' },
-  { key: 'hardware', label: 'Устройство ПК и железо', defaultColor: '#E2E8F0' },
-];
-
-export const MODULE_LUCIDE_ICON_OPTIONS: Array<{
+export const DECOR_VECTOR_ICON_OPTIONS: Array<{
   key: ModuleLucideIconKey;
   label: string;
 }> = [
@@ -71,9 +41,7 @@ export const MODULE_LUCIDE_ICON_OPTIONS: Array<{
   { key: 'bookOpen', label: 'Теория / База' },
 ];
 
-export const MODULE_VECTOR_ICON_OPTIONS = MODULE_LUCIDE_ICON_OPTIONS;
-
-export function ModuleVectorIcon({
+export function DecorVectorIcon({
   iconKey,
   className = 'w-10 h-10',
 }: {
@@ -507,240 +475,6 @@ export function ModuleVectorIcon({
   }
 }
 
-export function ModuleLucideIcon({
-  iconKey,
-  className = 'w-11 h-11 text-[#18181B]',
-}: {
-  iconKey?: ModuleLucideIconKey;
-  className?: string;
-}) {
-  return <ModuleVectorIcon iconKey={iconKey} className={className} />;
-}
-
-export function ModuleSvgIllustration({ type }: { type: ModuleIllustrationKey }) {
-  switch (type) {
-    case 'kodu':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <path d="M80 12L102 30L94 72L66 72L58 30L80 12Z" fill="#5EEAD4" stroke="#18181B" strokeWidth="2.2" strokeLinejoin="round" />
-          <path d="M80 12V72" stroke="#18181B" strokeWidth="1.8" />
-          <text x="73" y="49" fill="#18181B" fontFamily="Rubik, sans-serif" fontWeight="800" fontSize="20">K</text>
-          <path d="M36 22L50 28L50 44L36 50L22 44L22 28L36 22Z" fill="#FB7185" stroke="#18181B" strokeWidth="2" strokeLinejoin="round" />
-          <path d="M22 28L36 34L50 28M36 34V50" stroke="#18181B" strokeWidth="1.6" />
-          <path d="M124 26L138 32L138 48L124 54L110 48L110 32L124 26Z" fill="#6EE7B7" stroke="#18181B" strokeWidth="2" strokeLinejoin="round" />
-          <path d="M110 32L124 38L138 32M124 38V54" stroke="#18181B" strokeWidth="1.6" />
-        </svg>
-      );
-    case 'python':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <path
-            d="M79 14C62 14 63 22 63 22V31H80V34H55C55 34 44 33 44 48C44 63 54 62 54 62H61V54C61 54 60 44 71 44H87C87 44 96 44 96 35V22C96 22 97 14 79 14Z"
-            fill="#3B82F6"
-            stroke="#18181B"
-            strokeWidth="2.2"
-            strokeLinejoin="round"
-          />
-          <circle cx="71" cy="22" r="2.6" fill="#FFFFFF" stroke="#18181B" strokeWidth="1.2" />
-          <path
-            d="M81 74C98 74 97 66 97 66V57H80V54H105C105 54 116 55 116 40C116 25 106 26 106 26H99V34C99 34 100 44 89 44H73C73 44 64 44 64 53V66C64 66 63 74 81 74Z"
-            fill="#FACC15"
-            stroke="#18181B"
-            strokeWidth="2.2"
-            strokeLinejoin="round"
-          />
-          <circle cx="89" cy="66" r="2.6" fill="#FFFFFF" stroke="#18181B" strokeWidth="1.2" />
-        </svg>
-      );
-    case 'animaker':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <rect x="44" y="16" width="72" height="54" rx="12" fill="#A78BFA" stroke="#18181B" strokeWidth="2.2" />
-          <rect x="52" y="23" width="56" height="40" rx="8" fill="#FB923C" stroke="#18181B" strokeWidth="2" />
-          <path d="M74 34L91 43L74 52V34Z" fill="#FFFFFF" stroke="#18181B" strokeWidth="2" strokeLinejoin="round" />
-          <rect x="122" y="42" width="14" height="10" rx="2" fill="#FACC15" stroke="#18181B" strokeWidth="1.8" />
-          <circle cx="32" cy="28" r="4" fill="#FFFFFF" stroke="#18181B" strokeWidth="1.6" />
-        </svg>
-      );
-    case 'blender':
-    case 'design3d':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <polygon points="80,14 116,32 116,60 80,76 44,60 44,32" fill="#93C5FD" stroke="#18181B" strokeWidth="2.2" />
-          <line x1="80" y1="14" x2="80" y2="76" stroke="#18181B" strokeWidth="1.8" />
-          <line x1="44" y1="32" x2="116" y2="32" stroke="#18181B" strokeWidth="1.8" />
-          <circle cx="80" cy="45" r="7" fill="#FACC15" stroke="#18181B" strokeWidth="2" />
-        </svg>
-      );
-    case 'web':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <rect x="30" y="14" width="100" height="60" rx="8" fill="#FFFFFF" stroke="#18181B" strokeWidth="2.2" />
-          <line x1="30" y1="28" x2="130" y2="28" stroke="#18181B" strokeWidth="2" />
-          <circle cx="40" cy="21" r="2.5" fill="#FB7185" />
-          <circle cx="49" cy="21" r="2.5" fill="#FACC15" />
-          <circle cx="58" cy="21" r="2.5" fill="#34D399" />
-          <text x="58" y="57" fill="#1D4ED8" fontFamily="IBM Plex Mono, monospace" fontWeight="700" fontSize="22">&lt;/&gt;</text>
-        </svg>
-      );
-    case 'roblox':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <g transform="rotate(-12 80 44)">
-            <rect x="54" y="18" width="52" height="52" rx="6" fill="#FB7185" stroke="#18181B" strokeWidth="2.4" />
-            <rect x="72" y="36" width="16" height="16" rx="2" fill="#FFFFFF" stroke="#18181B" strokeWidth="2" />
-          </g>
-        </svg>
-      );
-    case 'ai':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <line x1="42" y1="26" x2="80" y2="44" stroke="#18181B" strokeWidth="2" />
-          <line x1="42" y1="62" x2="80" y2="44" stroke="#18181B" strokeWidth="2" />
-          <line x1="80" y1="44" x2="118" y2="44" stroke="#18181B" strokeWidth="2" />
-          <circle cx="42" cy="26" r="8" fill="#5EEAD4" stroke="#18181B" strokeWidth="2" />
-          <circle cx="42" cy="62" r="8" fill="#93C5FD" stroke="#18181B" strokeWidth="2" />
-          <circle cx="80" cy="44" r="11" fill="#FACC15" stroke="#18181B" strokeWidth="2" />
-          <circle cx="118" cy="44" r="9" fill="#FB7185" stroke="#18181B" strokeWidth="2" />
-        </svg>
-      );
-    case 'algorithms':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <rect x="26" y="16" width="34" height="24" rx="6" fill="#5EEAD4" stroke="#18181B" strokeWidth="2" />
-          <path d="M60 28H88" stroke="#18181B" strokeWidth="2.2" />
-          <polygon points="88,16 112,28 88,40 64,28" fill="#FACC15" stroke="#18181B" strokeWidth="2" />
-          <path d="M112 28H126V56H104" stroke="#18181B" strokeWidth="2.2" />
-          <rect x="48" y="48" width="56" height="22" rx="6" fill="#A7F3D0" stroke="#18181B" strokeWidth="2" />
-        </svg>
-      );
-    case 'security':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <path d="M80 12L112 24V46C112 63 97 74 80 78C63 74 48 63 48 46V24L80 12Z" fill="#BAE6FD" stroke="#18181B" strokeWidth="2.2" />
-          <rect x="68" y="42" width="24" height="18" rx="4" fill="#FACC15" stroke="#18181B" strokeWidth="2" />
-          <path d="M73 42V36C73 32 76 29 80 29C84 29 87 32 87 36V42" stroke="#18181B" strokeWidth="2" />
-        </svg>
-      );
-    case 'office':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <rect x="34" y="14" width="92" height="60" rx="8" fill="#FFFFFF" stroke="#18181B" strokeWidth="2.2" />
-          <rect x="44" y="24" width="32" height="18" rx="4" fill="#5EEAD4" stroke="#18181B" strokeWidth="1.8" />
-          <rect x="84" y="24" width="32" height="8" rx="3" fill="#FACC15" stroke="#18181B" strokeWidth="1.6" />
-          <rect x="84" y="36" width="24" height="6" rx="2" fill="#CBD5E1" />
-          <rect x="44" y="48" width="72" height="16" rx="4" fill="#E0F2FE" stroke="#18181B" strokeWidth="1.8" />
-        </svg>
-      );
-    case 'pixel':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <rect x="48" y="16" width="16" height="16" fill="#FB7185" stroke="#18181B" strokeWidth="1.8" />
-          <rect x="64" y="16" width="16" height="16" fill="#FACC15" stroke="#18181B" strokeWidth="1.8" />
-          <rect x="80" y="16" width="16" height="16" fill="#5EEAD4" stroke="#18181B" strokeWidth="1.8" />
-          <rect x="96" y="16" width="16" height="16" fill="#A78BFA" stroke="#18181B" strokeWidth="1.8" />
-          <rect x="48" y="32" width="16" height="16" fill="#FACC15" stroke="#18181B" strokeWidth="1.8" />
-          <rect x="64" y="32" width="32" height="32" fill="#60A5FA" stroke="#18181B" strokeWidth="2" />
-          <rect x="96" y="32" width="16" height="16" fill="#34D399" stroke="#18181B" strokeWidth="1.8" />
-          <rect x="64" y="64" width="16" height="12" fill="#FB7185" stroke="#18181B" strokeWidth="1.8" />
-          <rect x="80" y="64" width="16" height="12" fill="#FB7185" stroke="#18181B" strokeWidth="1.8" />
-        </svg>
-      );
-    case 'mobile':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <rect x="58" y="10" width="44" height="68" rx="9" fill="#FFFFFF" stroke="#18181B" strokeWidth="2.2" />
-          <rect x="64" y="18" width="32" height="46" rx="4" fill="#E0F2FE" stroke="#18181B" strokeWidth="1.6" />
-          <rect x="69" y="24" width="22" height="10" rx="3" fill="#5EEAD4" stroke="#18181B" strokeWidth="1.4" />
-          <rect x="69" y="38" width="22" height="10" rx="3" fill="#FACC15" stroke="#18181B" strokeWidth="1.4" />
-          <circle cx="80" cy="70" r="2.5" fill="#18181B" />
-        </svg>
-      );
-    case 'database':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <ellipse cx="80" cy="24" rx="36" ry="10" fill="#5EEAD4" stroke="#18181B" strokeWidth="2" />
-          <path d="M44 24V44C44 50 60 54 80 54C100 54 116 50 116 44V24" fill="#99F6E4" stroke="#18181B" strokeWidth="2" />
-          <path d="M44 44V64C44 70 60 74 80 74C100 74 116 70 116 64V44" fill="#BAE6FD" stroke="#18181B" strokeWidth="2" />
-          <ellipse cx="80" cy="24" rx="36" ry="10" fill="#5EEAD4" stroke="#18181B" strokeWidth="2" />
-        </svg>
-      );
-    case 'testing':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <rect x="38" y="16" width="84" height="56" rx="10" fill="#FFFFFF" stroke="#18181B" strokeWidth="2.2" />
-          <circle cx="64" cy="44" r="14" fill="#A7F3D0" stroke="#18181B" strokeWidth="2" />
-          <path d="M58 44L62 49L71 39" stroke="#18181B" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-          <rect x="86" y="34" width="24" height="6" rx="2" fill="#CBD5E1" />
-          <rect x="86" y="46" width="18" height="6" rx="2" fill="#FACC15" />
-        </svg>
-      );
-    case 'cloud':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <path d="M48 64H112C122 64 129 57 129 48C129 40 123 33 114 32C110 20 98 14 85 16C74 17 65 24 62 34C50 35 42 43 42 53C42 59 44 64 48 64Z" fill="#BAE6FD" stroke="#18181B" strokeWidth="2.2" strokeLinejoin="round" />
-          <circle cx="80" cy="46" r="8" fill="#FACC15" stroke="#18181B" strokeWidth="1.8" />
-        </svg>
-      );
-    case 'olympiad':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <path d="M56 18H104V38C104 51 93 60 80 60C67 60 56 51 56 38V18Z" fill="#FACC15" stroke="#18181B" strokeWidth="2.2" />
-          <path d="M56 24H42V34C42 41 48 44 56 44" stroke="#18181B" strokeWidth="2" />
-          <path d="M104 24H118V34C118 41 112 44 104 44" stroke="#18181B" strokeWidth="2" />
-          <rect x="73" y="60" width="14" height="10" fill="#FB923C" stroke="#18181B" strokeWidth="2" />
-          <rect x="60" y="70" width="40" height="8" rx="3" fill="#18181B" />
-        </svg>
-      );
-    case 'finance':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <rect x="34" y="22" width="74" height="48" rx="10" fill="#6EE7B7" stroke="#18181B" strokeWidth="2.2" />
-          <rect x="86" y="38" width="26" height="16" rx="5" fill="#FACC15" stroke="#18181B" strokeWidth="2" />
-          <circle cx="118" cy="30" r="12" fill="#FACC15" stroke="#18181B" strokeWidth="2" />
-          <circle cx="95" cy="46" r="2.5" fill="#18181B" />
-        </svg>
-      );
-    case 'chatbot':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <rect x="36" y="18" width="88" height="46" rx="12" fill="#C4B5FD" stroke="#18181B" strokeWidth="2.2" />
-          <path d="M58 64L52 74L72 64" fill="#C4B5FD" stroke="#18181B" strokeWidth="2" strokeLinejoin="round" />
-          <circle cx="64" cy="41" r="5" fill="#FFFFFF" stroke="#18181B" strokeWidth="1.8" />
-          <circle cx="96" cy="41" r="5" fill="#FFFFFF" stroke="#18181B" strokeWidth="1.8" />
-          <path d="M72 51H88" stroke="#18181B" strokeWidth="2.2" strokeLinecap="round" />
-        </svg>
-      );
-    case 'typescript':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <rect x="44" y="16" width="72" height="56" rx="10" fill="#3B82F6" stroke="#18181B" strokeWidth="2.2" />
-          <text x="64" y="57" fill="#FFFFFF" fontFamily="IBM Plex Mono, monospace" fontWeight="800" fontSize="26">TS</text>
-        </svg>
-      );
-    case 'hardware':
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <rect x="52" y="20" width="56" height="48" rx="8" fill="#CBD5E1" stroke="#18181B" strokeWidth="2.2" />
-          <rect x="64" y="32" width="32" height="24" rx="4" fill="#FACC15" stroke="#18181B" strokeWidth="1.8" />
-          <line x1="40" y1="34" x2="52" y2="34" stroke="#18181B" strokeWidth="2.4" />
-          <line x1="40" y1="54" x2="52" y2="54" stroke="#18181B" strokeWidth="2.4" />
-          <line x1="108" y1="34" x2="120" y2="34" stroke="#18181B" strokeWidth="2.4" />
-          <line x1="108" y1="54" x2="120" y2="54" stroke="#18181B" strokeWidth="2.4" />
-        </svg>
-      );
-    case 'scratch':
-    default:
-      return (
-        <svg viewBox="0 0 160 88" className="w-full h-full" fill="none">
-          <path d="M38 18H106L112 24H124V36H38V18Z" fill="#60A5FA" stroke="#18181B" strokeWidth="2" strokeLinejoin="round" />
-          <path d="M46 36H118V54H46V36Z" fill="#34D399" stroke="#18181B" strokeWidth="2" strokeLinejoin="round" />
-          <path d="M46 54H104V70H46V54Z" fill="#FACC15" stroke="#18181B" strokeWidth="2" strokeLinejoin="round" />
-        </svg>
-      );
-  }
-}
-
 export function ProjectFallbackGraphic({
   theme,
 }: {
@@ -935,7 +669,7 @@ export function NextTopicLineIcon({
   type: NextTopicIconKey;
   className?: string;
 }) {
-  return <ModuleVectorIcon iconKey={type} className={className} />;
+  return <DecorVectorIcon iconKey={type} className={className} />;
 }
 
 export function SkillCircleIcon({

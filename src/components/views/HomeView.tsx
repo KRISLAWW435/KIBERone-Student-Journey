@@ -4,8 +4,10 @@ import {
   Calendar,
   Download,
   Edit3,
+  FolderArchive,
   FolderOpen,
   Image as ImageIcon,
+  Loader2,
   MapPin,
   Plus,
   Search,
@@ -53,6 +55,14 @@ interface HomeViewProps {
   onOpenMediaLibrary: () => void;
   onImportBackup: (file: File) => void;
   onExportAllBackup: () => void;
+  onBatchExportGroupZip: (group: StudentGroup) => Promise<void> | void;
+  batchProgress?: {
+    active: boolean;
+    current: number;
+    total: number;
+    groupName: string;
+    groupId?: string;
+  } | null;
   openCreateGroupSignal?: number;
 }
 
@@ -88,6 +98,8 @@ export function HomeView({
   onOpenMediaLibrary,
   onImportBackup,
   onExportAllBackup,
+  onBatchExportGroupZip,
+  batchProgress,
   openCreateGroupSignal = 0,
 }: HomeViewProps) {
   const [branchFilter, setBranchFilter] = useState<string>('all');
@@ -155,7 +167,7 @@ export function HomeView({
       mentorName: '',
       startDate: '2026-09-01',
       endDate: '2026-12-25',
-      ageCategory: '11-13',
+      ageCategory: '9-11',
       createdAt: now,
       updatedAt: now,
     });
@@ -593,14 +605,38 @@ export function HomeView({
 
                     {/* Card Footer Actions */}
                     <div className="pt-3 border-t border-zinc-100 space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => onOpenGroupEditor(group.id)}
-                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-semibold transition-colors whitespace-nowrap"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        <span>Открыть редактор группы</span>
-                      </button>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onOpenGroupEditor(group.id)}
+                          className="flex-1 inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-semibold transition-colors whitespace-nowrap"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Открыть редактор группы</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={Boolean(batchProgress?.active)}
+                          onClick={() => onBatchExportGroupZip(group)}
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 text-white text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
+                          title="Выгрузить готовые журналы группы в ZIP-архив"
+                        >
+                          {batchProgress?.active &&
+                          batchProgress.groupId === group.id ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span className="tabular-nums">
+                                {batchProgress.current}/{batchProgress.total}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <FolderArchive className="w-3.5 h-3.5" />
+                              <span>Выгрузить готовые (ZIP)</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
 
                       <div className="grid grid-cols-3 gap-1.5">
                         <button
@@ -831,9 +867,18 @@ export function HomeView({
                   }
                   className="mt-1 w-full rounded-lg border border-zinc-200 px-2.5 py-2 bg-white focus:outline-none focus:border-[#0D9488]"
                 >
-                  <option value="8-10">8–10 лет</option>
-                  <option value="11-13">11–13 лет</option>
-                  <option value="14-15">14–15 лет</option>
+                  <option value="6-8">6–8 лет (Младшая)</option>
+                  <option value="9-11">9–11 лет (Средняя)</option>
+                  <option value="12-14">12–14 лет (Старшая)</option>
+                  {(groupModal.ageCategory === '8-10' ||
+                    groupModal.ageCategory === '11-13' ||
+                    groupModal.ageCategory === '14-15') && (
+                    <>
+                      <option value="8-10">8–10 лет (архивная)</option>
+                      <option value="11-13">11–13 лет (архивная)</option>
+                      <option value="14-15">14–15 лет (архивная)</option>
+                    </>
+                  )}
                 </select>
               </label>
             </div>

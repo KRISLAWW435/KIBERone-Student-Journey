@@ -101,7 +101,7 @@ export type ModuleLucideIconKey =
   | 'bookOpen'
   | 'rocket';
 
-export type ModuleVisualMode = 'illustration' | 'icon' | 'image';
+export type ModuleVisualMode = 'image';
 
 export type SkillGroupName =
   | 'Алгоритмическое мышление'
@@ -232,7 +232,7 @@ export interface ModuleItem {
   subtitle: string;
   description: string;
   category?: ModuleCategoryId;
-  illustrationKey: ModuleIllustrationKey;
+  illustrationKey?: ModuleIllustrationKey;
   iconKey?: ModuleLucideIconKey;
   visualMode?: ModuleVisualMode;
   imageMediaId?: string | null;
@@ -478,10 +478,10 @@ export interface LibraryModule {
   categoryId: ModuleCategoryId;
   filterCategories?: ModuleCategoryId[];
   ageGroups: ModuleAgeGroup[];
-  illustrationType: 'svg' | 'image';
+  illustrationType: 'image';
   illustrationValue: string;
-  illustrationKey: ModuleIllustrationKey;
-  iconKey: ModuleLucideIconKey;
+  illustrationKey?: ModuleIllustrationKey;
+  iconKey?: ModuleLucideIconKey;
   visualMode?: ModuleVisualMode;
   visualNotes?: string;
   imageMediaId?: string | null;

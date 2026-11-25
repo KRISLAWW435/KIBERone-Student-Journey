@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { Image as ImageIcon } from 'lucide-react';
 import {
   ActiveTextFieldTarget,
   AgeCategory,
@@ -6,7 +7,6 @@ import {
   ModuleItem,
 } from '../../types/journal';
 import { InlineEditableText } from './DecorLayer';
-import { ModuleSvgIllustration, ModuleVectorIcon } from './JournalArtwork';
 
 interface ModuleCardProps {
   module: ModuleItem;
@@ -35,7 +35,7 @@ export function ModuleCard({
   onClick,
 }: ModuleCardProps) {
   const tiltDeg =
-    ageCategory === '14-15'
+    ageCategory === '12-14' || ageCategory === '14-15'
       ? index % 3 === 0
         ? -0.6
         : index % 3 === 1
@@ -58,8 +58,10 @@ export function ModuleCard({
       : undefined;
   const resolvedImageUrl = linkedMediaUrl || module.customImageUrl;
 
-  const effectiveMode =
-    module.visualMode ?? (resolvedImageUrl ? 'image' : 'illustration');
+  const [imgError, setImgError] = useState(false);
+  useEffect(() => {
+    setImgError(false);
+  }, [resolvedImageUrl]);
 
   const tapeCorner =
     index % 3 === 0
@@ -67,6 +69,9 @@ export function ModuleCard({
       : index % 3 === 1
       ? { pos: '-top-[8px] -right-[16px]', rot: '28deg' }
       : { pos: '-top-[8px] -left-[13px]', rot: '-22deg' };
+
+  const hasImage = Boolean(resolvedImageUrl) && !imgError;
+  const headerBgColor = hasImage ? module.cardBgColor || '#C9F3EE' : '#F4F4F5';
 
   return (
     <div
@@ -76,9 +81,7 @@ export function ModuleCard({
         onClick();
       }}
       style={{ transform: `rotate(${tiltDeg}deg)` }}
-      className={`relative overflow-visible bg-white border-[1.7px] border-[#18181B] rounded-xl ${
-        compact ? 'p-[8px]' : 'p-[10px]'
-      } shadow-[0_8px_18px_rgba(17,24,39,0.13),0_2px_5px_rgba(17,24,39,0.08)] flex flex-col self-stretch ${
+      className={`relative overflow-visible bg-white border-[1.7px] border-[#18181B] rounded-xl shadow-[0_8px_18px_rgba(17,24,39,0.13),0_2px_5px_rgba(17,24,39,0.08)] flex flex-col self-stretch ${
         onClick ? 'editable-block' : ''
       } ${isActive ? 'editable-block-active' : ''}`}
     >
@@ -105,145 +108,134 @@ export function ModuleCard({
           strokeWidth="1.2"
         />
       </svg>
-      {/* Badge-top variant header */}
-      {variant === 'badge-top' && (
-        <div className="flex items-center justify-between px-[4px] mb-[5px] shrink-0">
-          <span
-            style={{ backgroundColor: module.cardBgColor }}
-            className="text-[10px] font-bold px-[8px] py-[1.5px] rounded-full border border-black/15 text-[#111827]"
-          >
-            {module.subtitle || 'Модуль'}
-          </span>
-          <span className="font-mono text-[9.5px] text-zinc-500">
-            0{index + 1}
-          </span>
-        </div>
-      )}
 
-      {/* Colored Graphic Container */}
-      {variant !== 'minimal' && (
-        <div
-          style={{
-            backgroundColor: module.cardBgColor,
-            height: compact ? '48px' : '64px',
-          }}
-          className="self-stretch rounded-lg border border-black/12 overflow-hidden flex items-center justify-center mb-[7px] shrink-0 relative"
-        >
-          {effectiveMode === 'image' && resolvedImageUrl ? (
-            <img
-              src={resolvedImageUrl}
-              alt={module.title}
-              referrerPolicy="no-referrer"
-              style={{
-                transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
-              }}
-              className="w-full h-full object-cover transition-transform duration-150"
-            />
-          ) : effectiveMode === 'icon' ? (
-            <div
-              style={{
-                transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
-              }}
-              className="flex items-center justify-center w-full h-full"
+      {/* Clipped inner surface so top color block fills top edge cleanly and bottom text stays pure white */}
+      <div className="rounded-[10px] overflow-hidden flex flex-col flex-1 bg-white">
+        {/* Badge-top variant header */}
+        {variant === 'badge-top' && (
+          <div className="flex items-center justify-between px-[8px] pt-[6px] pb-[4px] bg-white border-b border-black/8 shrink-0">
+            <span
+              style={{ backgroundColor: headerBgColor }}
+              className="text-[9.5px] font-bold px-[7px] py-[1px] rounded-full border border-black/15 text-[#111827] truncate"
             >
-              <div
-                className={`${
-                  compact ? 'w-[42px] h-[42px]' : 'w-[52px] h-[52px]'
-                } rounded-2xl bg-white border-[1.6px] border-[#18181B] shadow-[0_4px_10px_rgba(24,24,27,0.14)] flex items-center justify-center`}
-              >
-                <ModuleVectorIcon
-                  iconKey={module.iconKey}
-                  className={compact ? 'w-[30px] h-[30px]' : 'w-[38px] h-[38px]'}
+              {module.subtitle || 'Модуль'}
+            </span>
+            <span className="font-mono text-[9.5px] text-zinc-500">
+              0{index + 1}
+            </span>
+          </div>
+        )}
+
+        {/* 4:3 Colored Upper Graphic Container (object-fit: contain) */}
+        {variant !== 'minimal' && (
+          <div
+            style={{ backgroundColor: headerBgColor }}
+            className={`w-full aspect-[4/3] ${
+              compact ? 'max-h-[126px] p-[6px]' : 'max-h-[154px] p-[8px]'
+            } border-b-[1.4px] border-[#18181B]/12 overflow-hidden flex items-center justify-center shrink-0 relative`}
+          >
+            {hasImage && resolvedImageUrl ? (
+              <img
+                src={resolvedImageUrl}
+                alt={module.title}
+                referrerPolicy="no-referrer"
+                onError={() => setImgError(true)}
+                style={{
+                  transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
+                }}
+                className="w-full h-full object-contain drop-shadow-[0_6px_12px_rgba(15,23,42,0.16)] transition-transform duration-150"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-[#F4F4F5] text-zinc-400">
+                <ImageIcon
+                  className={
+                    compact ? 'w-[28px] h-[28px] stroke-[1.6]' : 'w-[34px] h-[34px] stroke-[1.6]'
+                  }
                 />
               </div>
-            </div>
-          ) : (
-            <div
-              style={{
-                transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
-                filter:
-                  'drop-shadow(1.5px 0 0 rgba(255,255,255,0.85)) drop-shadow(-1.5px 0 0 rgba(255,255,255,0.85)) drop-shadow(0 1.5px 0 rgba(255,255,255,0.85)) drop-shadow(0 -1.5px 0 rgba(255,255,255,0.85))',
-              }}
-              className="w-full h-full"
-            >
-              <ModuleSvgIllustration type={module.illustrationKey} />
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
 
-      {/* Text Content (print-legible body copy, stretched card baseline) */}
-      <div className="text-center px-[3px] flex-1 flex flex-col justify-start">
-        <InlineEditableText
-          value={module.title}
-          onSelectText={
-            onSelectTextField
-              ? () =>
-                  onSelectTextField({
-                    page: 1,
-                    field: 'moduleTitle',
-                    itemId: module.id,
-                  })
-              : undefined
-          }
-          isSelected={
-            activeTextField?.page === 1 &&
-            activeTextField.field === 'moduleTitle' &&
-            activeTextField.itemId === module.id
-          }
-          as="h3"
-          className={`font-journal-display font-extrabold ${
-            compact ? 'text-[12.5px]' : 'text-[14px]'
-          } leading-[1.18] text-[#111827] block`}
-        />
-        {variant !== 'badge-top' && (module.subtitle || onSelectTextField) && (
+        {/* White Text Content Area */}
+        <div
+          className={`bg-white text-center flex-1 flex flex-col justify-start ${
+            compact ? 'px-[7px] py-[6px]' : 'px-[10px] py-[8px]'
+          }`}
+        >
           <InlineEditableText
-            value={module.subtitle}
-            placeholder="Подзаголовок"
+            value={module.title}
             onSelectText={
               onSelectTextField
                 ? () =>
                     onSelectTextField({
                       page: 1,
-                      field: 'moduleSubtitle',
+                      field: 'moduleTitle',
                       itemId: module.id,
                     })
                 : undefined
             }
             isSelected={
               activeTextField?.page === 1 &&
-              activeTextField.field === 'moduleSubtitle' &&
+              activeTextField.field === 'moduleTitle' &&
               activeTextField.itemId === module.id
             }
-            as="div"
-            className="font-bold text-[10.5px] leading-tight text-[#111827]/90 mt-[2px] block"
+            as="h3"
+            className={`font-journal-display font-extrabold ${
+              compact ? 'text-[12px]' : 'text-[13.5px]'
+            } leading-[1.16] text-[#111827] block`}
           />
-        )}
-        <InlineEditableText
-          value={module.description}
-          placeholder="Описание модуля"
-          onSelectText={
-            onSelectTextField
-              ? () =>
-                  onSelectTextField({
-                    page: 1,
-                    field: 'moduleDescription',
-                    itemId: module.id,
-                  })
-              : undefined
-          }
-          isSelected={
-            activeTextField?.page === 1 &&
-            activeTextField.field === 'moduleDescription' &&
-            activeTextField.itemId === module.id
-          }
-          as="p"
-          className={`font-journal-body ${
-            compact
-              ? 'text-[10px] leading-[1.35] line-clamp-2'
-              : 'text-[10.5px] leading-[1.42] line-clamp-3'
-          } text-[#27272A] mt-[4px] block`}
-        />
+          {variant !== 'badge-top' && (module.subtitle || onSelectTextField) && (
+            <InlineEditableText
+              value={module.subtitle}
+              placeholder="Подзаголовок"
+              onSelectText={
+                onSelectTextField
+                  ? () =>
+                      onSelectTextField({
+                        page: 1,
+                        field: 'moduleSubtitle',
+                        itemId: module.id,
+                      })
+                  : undefined
+              }
+              isSelected={
+                activeTextField?.page === 1 &&
+                activeTextField.field === 'moduleSubtitle' &&
+                activeTextField.itemId === module.id
+              }
+              as="div"
+              className={`font-bold ${
+                compact ? 'text-[9.5px]' : 'text-[10.5px]'
+              } leading-tight text-[#111827]/85 mt-[2px] block`}
+            />
+          )}
+          <InlineEditableText
+            value={module.description}
+            placeholder="Описание модуля"
+            onSelectText={
+              onSelectTextField
+                ? () =>
+                    onSelectTextField({
+                      page: 1,
+                      field: 'moduleDescription',
+                      itemId: module.id,
+                    })
+                : undefined
+            }
+            isSelected={
+              activeTextField?.page === 1 &&
+              activeTextField.field === 'moduleDescription' &&
+              activeTextField.itemId === module.id
+            }
+            as="p"
+            className={`font-journal-body ${
+              compact
+                ? 'text-[9.5px] leading-[1.3] line-clamp-2 mt-[2px]'
+                : 'text-[10.5px] leading-[1.38] line-clamp-3 mt-[4px]'
+            } text-[#27272A] block`}
+          />
+        </div>
       </div>
     </div>
   );

@@ -31,19 +31,43 @@ import {
   MediaCategory,
   ModuleAgeGroup,
   ModuleCategoryConfig,
-  ModuleIllustrationKey,
-  ModuleLucideIconKey,
-  ModuleVisualMode,
   SkillDefinition,
   SkillGroupName,
 } from '../../types/journal';
 import { AppHeader, WorkspaceTab } from '../AppHeader';
-import {
-  MODULE_ILLUSTRATION_OPTIONS,
-  MODULE_LUCIDE_ICON_OPTIONS,
-  ModuleLucideIcon,
-  ModuleSvgIllustration,
-} from '../journal/JournalArtwork';
+
+function ModuleCardPreviewImage({
+  src,
+  alt,
+}: {
+  src?: string;
+  alt: string;
+}) {
+  const [failed, setFailed] = React.useState(false);
+  React.useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt={alt}
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+        className="w-full h-full object-contain p-1.5 drop-shadow-[0_4px_8px_rgba(15,23,42,0.14)]"
+      />
+    );
+  }
+  return (
+    <div className="w-full h-full rounded-lg bg-zinc-100 flex flex-col items-center justify-center gap-1.5 text-zinc-400">
+      <ImageIcon className="w-7 h-7 stroke-[1.6]" />
+      <span className="text-[10px] font-medium text-zinc-400">
+        Нет картинки
+      </span>
+    </div>
+  );
+}
 
 interface ModulesLibraryViewProps {
   modules: LibraryModule[];
@@ -126,11 +150,6 @@ export function ModulesLibraryView({
   // Skill catalog modal/form state
   const [skillsSearch, setSkillsSearch] = useState('');
   const [editingSkill, setEditingSkill] = useState<SkillDefinition | null>(null);
-
-  // Cards preview mode override
-  const [cardsPreviewMode, setCardsPreviewMode] = useState<
-    'auto' | ModuleVisualMode
-  >('auto');
 
   // Group curriculum template modal
   const [editingGroupTemplate, setEditingGroupTemplate] =
@@ -256,11 +275,9 @@ export function ModulesLibraryView({
       categoryId: defaultCat,
       filterCategories: [],
       ageGroups: ['9-11'],
-      illustrationType: 'svg',
-      illustrationValue: 'algorithms',
-      illustrationKey: 'algorithms',
-      iconKey: 'rocket',
-      visualMode: 'illustration',
+      illustrationType: 'image',
+      illustrationValue: '',
+      visualMode: 'image',
       visualNotes: '',
       imageMediaId: null,
       cardBgColor: catColor,
@@ -294,9 +311,7 @@ export function ModulesLibraryView({
     const shortTitle = editingModule.displayTitle.trim();
     const officialTitle =
       editingModule.officialTitle.trim() || shortTitle;
-    const isImage =
-      editingModule.visualMode === 'image' &&
-      Boolean(editingModule.customImageUrl);
+    const resolvedImg = resolveModuleImageUrl(editingModule);
     const saved: LibraryModule = {
       ...editingModule,
       shortTitle,
@@ -308,10 +323,9 @@ export function ModulesLibraryView({
         editingModule.ageGroups.length > 0
           ? editingModule.ageGroups
           : ['9-11'],
-      illustrationType: isImage ? 'image' : 'svg',
-      illustrationValue: isImage
-        ? editingModule.customImageUrl || ''
-        : editingModule.illustrationKey,
+      visualMode: 'image',
+      illustrationType: 'image',
+      illustrationValue: resolvedImg || editingModule.customImageUrl || '',
       relatedSkills: syncedLabels,
       updatedAt: new Date().toISOString(),
     };
@@ -319,38 +333,9 @@ export function ModulesLibraryView({
     setEditingModule(saved);
   };
 
-  const renderCardVisual = (
-    mod: LibraryModule,
-    forcedMode?: 'auto' | ModuleVisualMode
-  ) => {
+  const renderCardVisual = (mod: LibraryModule) => {
     const imgUrl = resolveModuleImageUrl(mod);
-    const mode =
-      forcedMode && forcedMode !== 'auto'
-        ? forcedMode
-        : mod.visualMode ?? (imgUrl ? 'image' : 'illustration');
-
-    if (mode === 'image' && imgUrl) {
-      return (
-        <img
-          src={imgUrl}
-          alt={mod.displayTitle}
-          referrerPolicy="no-referrer"
-          className="w-full h-full object-cover"
-        />
-      );
-    }
-    if (mode === 'icon') {
-      return (
-        <div className="w-12 h-12 rounded-2xl bg-white/85 border-[1.5px] border-[#18181B] shadow-[0_2px_0_rgba(24,24,27,0.16)] flex items-center justify-center">
-          <ModuleLucideIcon iconKey={mod.iconKey} className="w-7 h-7 text-[#18181B]" />
-        </div>
-      );
-    }
-    return (
-      <div className="w-36 h-24">
-        <ModuleSvgIllustration type={mod.illustrationKey} />
-      </div>
-    );
+    return <ModuleCardPreviewImage src={imgUrl} alt={mod.displayTitle} />;
   };
 
   const subTabs: Array<{
@@ -575,8 +560,12 @@ export function ModulesLibraryView({
                   >
                     <div className="space-y-3">
                       <div
-                        style={{ backgroundColor: mod.cardBgColor }}
-                        className="h-28 rounded-xl border border-black/10 overflow-hidden flex items-center justify-center p-2 relative"
+                        style={{
+                          backgroundColor: resolveModuleImageUrl(mod)
+                            ? mod.cardBgColor
+                            : '#F4F4F5',
+                        }}
+                        className="aspect-[4/3] max-h-40 rounded-xl border border-black/10 overflow-hidden flex items-center justify-center p-2 relative"
                       >
                         {renderCardVisual(mod)}
                         {!mod.isActive && (
@@ -904,30 +893,7 @@ export function ModulesLibraryView({
           <div className="space-y-5">
             <div className="bg-white border border-zinc-200 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
               <div className="text-xs text-zinc-600">
-                Предпросмотр карточек для первой страницы журнала. Выберите режим отображения или привяжите графику из медиатеки.
-              </div>
-              <div className="flex items-center gap-1 p-1 bg-zinc-100 rounded-lg shrink-0 text-xs">
-                {(
-                  [
-                    { id: 'auto', label: 'Как в модуле' },
-                    { id: 'illustration', label: 'SVG-иллюстрации' },
-                    { id: 'icon', label: 'Иконки (SVG)' },
-                    { id: 'image', label: 'Картинки из медиатеки' },
-                  ] as const
-                ).map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setCardsPreviewMode(m.id)}
-                    className={`px-2.5 py-1 rounded-md font-medium whitespace-nowrap ${
-                      cardsPreviewMode === m.id
-                        ? 'bg-white text-zinc-900 shadow-xs'
-                        : 'text-zinc-600'
-                    }`}
-                  >
-                    {m.label}
-                  </button>
-                ))}
+                Предпросмотр карточек для первой страницы журнала. Привяжите или замените PNG/WEBP-иллюстрацию из медиатеки и настройте цвет фона.
               </div>
             </div>
 
@@ -941,10 +907,12 @@ export function ModulesLibraryView({
                   >
                     <div>
                       <div
-                        style={{ backgroundColor: mod.cardBgColor }}
-                        className="h-24 rounded-lg border border-black/10 overflow-hidden flex items-center justify-center mb-2.5"
+                        style={{
+                          backgroundColor: imgUrl ? mod.cardBgColor : '#F4F4F5',
+                        }}
+                        className="aspect-[4/3] rounded-lg border border-black/10 overflow-hidden flex items-center justify-center p-2 mb-2.5"
                       >
-                        {renderCardVisual(mod, cardsPreviewMode)}
+                        {renderCardVisual(mod)}
                       </div>
                       <div className="text-center space-y-0.5">
                         <div className="text-sm font-extrabold text-[#111827] leading-tight">
@@ -1088,7 +1056,7 @@ export function ModulesLibraryView({
                     <div className="bg-white border-[1.5px] border-[#18181B] rounded-xl p-2.5 shadow-[0_4px_10px_rgba(0,0,0,0.08)]">
                       <div
                         style={{ backgroundColor: editingModule.cardBgColor }}
-                        className="h-24 rounded-lg border border-black/10 overflow-hidden flex items-center justify-center mb-2"
+                        className="aspect-[4/3] rounded-lg border border-black/10 overflow-hidden flex items-center justify-center p-2 mb-2"
                       >
                         {renderCardVisual(editingModule)}
                       </div>
@@ -1264,75 +1232,10 @@ export function ModulesLibraryView({
                       <div className="font-semibold text-zinc-800">
                         Оформление визуальной карточки
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      <div className="max-w-[220px]">
                         <label className="block">
                           <span className="text-[11px] font-medium text-zinc-600">
-                            Режим графики
-                          </span>
-                          <select
-                            value={editingModule.visualMode ?? 'illustration'}
-                            onChange={(e) =>
-                              setEditingModule({
-                                ...editingModule,
-                                visualMode: e.target.value as ModuleVisualMode,
-                              })
-                            }
-                            className="mt-1 w-full rounded-lg border border-zinc-200 px-2 py-1.5 bg-white"
-                          >
-                            <option value="illustration">SVG-иллюстрация</option>
-                            <option value="icon">Иконка (SVG-библиотека)</option>
-                            <option value="image">Своя картинка</option>
-                          </select>
-                        </label>
-
-                        <label className="block">
-                          <span className="text-[11px] font-medium text-zinc-600">
-                            SVG-иллюстрация
-                          </span>
-                          <select
-                            value={editingModule.illustrationKey}
-                            onChange={(e) =>
-                              setEditingModule({
-                                ...editingModule,
-                                illustrationKey: e.target
-                                  .value as ModuleIllustrationKey,
-                              })
-                            }
-                            className="mt-1 w-full rounded-lg border border-zinc-200 px-2 py-1.5 bg-white"
-                          >
-                            {MODULE_ILLUSTRATION_OPTIONS.map((opt) => (
-                              <option key={opt.key} value={opt.key}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        <label className="block">
-                          <span className="text-[11px] font-medium text-zinc-600">
-                            Векторная иконка
-                          </span>
-                          <select
-                            value={editingModule.iconKey}
-                            onChange={(e) =>
-                              setEditingModule({
-                                ...editingModule,
-                                iconKey: e.target.value as ModuleLucideIconKey,
-                              })
-                            }
-                            className="mt-1 w-full rounded-lg border border-zinc-200 px-2 py-1.5 bg-white"
-                          >
-                            {MODULE_LUCIDE_ICON_OPTIONS.map((opt) => (
-                              <option key={opt.key} value={opt.key}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        <label className="block">
-                          <span className="text-[11px] font-medium text-zinc-600">
-                            Цвет плашки
+                            Цвет фона изображения
                           </span>
                           <input
                             type="color"
@@ -1378,7 +1281,7 @@ export function ModulesLibraryView({
                             onClick={() =>
                               setEditingModule({
                                 ...editingModule,
-                                visualMode: 'illustration',
+                                visualMode: 'image',
                                 imageMediaId: null,
                                 customImageUrl: undefined,
                               })
@@ -1476,7 +1379,7 @@ export function ModulesLibraryView({
                     id: `gtpl-${Date.now()}`,
                     name: 'Новый групповой шаблон',
                     description: 'Набор модулей на учебный период.',
-                    ageCategory: '11-13',
+                    ageCategory: '9-11',
                     paletteId: DESIGN_PALETTES[0].id,
                     moduleIds: modules.slice(0, 3).map((m) => m.id),
                     isBuiltIn: false,
@@ -1829,9 +1732,18 @@ export function ModulesLibraryView({
                     }
                     className="mt-1 w-full rounded-lg border border-zinc-200 px-2.5 py-2 bg-white"
                   >
-                    <option value="8-10">8–10 лет</option>
-                    <option value="11-13">11–13 лет</option>
-                    <option value="14-15">14–15 лет</option>
+                    <option value="6-8">6–8 лет (Младшая)</option>
+                    <option value="9-11">9–11 лет (Средняя)</option>
+                    <option value="12-14">12–14 лет (Старшая)</option>
+                    {(editingGroupTemplate.ageCategory === '8-10' ||
+                      editingGroupTemplate.ageCategory === '11-13' ||
+                      editingGroupTemplate.ageCategory === '14-15') && (
+                      <>
+                        <option value="8-10">8–10 лет (архивная)</option>
+                        <option value="11-13">11–13 лет (архивная)</option>
+                        <option value="14-15">14–15 лет (архивная)</option>
+                      </>
+                    )}
                   </select>
                 </label>
 

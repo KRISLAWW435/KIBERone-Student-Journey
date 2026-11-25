@@ -50,7 +50,11 @@ export function PrideSection({
   const isBearActive =
     activeTarget?.page === 2 && activeTarget.block === 'prideBear';
   const bearMultiplier =
-    ageCategory === '8-10' ? 1.02 : ageCategory === '14-15' ? 0.94 : 1;
+    ageCategory === '6-8' || ageCategory === '8-10'
+      ? 1.02
+      : ageCategory === '12-14' || ageCategory === '14-15'
+      ? 0.94
+      : 1;
 
   // Migrate legacy coral background to sunny yellow matching the Page 2 spread
   const resolvedBgColor =
@@ -124,7 +128,9 @@ export function PrideSection({
                 <circle cx="172" cy="164" r="96" fill="#FFFFFF" opacity="0.52" />
               </g>
 
-              {config.showPrideConfetti && ageCategory !== '14-15' && (
+              {config.showPrideConfetti &&
+                ageCategory !== '12-14' &&
+                ageCategory !== '14-15' && (
                 <g>
                   <path
                     d="M22 118C32 108 44 120 54 110C62 102 60 92 70 88"

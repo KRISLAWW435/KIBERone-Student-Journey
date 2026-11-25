@@ -172,6 +172,28 @@ export function sanitizeFilename(name: string): string {
   return cleaned || 'resident';
 }
 
+export function formatJournalPdfFilename(
+  fullName: string,
+  usedNames?: Set<string>
+): string {
+  const parts = fullName
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  const base = parts.length > 0 ? parts.join('_') : 'Резидент';
+  let candidate = `Журнал_${base}.pdf`;
+  if (usedNames) {
+    let counter = 2;
+    while (usedNames.has(candidate.toLowerCase())) {
+      candidate = `Журнал_${base}_${counter}.pdf`;
+      counter += 1;
+    }
+    usedNames.add(candidate.toLowerCase());
+  }
+  return candidate;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -239,10 +261,34 @@ async function getEmbeddedFontCss(): Promise<string> {
   return cachedFontCssPromise;
 }
 
+async function waitForNodeImages(node: HTMLElement): Promise<void> {
+  const imgs = Array.from(node.querySelectorAll('img'));
+  await Promise.all(
+    imgs.map(async (img) => {
+      if (!img.complete) {
+        await new Promise<void>((resolve) => {
+          const done = () => resolve();
+          img.addEventListener('load', done, { once: true });
+          img.addEventListener('error', done, { once: true });
+          setTimeout(done, 2500);
+        });
+      }
+      if (typeof img.decode === 'function') {
+        try {
+          await img.decode();
+        } catch {
+          // Ignore decode error on fallback/already-decoded images
+        }
+      }
+    })
+  );
+}
+
 async function renderNodeToPng(node: HTMLElement): Promise<string> {
   if (document.fonts && document.fonts.ready) {
     await document.fonts.ready;
   }
+  await waitForNodeImages(node);
   const fontEmbedCSS = await getEmbeddedFontCss();
   return toPng(node, {
     width: 794,

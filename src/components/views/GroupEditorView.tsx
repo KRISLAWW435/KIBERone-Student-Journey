@@ -108,13 +108,54 @@ import {
 } from '../journal/A4SpreadFrame';
 import { COVER_OBJECT_DEFAULTS } from '../journal/CoverSection';
 import {
-  MODULE_VECTOR_ICON_OPTIONS,
-  ModuleSvgIllustration,
-  ModuleVectorIcon,
+  DECOR_VECTOR_ICON_OPTIONS,
+  DecorVectorIcon,
   NextTopicLineIcon,
 } from '../journal/JournalArtwork';
 import { JournalPageOne } from '../journal/JournalPageOne';
 import { JournalPageTwo } from '../journal/JournalPageTwo';
+
+function ModuleThumbImage({
+  src,
+  alt,
+  style,
+  className = 'w-full h-full object-contain p-0.5',
+  iconClassName = 'w-5 h-5 stroke-[1.6]',
+  showLabel = false,
+}: {
+  src?: string;
+  alt: string;
+  style?: React.CSSProperties;
+  className?: string;
+  iconClassName?: string;
+  showLabel?: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  if (!src || failed) {
+    return (
+      <div className="w-full h-full bg-zinc-100 flex flex-col items-center justify-center gap-1.5 text-zinc-400">
+        <ImageIcon className={iconClassName} />
+        {showLabel && (
+          <span className="text-[11px] font-medium">Нет картинки</span>
+        )}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+      style={style}
+      className={className}
+    />
+  );
+}
 
 const flatInputClass =
   'w-full bg-transparent border-0 border-b border-zinc-200 rounded-none px-0.5 py-1.5 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-[#0D9488] transition-colors';
@@ -139,6 +180,7 @@ interface GroupEditorViewProps {
     current: number;
     total: number;
     groupName: string;
+    groupId?: string;
   } | null;
   activeJournalId: string | null;
   initialTab?: EditorTab;
@@ -1605,10 +1647,7 @@ export function GroupEditorView({
         subtitle: lib.subtitle,
         description: lib.description,
         category: lib.category,
-        illustrationKey: lib.illustrationKey,
-        iconKey: lib.iconKey,
-        visualMode:
-          lib.visualMode || (lib.customImageUrl ? 'image' : 'illustration'),
+        visualMode: 'image' as const,
         imageMediaId: lib.imageMediaId ?? null,
         customImageUrl: lib.customImageUrl,
         cardBgColor: lib.cardBgColor,
@@ -1739,10 +1778,7 @@ export function GroupEditorView({
         subtitle: lib.subtitle,
         description: lib.description,
         category: lib.category,
-        illustrationKey: lib.illustrationKey,
-        iconKey: lib.iconKey,
-        visualMode:
-          lib.visualMode || (lib.customImageUrl ? 'image' : 'illustration'),
+        visualMode: 'image',
         imageMediaId: lib.imageMediaId ?? null,
         customImageUrl: lib.customImageUrl,
         cardBgColor: lib.cardBgColor,
@@ -1894,10 +1930,7 @@ export function GroupEditorView({
       subtitle: lib.subtitle,
       description: lib.description,
       category: lib.category,
-      illustrationKey: lib.illustrationKey,
-      iconKey: lib.iconKey,
-      visualMode:
-        lib.visualMode || (lib.customImageUrl ? 'image' : 'illustration'),
+      visualMode: 'image',
       imageMediaId: lib.imageMediaId ?? null,
       customImageUrl: lib.customImageUrl,
       cardBgColor: lib.cardBgColor,
@@ -1928,9 +1961,7 @@ export function GroupEditorView({
       subtitle: customIndividualModSub.trim() || 'Индивидуальный модуль',
       description: 'Освоен по индивидуальной программе.',
       category: 'programming',
-      illustrationKey: 'python',
-      iconKey: 'code',
-      visualMode: 'illustration',
+      visualMode: 'image',
       cardBgColor: '#F6E8BF',
       layoutVariant: 'classic',
       size: 'normal',
@@ -2162,12 +2193,10 @@ export function GroupEditorView({
 
           <button
             type="button"
-            disabled={
-              activeStudentsOnly.length === 0 || Boolean(batchProgress?.active)
-            }
+            disabled={Boolean(batchProgress?.active)}
             onClick={() => onBatchExportGroupZip(group)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold disabled:opacity-50 whitespace-nowrap shrink-0"
-            title="Скачать журналы всех учеников группы одним ZIP-архивом"
+            title="Выгрузить готовые журналы группы в ZIP-архив"
           >
             {batchProgress?.active ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -2177,7 +2206,7 @@ export function GroupEditorView({
             <span className="hidden md:inline">
               {batchProgress?.active
                 ? `ZIP: ${batchProgress.current}/${batchProgress.total}`
-                : 'ZIP группы'}
+                : 'Выгрузить готовые (ZIP)'}
             </span>
           </button>
         </div>
@@ -2859,17 +2888,31 @@ export function GroupEditorView({
                         </span>
                         <select
                           value={groupDraft.ageCategory}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const nextAge = e.target.value as AgeCategory;
                             setGroupDraft({
                               ...groupDraft,
-                              ageCategory: e.target.value as AgeCategory,
-                            })
-                          }
+                              ageCategory: nextAge,
+                            });
+                            setModalAgeFilter(normalizeToModuleAgeGroup(nextAge));
+                            setIndividualModAgeFilter(
+                              normalizeToModuleAgeGroup(nextAge)
+                            );
+                          }}
                           className={`mt-1 ${flatSelectClass}`}
                         >
-                          <option value="8-10">8–10 лет</option>
-                          <option value="11-13">11–13 лет</option>
-                          <option value="14-15">14–15 лет</option>
+                          <option value="6-8">6–8 лет (Младшая)</option>
+                          <option value="9-11">9–11 лет (Средняя)</option>
+                          <option value="12-14">12–14 лет (Старшая)</option>
+                          {(groupDraft.ageCategory === '8-10' ||
+                            groupDraft.ageCategory === '11-13' ||
+                            groupDraft.ageCategory === '14-15') && (
+                            <>
+                              <option value="8-10">8–10 лет (архивная)</option>
+                              <option value="11-13">11–13 лет (архивная)</option>
+                              <option value="14-15">14–15 лет (архивная)</option>
+                            </>
+                          )}
                         </select>
                       </label>
                     </div>
@@ -3020,9 +3063,6 @@ export function GroupEditorView({
                                 : undefined;
                             const resolvedUrl =
                               linkedMediaUrl || mod.customImageUrl;
-                            const effectiveMode =
-                              mod.visualMode ??
-                              (resolvedUrl ? 'image' : 'illustration');
                             const imgScale = mod.imageScale ?? 1;
                             const imgX = mod.imagePosX ?? 0;
                             const imgY = mod.imagePosY ?? 0;
@@ -3117,45 +3157,22 @@ export function GroupEditorView({
                                         })
                                       }
                                       style={{
-                                        backgroundColor: mod.cardBgColor,
+                                        backgroundColor: resolvedUrl
+                                          ? mod.cardBgColor
+                                          : '#F4F4F5',
                                       }}
                                       className="w-16 h-16 shrink-0 rounded-xl border border-zinc-200 overflow-hidden relative group flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
-                                      title="Настроить картинку или иконку модуля"
+                                      title="Настроить картинку и фон модуля"
                                     >
-                                      {effectiveMode === 'image' && resolvedUrl ? (
-                                        <img
-                                          src={resolvedUrl}
-                                          alt={mod.title}
-                                          referrerPolicy="no-referrer"
-                                          style={{
-                                            transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
-                                          }}
-                                          className="w-full h-full object-cover"
-                                        />
-                                      ) : effectiveMode === 'icon' ? (
-                                        <div
-                                          style={{
-                                            transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
-                                          }}
-                                          className="flex items-center justify-center w-full h-full"
-                                        >
-                                          <ModuleVectorIcon
-                                            iconKey={mod.iconKey}
-                                            className="w-9 h-9"
-                                          />
-                                        </div>
-                                      ) : (
-                                        <div
-                                          style={{
-                                            transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
-                                          }}
-                                          className="w-full h-full"
-                                        >
-                                          <ModuleSvgIllustration
-                                            type={mod.illustrationKey}
-                                          />
-                                        </div>
-                                      )}
+                                      <ModuleThumbImage
+                                        src={resolvedUrl}
+                                        alt={mod.title}
+                                        style={{
+                                          transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
+                                        }}
+                                        className="w-full h-full object-contain p-1"
+                                        iconClassName="w-5 h-5 stroke-[1.6]"
+                                      />
                                       <span className="absolute inset-0 bg-zinc-900/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                         <Camera className="w-4 h-4 text-white" />
                                       </span>
@@ -3221,61 +3238,31 @@ export function GroupEditorView({
                                       className={`${flatTextareaClass} leading-relaxed text-zinc-600`}
                                     />
                                     <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-                                      <div className="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5 text-[11px] font-semibold">
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setCommonDraft((prev) => ({
-                                              ...prev,
-                                              modules: prev.modules.map((m) =>
-                                                m.id === mod.id
-                                                  ? { ...m, visualMode: 'image' }
-                                                  : m
-                                              ),
-                                            }));
-                                            setEditingModuleVisual({
-                                              scope: 'common',
-                                              id: mod.id,
-                                            });
-                                          }}
-                                          className={`px-2 py-0.5 rounded-md transition-colors ${
-                                            effectiveMode === 'image'
-                                              ? 'bg-white text-zinc-900 shadow-2xs'
-                                              : 'text-zinc-500 hover:text-zinc-800'
-                                          }`}
-                                        >
-                                          Своя картинка
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
+                                      <label
+                                        className="inline-flex items-center gap-1.5 text-[11px] font-medium text-zinc-600 cursor-pointer"
+                                        title="Цвет фона изображения"
+                                      >
+                                        <input
+                                          type="color"
+                                          value={mod.cardBgColor || '#C9F3EE'}
+                                          onChange={(e) => {
+                                            const nextColor = e.target.value;
                                             setCommonDraft((prev) => ({
                                               ...prev,
                                               modules: prev.modules.map((m) =>
                                                 m.id === mod.id
                                                   ? {
                                                       ...m,
-                                                      visualMode: 'icon',
-                                                      iconKey:
-                                                        m.iconKey || 'python',
+                                                      cardBgColor: nextColor,
                                                     }
                                                   : m
                                               ),
                                             }));
-                                            setEditingModuleVisual({
-                                              scope: 'common',
-                                              id: mod.id,
-                                            });
                                           }}
-                                          className={`px-2 py-0.5 rounded-md transition-colors ${
-                                            effectiveMode === 'icon'
-                                              ? 'bg-[#0D9488] text-white shadow-2xs'
-                                              : 'text-zinc-500 hover:text-zinc-800'
-                                          }`}
-                                        >
-                                          Иконка
-                                        </button>
-                                      </div>
+                                          className="w-5 h-5 rounded border border-zinc-200 cursor-pointer p-0 bg-transparent"
+                                        />
+                                        <span>Цвет фона изображения</span>
+                                      </label>
                                       <button
                                         type="button"
                                         onClick={() =>
@@ -3286,9 +3273,7 @@ export function GroupEditorView({
                                         }
                                         className="text-[11px] font-medium text-[#0D9488] hover:underline"
                                       >
-                                        {effectiveMode === 'icon'
-                                          ? 'Выбрать SVG-иконку'
-                                          : 'Загрузить / медиатека'}
+                                        Загрузить / медиатека
                                       </button>
                                     </div>
                                   </div>
@@ -3688,7 +3673,7 @@ export function GroupEditorView({
                                     </button>
                                   </div>
                                   <div className="grid grid-cols-6 sm:grid-cols-9 gap-1.5">
-                                    {MODULE_VECTOR_ICON_OPTIONS.map((opt) => {
+                                    {DECOR_VECTOR_ICON_OPTIONS.map((opt) => {
                                       const selected =
                                         activeTopic.iconKey === opt.key;
                                       return (
@@ -3713,7 +3698,7 @@ export function GroupEditorView({
                                           }`}
                                           title={opt.label}
                                         >
-                                          <ModuleVectorIcon
+                                          <DecorVectorIcon
                                             iconKey={opt.key}
                                             className="w-6 h-6"
                                           />
@@ -4310,7 +4295,10 @@ export function GroupEditorView({
                       if (activeTextField.field === 'coverTitle') {
                         const curTitleSize =
                           activeDoc.page1.coverTitleSize ??
-                          (activeDoc.resident.ageCategory === '14-15' ? 50 : 58);
+                          (activeDoc.resident.ageCategory === '12-14' ||
+                          activeDoc.resident.ageCategory === '14-15'
+                            ? 50
+                            : 58);
                         const curTitleColor =
                           activeDoc.page1.coverTitleColor || '#FFFFFF';
                         fieldLabel = 'Обложка · Заголовок «МОЙ ПУТЬ»';
@@ -5053,7 +5041,7 @@ export function GroupEditorView({
                                   </button>
                                 </div>
                                 <div className="grid grid-cols-5 gap-1.5 max-h-44 overflow-y-auto pr-0.5">
-                                  {MODULE_VECTOR_ICON_OPTIONS.map((opt) => (
+                                  {DECOR_VECTOR_ICON_OPTIONS.map((opt) => (
                                     <button
                                       key={opt.key}
                                       type="button"
@@ -5067,7 +5055,7 @@ export function GroupEditorView({
                                       title={opt.label}
                                       className="p-1.5 rounded-lg border border-zinc-200 hover:border-[#0D9488] hover:bg-[#F0FDFA] flex flex-col items-center gap-1 transition-colors"
                                     >
-                                      <ModuleVectorIcon
+                                      <DecorVectorIcon
                                         iconKey={opt.key}
                                         className="w-7 h-7"
                                       />
@@ -6027,7 +6015,10 @@ export function GroupEditorView({
                                         max={92}
                                         value={
                                           activeDoc.page1.coverTitleSize ??
-                                          (activeDoc.resident.ageCategory === '14-15'
+                                          (activeDoc.resident.ageCategory ===
+                                            '12-14' ||
+                                          activeDoc.resident.ageCategory ===
+                                            '14-15'
                                             ? 50
                                             : 58)
                                         }
@@ -7300,9 +7291,6 @@ export function GroupEditorView({
                                             : undefined;
                                         const resolvedUrl =
                                           linkedUrl || mod.customImageUrl;
-                                        const effectiveMode =
-                                          mod.visualMode ??
-                                          (resolvedUrl ? 'image' : 'illustration');
                                         const isHighlighted =
                                           highlightedStudentModId === mod.id;
 
@@ -7355,30 +7343,19 @@ export function GroupEditorView({
                                                     })
                                                   }
                                                   style={{
-                                                    backgroundColor:
-                                                      mod.cardBgColor,
+                                                    backgroundColor: resolvedUrl
+                                                      ? mod.cardBgColor
+                                                      : '#F4F4F5',
                                                   }}
                                                   className="w-9 h-9 rounded-lg border border-zinc-200 overflow-hidden shrink-0 flex items-center justify-center relative group/thumb"
-                                                  title="Настроить картинку или иконку модуля"
+                                                  title="Настроить картинку и фон модуля"
                                                 >
-                                                  {effectiveMode === 'image' &&
-                                                  resolvedUrl ? (
-                                                    <img
-                                                      src={resolvedUrl}
-                                                      alt={mod.title}
-                                                      referrerPolicy="no-referrer"
-                                                      className="w-full h-full object-cover"
-                                                    />
-                                                  ) : effectiveMode === 'icon' ? (
-                                                    <ModuleVectorIcon
-                                                      iconKey={mod.iconKey}
-                                                      className="w-6 h-6"
-                                                    />
-                                                  ) : (
-                                                    <ModuleSvgIllustration
-                                                      type={mod.illustrationKey}
-                                                    />
-                                                  )}
+                                                  <ModuleThumbImage
+                                                    src={resolvedUrl}
+                                                    alt={mod.title}
+                                                    className="w-full h-full object-contain p-0.5"
+                                                    iconClassName="w-4 h-4 stroke-[1.6]"
+                                                  />
                                                 </button>
 
                                                 <div className="min-w-0 flex-1">
@@ -7415,51 +7392,40 @@ export function GroupEditorView({
                                                     )}
                                                   </div>
 
-                                                  {/* Segmented Switcher: Своя картинка / Иконка */}
-                                                  <div className="mt-1.5 flex items-center gap-1.5">
-                                                    <div className="inline-flex rounded-md border border-zinc-200 bg-zinc-50 p-0.5 text-[10px] font-semibold">
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => {
+                                                  <div className="mt-1.5 flex items-center gap-2.5">
+                                                    <button
+                                                      type="button"
+                                                      onClick={() =>
+                                                        setEditingModuleVisual({
+                                                          scope: 'individual',
+                                                          id: mod.id,
+                                                        })
+                                                      }
+                                                      className="text-[10px] font-semibold text-[#0D9488] hover:underline"
+                                                    >
+                                                      Картинка
+                                                    </button>
+
+                                                    <label
+                                                      className="inline-flex items-center gap-1 text-[10px] font-medium text-zinc-600 cursor-pointer"
+                                                      title="Цвет фона изображения"
+                                                    >
+                                                      <input
+                                                        type="color"
+                                                        value={
+                                                          mod.cardBgColor ||
+                                                          '#C9F3EE'
+                                                        }
+                                                        onChange={(e) =>
                                                           updateStudentMod({
-                                                            visualMode: 'image',
-                                                          });
-                                                          setEditingModuleVisual({
-                                                            scope: 'individual',
-                                                            id: mod.id,
-                                                          });
-                                                        }}
-                                                        className={`px-1.5 py-0.5 rounded transition-colors ${
-                                                          effectiveMode === 'image'
-                                                            ? 'bg-white text-zinc-900 shadow-2xs'
-                                                            : 'text-zinc-500 hover:text-zinc-800'
-                                                        }`}
-                                                      >
-                                                        Своя картинка
-                                                      </button>
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                          updateStudentMod({
-                                                            visualMode: 'icon',
-                                                            iconKey:
-                                                              mod.iconKey ||
-                                                              'python',
-                                                          });
-                                                          setEditingModuleVisual({
-                                                            scope: 'individual',
-                                                            id: mod.id,
-                                                          });
-                                                        }}
-                                                        className={`px-1.5 py-0.5 rounded transition-colors ${
-                                                          effectiveMode === 'icon'
-                                                            ? 'bg-[#0D9488] text-white shadow-2xs'
-                                                            : 'text-zinc-500 hover:text-zinc-800'
-                                                        }`}
-                                                      >
-                                                        Иконка
-                                                      </button>
-                                                    </div>
+                                                            cardBgColor:
+                                                              e.target.value,
+                                                          })
+                                                        }
+                                                        className="w-4 h-4 rounded border border-zinc-200 cursor-pointer p-0 bg-transparent"
+                                                      />
+                                                      <span>Фон</span>
+                                                    </label>
                                                   </div>
                                                 </div>
                                               </div>
@@ -8979,7 +8945,7 @@ export function GroupEditorView({
         </div>
       )}
 
-      {/* MODULE VISUAL MODAL: СВОЯ КАРТИНКА / ВЕКТОРНАЯ ИКОНКА (ДЛЯ ГРУППЫ И УЧЕНИКА) */}
+      {/* MODULE VISUAL MODAL: ИЛЛЮСТРАЦИЯ И ЦВЕТ ФОНА (ДЛЯ ГРУППЫ И УЧЕНИКА) */}
       {editingModuleVisual &&
         (() => {
           const targetMod =
@@ -8994,8 +8960,6 @@ export function GroupEditorView({
               ? mediaAssets.find((a) => a.id === targetMod.imageMediaId)?.url
               : undefined;
           const resolvedUrl = linkedUrl || targetMod.customImageUrl;
-          const effectiveMode =
-            targetMod.visualMode ?? (resolvedUrl ? 'image' : 'illustration');
           const imgScale = targetMod.imageScale ?? 1;
           const imgX = targetMod.imagePosX ?? 0;
           const imgY = targetMod.imagePosY ?? 0;
@@ -9020,8 +8984,6 @@ export function GroupEditorView({
               });
             }
           };
-
-          const isIconTab = effectiveMode === 'icon';
 
           return (
             <div
@@ -9051,186 +9013,149 @@ export function GroupEditorView({
                 </div>
 
                 <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
-                  {/* Live A4-aspect preview */}
-                  <div
-                    style={{ backgroundColor: targetMod.cardBgColor }}
-                    className="w-[220px] h-[90px] mx-auto rounded-xl border border-black/10 overflow-hidden flex items-center justify-center"
-                  >
-                    {effectiveMode === 'image' && resolvedUrl ? (
-                      <img
+                  {/* Live A4-aspect 4:3 preview */}
+                  <div className="w-[220px] mx-auto rounded-xl border-[1.6px] border-[#18181B] overflow-hidden shadow-xs bg-white">
+                    <div
+                      style={{
+                        backgroundColor: resolvedUrl
+                          ? targetMod.cardBgColor || '#C9F3EE'
+                          : '#F4F4F5',
+                      }}
+                      className="w-full aspect-[4/3] p-2.5 border-b border-black/10 overflow-hidden flex items-center justify-center"
+                    >
+                      <ModuleThumbImage
                         src={resolvedUrl}
                         alt={targetMod.title}
-                        referrerPolicy="no-referrer"
                         style={{
                           transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
                         }}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-contain drop-shadow-[0_4px_10px_rgba(15,23,42,0.16)]"
+                        iconClassName="w-8 h-8 stroke-[1.6]"
+                        showLabel
                       />
-                    ) : effectiveMode === 'icon' ? (
-                      <div
-                        style={{
-                          transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
-                        }}
-                        className="flex items-center justify-center w-full h-full"
-                      >
-                        <div className="w-[60px] h-[60px] rounded-2xl bg-white/70 border-[1.5px] border-[#18181B]/15 shadow-xs flex items-center justify-center">
-                          <ModuleVectorIcon
-                            iconKey={targetMod.iconKey}
-                            className="w-11 h-11"
-                          />
-                        </div>
+                    </div>
+                    <div className="px-3 py-2 text-center bg-white">
+                      <div className="font-bold text-xs text-zinc-900 truncate">
+                        {targetMod.title}
                       </div>
-                    ) : (
-                      <div
-                        style={{
-                          transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
-                        }}
-                        className="w-full h-full"
-                      >
-                        <ModuleSvgIllustration
-                          type={targetMod.illustrationKey}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Primary Segmented Switcher: Своя картинка / Иконка */}
-                  <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-zinc-100 border border-zinc-200/80">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateTargetMod({
-                          visualMode: 'image',
-                        })
-                      }
-                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-colors ${
-                        !isIconTab && effectiveMode === 'image'
-                          ? 'bg-white text-zinc-900 shadow-xs'
-                          : 'text-zinc-600 hover:text-zinc-900'
-                      }`}
-                    >
-                      Своя картинка
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateTargetMod({
-                          visualMode: 'icon',
-                          iconKey: targetMod.iconKey || 'python',
-                          imageScale: 1,
-                          imagePosX: 0,
-                          imagePosY: 0,
-                        })
-                      }
-                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-colors ${
-                        isIconTab
-                          ? 'bg-[#0D9488] text-white shadow-xs'
-                          : 'text-zinc-600 hover:text-zinc-900'
-                      }`}
-                    >
-                      Иконка (SVG-библиотека)
-                    </button>
-                  </div>
-
-                  {isIconTab ? (
-                    /* Vector SVG Icon Library Grid */
-                    <div className="space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-zinc-700">
-                          Выберите векторную иконку
-                        </span>
-                        <span className="text-[11px] text-zinc-400">
-                          Python, 3D, Web, ИИ, Роботы и др.
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[250px] overflow-y-auto pr-1">
-                        {MODULE_VECTOR_ICON_OPTIONS.map((opt) => {
-                          const selected = targetMod.iconKey === opt.key;
-                          return (
-                            <button
-                              key={opt.key}
-                              type="button"
-                              onClick={() =>
-                                updateTargetMod({
-                                  visualMode: 'icon',
-                                  iconKey: opt.key as ModuleLucideIconKey,
-                                })
-                              }
-                              className={`p-2 rounded-xl border flex flex-col items-center justify-center gap-1.5 text-center transition-all ${
-                                selected
-                                  ? 'border-[#0D9488] bg-[#F0FDFA] ring-2 ring-[#0D9488]/25'
-                                  : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50'
-                              }`}
-                            >
-                              <ModuleVectorIcon
-                                iconKey={opt.key}
-                                className="w-8 h-8"
-                              />
-                              <span className="text-[10px] font-semibold leading-tight text-zinc-700 line-clamp-1">
-                                {opt.label}
-                              </span>
-                            </button>
-                          );
-                        })}
+                      <div className="text-[10px] text-zinc-500 truncate">
+                        {targetMod.subtitle || 'Модуль программы'}
                       </div>
                     </div>
-                  ) : (
-                    /* Image Upload + Media Picker + Crop/Zoom */
-                    <div className="space-y-4">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onOpenMediaPicker('modules', (url, asset) =>
+                  </div>
+
+                  {/* Цвет фона изображения */}
+                  <div className="p-3 rounded-xl border border-zinc-200 bg-[#FCFCFA] space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-zinc-700">
+                        Цвет фона изображения
+                      </span>
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <span className="font-mono text-[11px] text-zinc-500 uppercase">
+                          {targetMod.cardBgColor || '#C9F3EE'}
+                        </span>
+                        <input
+                          type="color"
+                          value={targetMod.cardBgColor || '#C9F3EE'}
+                          onChange={(e) =>
+                            updateTargetMod({ cardBgColor: e.target.value })
+                          }
+                          className="w-7 h-7 rounded-md border border-zinc-200 cursor-pointer p-0 bg-white"
+                        />
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {[
+                        '#C9F3EE',
+                        '#FFE885',
+                        '#DDD2FE',
+                        '#DBEAFE',
+                        '#FEF08A',
+                        '#E9D5FF',
+                        '#E0F2FE',
+                        '#D1FAE5',
+                        '#FCE7F3',
+                        '#FFFFFF',
+                      ].map((swatch) => {
+                        const active =
+                          (targetMod.cardBgColor || '').toUpperCase() ===
+                          swatch;
+                        return (
+                          <button
+                            key={swatch}
+                            type="button"
+                            onClick={() =>
+                              updateTargetMod({ cardBgColor: swatch })
+                            }
+                            style={{ backgroundColor: swatch }}
+                            className={`w-6 h-6 rounded-md border transition-transform ${
+                              active
+                                ? 'border-zinc-900 ring-2 ring-[#0D9488] scale-105'
+                                : 'border-black/15 hover:scale-105'
+                            }`}
+                            title={swatch}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Image Upload + Media Picker + Crop/Zoom */}
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onOpenMediaPicker('modules', (url, asset) =>
+                            updateTargetMod({
+                              visualMode: 'image',
+                              customImageUrl: url,
+                              imageMediaId: asset?.id ?? null,
+                            })
+                          )
+                        }
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white font-semibold whitespace-nowrap"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5" />
+                        <span>Выбрать из медиатеки</span>
+                      </button>
+
+                      <label className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-zinc-200 hover:bg-zinc-50 font-semibold text-zinc-700 cursor-pointer whitespace-nowrap">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Загрузить файл</span>
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="hidden"
+                          onChange={(e) =>
+                            handleUploadImage(e.target.files?.[0], (url) =>
                               updateTargetMod({
                                 visualMode: 'image',
                                 customImageUrl: url,
-                                imageMediaId: asset?.id ?? null,
+                                imageMediaId: null,
                               })
                             )
                           }
-                          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white font-semibold whitespace-nowrap"
-                        >
-                          <ImageIcon className="w-3.5 h-3.5" />
-                          <span>Выбрать из медиатеки</span>
-                        </button>
+                        />
+                      </label>
 
-                        <label className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-zinc-200 hover:bg-zinc-50 font-semibold text-zinc-700 cursor-pointer whitespace-nowrap">
-                          <Upload className="w-3.5 h-3.5" />
-                          <span>Загрузить файл</span>
-                          <input
-                            type="file"
-                            accept="image/png,image/jpeg,image/webp"
-                            className="hidden"
-                            onChange={(e) =>
-                              handleUploadImage(e.target.files?.[0], (url) =>
-                                updateTargetMod({
-                                  visualMode: 'image',
-                                  customImageUrl: url,
-                                  imageMediaId: null,
-                                })
-                              )
-                            }
-                          />
-                        </label>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateTargetMod({
-                              visualMode: 'illustration',
-                              customImageUrl: undefined,
-                              imageMediaId: null,
-                              imageScale: 1,
-                              imagePosX: 0,
-                              imagePosY: 0,
-                            })
-                          }
-                          className="w-full py-1 text-[11px] font-medium text-zinc-500 hover:text-zinc-900 text-center"
-                        >
-                          Сбросить на встроенную иллюстрацию
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateTargetMod({
+                            visualMode: 'image',
+                            customImageUrl: undefined,
+                            imageMediaId: null,
+                            imageScale: 1,
+                            imagePosX: 0,
+                            imagePosY: 0,
+                          })
+                        }
+                        className="w-full py-1 text-[11px] font-medium text-zinc-500 hover:text-zinc-900 text-center"
+                      >
+                        Удалить картинку (показать заглушку)
+                      </button>
+                    </div>
 
                       {/* Crop & Zoom Sliders */}
                       <div className="pt-3 border-t border-zinc-100 space-y-3">
@@ -9321,7 +9246,6 @@ export function GroupEditorView({
                         </label>
                       </div>
                     </div>
-                  )}
                 </div>
 
                 <div className="shrink-0 px-5 py-3 border-t border-zinc-200 flex justify-end">

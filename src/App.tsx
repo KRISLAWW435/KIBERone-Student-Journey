@@ -61,7 +61,7 @@ import {
 import {
   buildJournalPdfUint8Array,
   exportGroupZipPdf,
-  sanitizeFilename,
+  formatJournalPdfFilename,
 } from './utils/exportService';
 import {
   applyGroupCommonDataToJournal,
@@ -106,6 +106,7 @@ export default function App() {
     current: number;
     total: number;
     groupName: string;
+    groupId?: string;
   } | null>(null);
 
   // Media Library Modal state
@@ -679,7 +680,7 @@ export default function App() {
     showToast(`Создана группа по шаблону «${tpl.name}»`);
   };
 
-  // Sequential offscreen rendering + ZIP packaging of group PDFs
+  // Sequential offscreen rendering + ZIP packaging of ready group PDFs
   const handleBatchExportGroupZip = async (group: StudentGroup) => {
     const groupRes = residents.filter(
       (r) => r.groupId === group.id && r.status === 'active'
@@ -688,10 +689,20 @@ export default function App() {
       .map((r) =>
         journals.find((j) => j.id === r.journalId || j.residentId === r.id)
       )
-      .filter((d): d is JournalDocument => Boolean(d));
+      .filter((d): d is JournalDocument => {
+        if (!d) return false;
+        const progress = computeJournalProgress(d);
+        return (
+          d.status === 'ready' ||
+          d.status === 'exported' ||
+          progress.filledBlocks >= progress.totalBlocks
+        );
+      });
 
     if (docsToExport.length === 0) {
-      showToast('У активных учеников этой группы ещё нет журналов для экспорта.');
+      showToast(
+        'В этой группе пока нет готовых журналов (нужен статус «Готов к выгрузке» или 5/5 блоков).'
+      );
       return;
     }
 
@@ -700,9 +711,11 @@ export default function App() {
       current: 0,
       total: docsToExport.length,
       groupName: group.name,
+      groupId: group.id,
     });
 
     const files: Array<{ filename: string; pdfBytes: Uint8Array }> = [];
+    const usedNames = new Set<string>();
 
     try {
       for (let i = 0; i < docsToExport.length; i++) {
@@ -712,12 +725,13 @@ export default function App() {
           current: i + 1,
           total: docsToExport.length,
           groupName: group.name,
+          groupId: group.id,
         });
         setBatchRenderDoc(doc);
 
         await new Promise((resolve) =>
           requestAnimationFrame(() =>
-            requestAnimationFrame(() => setTimeout(resolve, 90))
+            requestAnimationFrame(() => setTimeout(resolve, 140))
           )
         );
 
@@ -726,9 +740,11 @@ export default function App() {
             exportPage1Ref.current,
             exportPage2Ref.current
           );
-          const idxPrefix = String(i + 1).padStart(2, '0');
           files.push({
-            filename: `${idxPrefix}-${sanitizeFilename(doc.resident.fullName)}.pdf`,
+            filename: formatJournalPdfFilename(
+              doc.resident.fullName,
+              usedNames
+            ),
             pdfBytes: bytes,
           });
         }
@@ -945,6 +961,8 @@ export default function App() {
             }
             onExportAllBackup={handleExportAllBackup}
             onImportBackup={handleImportBackup}
+            onBatchExportGroupZip={handleBatchExportGroupZip}
+            batchProgress={batchProgress}
             openCreateGroupSignal={createGroupSignal}
           />
         )}
