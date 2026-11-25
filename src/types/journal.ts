@@ -170,7 +170,8 @@ export type DecorElementKind =
   | 'sticker'
   | 'icon'
   | 'text'
-  | 'image';
+  | 'image'
+  | 'tape';
 
 export interface DecorElement {
   id: string;
@@ -268,6 +269,7 @@ export interface ProjectItem {
 export interface Page1Config {
   background?: PageBackgroundConfig;
   decorElements?: DecorElement[];
+  decorSeeded?: boolean;
   objectLayouts?: Record<string, CanvasObjectTransform>;
   coverTitle: string;
   coverSubtitle: string;
@@ -281,6 +283,7 @@ export interface Page1Config {
   bearOffsetX: number;
   bearOffsetY: number;
   bearCropTop: boolean;
+  coverSpeechBubbleText?: string;
   logoUrl: string;
   showModules: boolean;
   modules: ModuleItem[];
@@ -311,6 +314,8 @@ export interface NextTopicItem {
 export interface Page2Config {
   background?: PageBackgroundConfig;
   decorElements?: DecorElement[];
+  decorSeeded?: boolean;
+  tapeSeeded?: boolean;
   objectLayouts?: Record<string, CanvasObjectTransform>;
   headerTitle: string;
   headerTealColor: string;
@@ -349,6 +354,8 @@ export interface Page2Config {
     bearScale: number;
     bearOffsetX: number;
     bearOffsetY: number;
+    speechBubbleText?: string;
+    bearVrMigrated?: boolean;
   };
   footerWebsite: string;
 }
@@ -532,6 +539,7 @@ export type EditorSectionTarget =
 export type ActiveTextFieldTarget =
   | { page: 1; field: 'coverTitle' }
   | { page: 1; field: 'coverSubtitle' }
+  | { page: 1; field: 'coverSpeechBubble' }
   | { page: 1; field: 'moduleTitle'; itemId: string }
   | { page: 1; field: 'moduleSubtitle'; itemId: string }
   | { page: 1; field: 'moduleDescription'; itemId: string }

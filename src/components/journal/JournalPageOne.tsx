@@ -154,7 +154,10 @@ export function JournalPageOne({
         onInteractionEnd={onInteractionEnd}
       />
 
-      <div style={{ width: '794px', height: '1123px' }} className="flex flex-col">
+      <div
+        style={{ width: '794px', height: '1123px' }}
+        className="flex flex-col pointer-events-none"
+      >
         {/* 1. COVER SECTION (strict 794x316px) */}
         <DraggableDesignWrapper
           id="cover"
@@ -197,13 +200,17 @@ export function JournalPageOne({
           />
         </DraggableDesignWrapper>
 
-        {/* MAIN BODY (balanced flow within 807px, never clipping ProjectsSection) */}
+        {/* MAIN BODY (balanced flow within 807px with generous breathing room) */}
         <div
           style={{
             width: '794px',
             height: '807px',
           }}
-          className="px-[40px] pt-[12px] pb-[14px] flex flex-col justify-start gap-[16px] shrink-0 overflow-visible"
+          className={`pointer-events-none relative z-[12] px-[40px] pb-[16px] flex flex-col justify-start shrink-0 overflow-visible ${
+            isCompactModules || isCompactSkills
+              ? 'pt-[28px] gap-[22px]'
+              : 'pt-[40px] gap-[30px]'
+          }`}
         >
           {/* 2. МОИ ОТКРЫТИЯ */}
           {page1.showModules && visibleModules.length > 0 && (
@@ -232,14 +239,14 @@ export function JournalPageOne({
               className="shrink-0"
             >
               <section style={{ width: '714px' }}>
-                <h2 className="font-extrabold text-[17px] leading-[20px] tracking-tight uppercase text-[#111827] mb-[6px]">
+                <h2 className="font-journal-display font-black text-[17.5px] leading-[21px] tracking-tight uppercase text-[#111827] mb-[14px]">
                   МОИ ОТКРЫТИЯ
                 </h2>
                 <div
                   style={{
                     width: visibleModules.length === 1 ? '260px' : '714px',
                   }}
-                  className={`grid items-stretch auto-rows-fr gap-[12px] ${
+                  className={`grid items-stretch auto-rows-fr gap-[14px] ${
                     visibleModules.length === 1
                       ? 'grid-cols-1'
                       : visibleModules.length === 2 || visibleModules.length === 4
@@ -344,11 +351,11 @@ export function JournalPageOne({
               className="shrink-0"
             >
               <section style={{ width: '714px' }}>
-                <div className="mb-[4px] flex items-baseline gap-[10px]">
-                  <h2 className="font-extrabold text-[17px] leading-[20px] tracking-tight uppercase text-[#111827]">
+                <div className="mb-[10px] flex items-baseline gap-[10px]">
+                  <h2 className="font-journal-display font-black text-[17.5px] leading-[21px] tracking-tight uppercase text-[#111827]">
                     ЧЕМУ Я НАУЧИЛСЯ
                   </h2>
-                  <span className="text-[12px] font-medium text-[#52525B] leading-none">
+                  <span className="font-journal-body text-[12px] font-semibold text-[#52525B] leading-none">
                     Важные навыки
                   </span>
                 </div>
@@ -356,7 +363,7 @@ export function JournalPageOne({
                   style={{
                     width: visibleSkills.length === 1 ? '220px' : '714px',
                   }}
-                  className={`grid items-stretch gap-x-[12px] gap-y-[6px] ${skillsGridColsClass}`}
+                  className={`grid items-stretch gap-x-[12px] gap-y-[8px] ${skillsGridColsClass}`}
                 >
                   {visibleSkills.map((skill, idx) => (
                     <SkillTag
@@ -381,24 +388,26 @@ export function JournalPageOne({
             </DraggableDesignWrapper>
           )}
 
-          {/* 4. МОИ РЕЗУЛЬТАТЫ (Dedicated ProjectsSection component) */}
+          {/* 4. МОИ РЕЗУЛЬТАТЫ (Extra top breathing room after Skills) */}
           {page1.showProjects !== false && (
-            <ProjectsSection
-              projects={page1.projects}
-              layouts={layouts}
-              compact={isCompactProjects || isCompactModules}
-              designMode={designMode}
-              scaleFactor={scaleFactor}
-              activeTarget={activeTarget}
-              activeTextField={activeTextField}
-              onSelectTarget={onSelectTarget}
-              onSelectTextField={onSelectTextField}
-              onUpdateTransform={onUpdateTransform}
-              onUpdateProject={onUpdateProject}
-              onSnapLinesChange={setSnapLines}
-              onInteractionStart={onInteractionStart}
-              onInteractionEnd={onInteractionEnd}
-            />
+            <div className={isCompactModules || isCompactSkills ? 'mt-[8px]' : 'mt-[14px]'}>
+              <ProjectsSection
+                projects={page1.projects}
+                layouts={layouts}
+                compact={isCompactProjects || isCompactModules}
+                designMode={designMode}
+                scaleFactor={scaleFactor}
+                activeTarget={activeTarget}
+                activeTextField={activeTextField}
+                onSelectTarget={onSelectTarget}
+                onSelectTextField={onSelectTextField}
+                onUpdateTransform={onUpdateTransform}
+                onUpdateProject={onUpdateProject}
+                onSnapLinesChange={setSnapLines}
+                onInteractionStart={onInteractionStart}
+                onInteractionEnd={onInteractionEnd}
+              />
+            </div>
           )}
         </div>
       </div>

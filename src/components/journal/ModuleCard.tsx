@@ -36,12 +36,16 @@ export function ModuleCard({
 }: ModuleCardProps) {
   const tiltDeg =
     ageCategory === '14-15'
-      ? 0
+      ? index % 3 === 0
+        ? -0.6
+        : index % 3 === 1
+        ? 0.6
+        : -0.5
       : index % 3 === 0
-      ? -1.1
+      ? -1.4
       : index % 3 === 1
-      ? 0.9
-      : -0.9;
+      ? 1.2
+      : -1.1;
 
   const variant = module.layoutVariant ?? 'classic';
   const imgScale = module.imageScale ?? 1;
@@ -57,6 +61,13 @@ export function ModuleCard({
   const effectiveMode =
     module.visualMode ?? (resolvedImageUrl ? 'image' : 'illustration');
 
+  const tapeCorner =
+    index % 3 === 0
+      ? { pos: '-top-[8px] -left-[16px]', rot: '-32deg' }
+      : index % 3 === 1
+      ? { pos: '-top-[8px] -right-[16px]', rot: '28deg' }
+      : { pos: '-top-[8px] -left-[13px]', rot: '-22deg' };
+
   return (
     <div
       onClick={(e) => {
@@ -65,12 +76,35 @@ export function ModuleCard({
         onClick();
       }}
       style={{ transform: `rotate(${tiltDeg}deg)` }}
-      className={`bg-white border-[1.5px] border-[#18181B] rounded-xl ${
+      className={`relative overflow-visible bg-white border-[1.7px] border-[#18181B] rounded-xl ${
         compact ? 'p-[8px]' : 'p-[10px]'
-      } shadow-[0_4px_10px_rgba(0,0,0,0.08)] flex flex-col self-stretch ${
+      } shadow-[0_8px_18px_rgba(17,24,39,0.13),0_2px_5px_rgba(17,24,39,0.08)] flex flex-col self-stretch ${
         onClick ? 'editable-block' : ''
       } ${isActive ? 'editable-block-active' : ''}`}
     >
+      {/* Translucent Masking Tape ("Скотч") anchoring the card corner onto paper */}
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 64 20"
+        style={{ transform: `rotate(${tapeCorner.rot})` }}
+        className={`pointer-events-none absolute ${tapeCorner.pos} w-[52px] h-[17px] z-20 drop-shadow-[0_1px_2px_rgba(17,24,39,0.14)]`}
+        fill="none"
+      >
+        <path
+          d="M3 2 L61 1.5 L59 6.5 L62 11.5 L59.5 18 L2.5 18.5 L5 12 L2 6.5 Z"
+          fill="rgba(254, 240, 138, 0.72)"
+          stroke="rgba(180, 155, 60, 0.42)"
+          strokeWidth="0.9"
+        />
+        <line
+          x1="10"
+          y1="6.5"
+          x2="52"
+          y2="6"
+          stroke="rgba(255, 255, 255, 0.48)"
+          strokeWidth="1.2"
+        />
+      </svg>
       {/* Badge-top variant header */}
       {variant === 'badge-top' && (
         <div className="flex items-center justify-between px-[4px] mb-[5px] shrink-0">
@@ -93,7 +127,7 @@ export function ModuleCard({
             backgroundColor: module.cardBgColor,
             height: compact ? '48px' : '64px',
           }}
-          className="self-stretch rounded-lg border border-black/10 overflow-hidden flex items-center justify-center mb-[6px] shrink-0 relative"
+          className="self-stretch rounded-lg border border-black/12 overflow-hidden flex items-center justify-center mb-[7px] shrink-0 relative"
         >
           {effectiveMode === 'image' && resolvedImageUrl ? (
             <img
@@ -115,7 +149,7 @@ export function ModuleCard({
               <div
                 className={`${
                   compact ? 'w-[42px] h-[42px]' : 'w-[52px] h-[52px]'
-                } rounded-2xl bg-white/65 border-[1.5px] border-[#18181B]/15 shadow-[0_3px_10px_rgba(24,24,27,0.08)] flex items-center justify-center`}
+                } rounded-2xl bg-white border-[1.6px] border-[#18181B] shadow-[0_4px_10px_rgba(24,24,27,0.14)] flex items-center justify-center`}
               >
                 <ModuleVectorIcon
                   iconKey={module.iconKey}
@@ -127,6 +161,8 @@ export function ModuleCard({
             <div
               style={{
                 transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
+                filter:
+                  'drop-shadow(1.5px 0 0 rgba(255,255,255,0.85)) drop-shadow(-1.5px 0 0 rgba(255,255,255,0.85)) drop-shadow(0 1.5px 0 rgba(255,255,255,0.85)) drop-shadow(0 -1.5px 0 rgba(255,255,255,0.85))',
               }}
               className="w-full h-full"
             >
@@ -156,9 +192,9 @@ export function ModuleCard({
             activeTextField.itemId === module.id
           }
           as="h3"
-          className={`font-extrabold ${
+          className={`font-journal-display font-extrabold ${
             compact ? 'text-[12.5px]' : 'text-[14px]'
-          } leading-[1.15] text-[#111827] block`}
+          } leading-[1.18] text-[#111827] block`}
         />
         {variant !== 'badge-top' && (module.subtitle || onSelectTextField) && (
           <InlineEditableText
@@ -202,11 +238,11 @@ export function ModuleCard({
             activeTextField.itemId === module.id
           }
           as="p"
-          className={`${
+          className={`font-journal-body ${
             compact
-              ? 'text-[10.5px] leading-[1.24] line-clamp-2'
-              : 'text-[11px] leading-[1.28] line-clamp-3'
-          } text-[#27272A] mt-[3px] block`}
+              ? 'text-[10px] leading-[1.35] line-clamp-2'
+              : 'text-[10.5px] leading-[1.42] line-clamp-3'
+          } text-[#27272A] mt-[4px] block`}
         />
       </div>
     </div>

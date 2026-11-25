@@ -135,7 +135,10 @@ export function JournalPageTwo({
         onInteractionEnd={onInteractionEnd}
       />
 
-      <div style={{ width: '794px', height: '1123px' }} className="flex flex-col">
+      <div
+        style={{ width: '794px', height: '1123px' }}
+        className="flex flex-col pointer-events-none"
+      >
         {/* TOP CLEAN TEAL + YELLOW WAVE HEADER (794x128px) */}
         <DraggableDesignWrapper
           id="header"
@@ -196,16 +199,19 @@ export function JournalPageTwo({
                 activeTextField.field === 'page2HeaderTitle'
               }
               as="h2"
-              className="relative z-10 font-extrabold text-[38px] leading-none tracking-tight text-[#111827] text-center"
-              style={{ fontFamily: 'var(--font-journal)' }}
+              className="font-journal-display relative z-[15] font-black text-[46px] leading-none tracking-tight text-[#FF7B6B] text-center uppercase"
+              style={{
+                textShadow:
+                  '2px 0 0 #18181B, -2px 0 0 #18181B, 0 2px 0 #18181B, 0 -2px 0 #18181B, 2px 2px 0 #18181B, -2px 2px 0 #18181B, 2px -2px 0 #18181B, -2px -2px 0 #18181B, 0 0 8px #FFFFFF, 4px 5px 0 rgba(24,24,27,0.85)',
+              }}
             />
           </header>
         </DraggableDesignWrapper>
 
-        {/* BODY: 3-column Strengths -> Fixed 50/50 Pride & MentorNote -> Winding-Road NextChapter */}
+        {/* BODY: 3-column Strengths -> Fixed 50/50 Pride & MentorNote -> Open Winding-Road NextChapter */}
         <div
           style={{ width: '794px', height: '995px' }}
-          className="px-[40px] pt-[12px] pb-[14px] flex flex-col justify-between gap-[12px] shrink-0"
+          className="pointer-events-none relative z-[12] px-[40px] pt-[12px] pb-0 flex flex-col justify-between gap-[10px] shrink-0"
         >
           {/* 1. МОИ СИЛЬНЫЕ СТОРОНЫ */}
           {page2.showStrengths && strengthsToRender.length > 0 && (
@@ -233,7 +239,7 @@ export function JournalPageTwo({
               className="shrink-0"
             >
               <section style={{ width: '714px' }} className="rounded-xl">
-                <h3 className="font-extrabold text-[17px] leading-[20px] tracking-tight uppercase text-[#111827] mb-[8px]">
+                <h3 className="font-journal-display font-black text-[17.5px] leading-[21px] tracking-tight uppercase text-[#111827] mb-[10px]">
                   МОИ СИЛЬНЫЕ СТОРОНЫ
                 </h3>
                 <div
@@ -407,8 +413,8 @@ export function JournalPageTwo({
               onSnapLinesChange={setSnapLines}
               onInteractionStart={onInteractionStart}
               onInteractionEnd={onInteractionEnd}
-              style={{ width: '714px', height: '254px' }}
-              className="shrink-0"
+              style={{ width: '794px', height: '266px' }}
+              className="shrink-0 -mx-[40px]"
             >
               <NextChapter
                 config={page2}

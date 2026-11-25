@@ -37,15 +37,15 @@ export function MentorNote({
       style={{ width: '345px' }}
       className="shrink-0 flex flex-col h-full"
     >
-      <h3 className="font-extrabold text-[17px] leading-[20px] tracking-tight uppercase text-[#111827] mb-[8px] shrink-0">
+      <h3 className="font-journal-display font-black text-[17.5px] leading-[21px] tracking-tight uppercase text-[#111827] mb-[10px] shrink-0">
         СЛОВО НАСТАВНИКА
       </h3>
 
       <div
         style={{ width: '345px', minHeight: '376px' }}
-        className="relative flex-1 flex flex-col pt-[6px]"
+        className="relative flex-1 flex flex-col pt-[8px]"
       >
-        {/* Stacked striped notebook backing sheet matching reference */}
+        {/* Stacked striped notebook backing sheet */}
         <div
           aria-hidden="true"
           style={{
@@ -53,7 +53,7 @@ export function MentorNote({
             backgroundImage:
               'repeating-linear-gradient(135deg, #D9F2F5 0px, #D9F2F5 6px, #FFFFFF 6px, #FFFFFF 12px)',
           }}
-          className="pointer-events-none absolute inset-0 top-[6px] rounded-md border-[1.5px] border-[#18181B]/75"
+          className="pointer-events-none absolute inset-0 top-[8px] rounded-md border-[1.5px] border-[#18181B]/75 shadow-[0_6px_14px_rgba(17,24,39,0.08)]"
         />
 
         {/* Foreground Ruled Notebook Sheet */}
@@ -66,26 +66,10 @@ export function MentorNote({
           style={{
             transform: `rotate(${mentorNote.tiltDeg ?? -0.8}deg)`,
           }}
-          className={`relative flex-1 min-h-0 mentor-notebook-paper rounded-md border-[1.6px] border-[#18181B] shadow-[0_6px_16px_rgba(0,0,0,0.08)] px-[20px] pt-[22px] pb-[14px] flex flex-col justify-between ${
+          className={`relative flex-1 min-h-0 mentor-notebook-paper rounded-md border-[1.7px] border-[#18181B] shadow-[0_8px_18px_rgba(17,24,39,0.12)] px-[20px] pt-[10px] pb-[12px] flex flex-col justify-between ${
             onSelectTarget ? 'editable-block' : ''
           } ${isActive ? 'editable-block-active' : ''}`}
         >
-          {/* Decorative Yellow Star Sticker at top-left edge */}
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 28 28"
-            className="pointer-events-none absolute -top-[12px] left-[16px] w-[26px] h-[26px] z-20"
-            fill="none"
-          >
-            <path
-              d="M14 2L17.4 9.5L25.5 10.6L19.5 16.2L21 24.2L14 20.3L7 24.2L8.5 16.2L2.5 10.6L10.6 9.5L14 2Z"
-              fill="#FFE14D"
-              stroke="#18181B"
-              strokeWidth="1.6"
-              strokeLinejoin="round"
-            />
-          </svg>
-
           {/* Realistic Metal Paperclip Binding at top-right */}
           <svg
             aria-hidden="true"

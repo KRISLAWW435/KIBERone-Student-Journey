@@ -612,7 +612,7 @@ export function DraggableDesignWrapper({
             ? 'pointer'
             : undefined,
         }}
-        className={`${onSelect ? 'editable-block' : ''} ${
+        className={`pointer-events-auto ${onSelect ? 'editable-block' : ''} ${
           isActive && !designMode ? 'editable-block-active' : ''
         }`}
       >
@@ -965,7 +965,8 @@ export function DecorLayer({
             (el.kind === 'image' && Boolean(el.cropEnabled)) ||
             el.kind === 'sticker' ||
             el.kind === 'line' ||
-            el.kind === 'blob';
+            el.kind === 'blob' ||
+            el.kind === 'tape';
 
           return (
             <div
@@ -987,7 +988,8 @@ export function DecorLayer({
                 minHeight: el.kind === 'text' ? `${el.height}px` : undefined,
                 transform: `rotate(${el.rotation}deg)`,
                 opacity: el.opacity,
-                zIndex: el.zIndex,
+                zIndex:
+                  designMode && isActive ? Math.max(el.zIndex, 45) : el.zIndex,
                 cursor: designMode
                   ? el.locked
                     ? 'not-allowed'
@@ -1174,14 +1176,29 @@ function DecorGraphic({ element }: { element: DecorElement }) {
           </div>
         );
       }
-      return (
-        <img
-          src={element.imageUrl}
-          alt={element.label || 'Изображение'}
-          referrerPolicy="no-referrer"
-          className="w-full h-full object-contain select-none pointer-events-none drop-shadow-sm"
-        />
-      );
+      {
+        const isStickerAsset =
+          element.imageUrl.includes('/assets/stickers/') ||
+          element.id.startsWith('decor-p1-') ||
+          element.id.startsWith('decor-p2-') ||
+          element.id.startsWith('sticker-');
+        return (
+          <img
+            src={element.imageUrl}
+            alt={element.label || 'Изображение'}
+            referrerPolicy="no-referrer"
+            style={
+              isStickerAsset
+                ? {
+                    filter:
+                      'drop-shadow(1.5px 0 0 #ffffff) drop-shadow(-1.5px 0 0 #ffffff) drop-shadow(0 1.5px 0 #ffffff) drop-shadow(0 -1.5px 0 #ffffff) drop-shadow(0 4px 6px rgba(17, 24, 39, 0.18))',
+                  }
+                : undefined
+            }
+            className="w-full h-full object-contain select-none pointer-events-none drop-shadow-sm"
+          />
+        );
+      }
 
     case 'blob':
       return (
@@ -1221,12 +1238,17 @@ function DecorGraphic({ element }: { element: DecorElement }) {
       );
     case 'star':
       return (
-        <svg viewBox="0 0 60 60" className="w-full h-full" fill="none">
+        <svg
+          viewBox="0 0 60 60"
+          style={{ filter: 'drop-shadow(0 2px 4px rgba(17,24,39,0.2))' }}
+          className="w-full h-full"
+          fill="none"
+        >
           <path
             d="M30 4L36 22L54 24L40 36L44 54L30 44L16 54L20 36L6 24L24 22L30 4Z"
             fill={element.color}
             stroke="#18181B"
-            strokeWidth="2"
+            strokeWidth="2.2"
             strokeLinejoin="round"
           />
         </svg>
@@ -1240,6 +1262,36 @@ function DecorGraphic({ element }: { element: DecorElement }) {
           {element.stickerText || 'SUPER!'}
         </div>
       );
+    case 'tape':
+      return (
+        <svg
+          viewBox="0 0 112 24"
+          preserveAspectRatio="none"
+          style={{
+            filter: 'drop-shadow(0 2px 3px rgba(17, 24, 39, 0.16))',
+          }}
+          className="w-full h-full select-none pointer-events-none"
+          fill="none"
+        >
+          <path
+            d="M3 2 L109 2 L106.5 8 L110 14 L107.5 21 L2.5 21 L5 15 L1.5 9 Z"
+            fill={element.color || '#FDE68A'}
+            fillOpacity="0.86"
+            stroke="rgba(180, 155, 60, 0.48)"
+            strokeWidth="1"
+            strokeLinejoin="round"
+          />
+          <line
+            x1="10"
+            y1="6.5"
+            x2="102"
+            y2="6.5"
+            stroke="rgba(255,255,255,0.42)"
+            strokeWidth="1"
+          />
+        </svg>
+      );
+
     case 'icon':
     default:
       if (element.iconKey) {

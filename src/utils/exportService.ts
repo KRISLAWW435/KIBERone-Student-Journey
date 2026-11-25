@@ -182,7 +182,7 @@ function escapeHtml(value: string): string {
 }
 
 const GOOGLE_FONTS_CSS_URL =
-  'https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Golos+Text:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Rubik:wght@500;600;700;800&display=swap';
+  'https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Golos+Text:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Montserrat+Alternates:wght@700;800;900&family=Rubik:wght@500;600;700;800;900&display=swap';
 
 let cachedFontCssPromise: Promise<string> | null = null;
 

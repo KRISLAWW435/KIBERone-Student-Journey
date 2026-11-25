@@ -2,9 +2,19 @@
 
 @theme {
   --font-sans: "Golos Text", system-ui, -apple-system, sans-serif;
+  --font-journal-display: "Montserrat Alternates", "Rubik", "Golos Text", system-ui, sans-serif;
   --font-journal: "Rubik", "Golos Text", system-ui, sans-serif;
+  --font-journal-body: "Inter", "Golos Text", system-ui, sans-serif;
   --font-handwriting: "Caveat", cursive;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.font-journal-display {
+  font-family: var(--font-journal-display);
+}
+
+.font-journal-body {
+  font-family: var(--font-journal-body);
 }
 
 /* Fixed A4 logical dimensions (210mm x 297mm at 96dpi = 794px x 1123px) */

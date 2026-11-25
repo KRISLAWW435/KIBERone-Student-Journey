@@ -40,7 +40,7 @@ export function ProjectCard({
         e.stopPropagation();
         onClick();
       }}
-      className={`bg-white border-[1.5px] border-[#18181B] rounded-xl overflow-hidden shadow-[0_3px_8px_rgba(0,0,0,0.06)] flex flex-col self-stretch h-full ${
+      className={`bg-white border-[1.6px] border-[#18181B] rounded-xl overflow-hidden shadow-[0_7px_16px_rgba(17,24,39,0.11),0_2px_4px_rgba(17,24,39,0.07)] flex flex-col self-stretch h-full ${
         onClick ? 'editable-block' : ''
       } ${isActive ? 'editable-block-active' : ''}`}
     >
@@ -58,7 +58,7 @@ export function ProjectCard({
 
       {/* Edge-to-Edge Screenshot / Illustration */}
       <div
-        style={{ height: compact ? '82px' : '106px' }}
+        style={{ height: compact ? '78px' : '102px' }}
         className="self-stretch overflow-hidden border-b border-[#18181B]/12 bg-zinc-100 shrink-0"
       >
         {project.imageUrl ? (
@@ -97,9 +97,9 @@ export function ProjectCard({
             activeTextField.itemId === project.id
           }
           as="div"
-          className={`font-extrabold ${
-            compact ? 'text-[13px]' : 'text-[14.5px]'
-          } leading-[1.18] text-[#111827] block`}
+          className={`font-journal-display font-extrabold ${
+            compact ? 'text-[12.5px]' : 'text-[14px]'
+          } leading-[1.2] text-[#111827] block`}
         />
         <InlineEditableText
           value={project.caption || project.description}
@@ -121,7 +121,7 @@ export function ProjectCard({
             activeTextField.itemId === project.id
           }
           as="div"
-          className="text-[10.5px] leading-[1.26] text-[#3F3F46] mt-[3px] block"
+          className="font-journal-body text-[10px] leading-[1.4] text-[#3F3F46] mt-[4px] block"
         />
       </div>
     </div>

@@ -815,53 +815,49 @@ export function ProjectFallbackGraphic({
   }
 }
 
-export function StrengthLineIcon({
+const STRENGTH_STICKER_ASSETS: Record<StrengthIconKey, string> = {
+  fastlearn: '/assets/strengths/fastlearn.png',
+  curiosity: '/assets/strengths/curiosity.png',
+  analytics: '/assets/strengths/analytics.png',
+  creativity: '/assets/strengths/creativity.png',
+  persistence: '/assets/strengths/persistence.png',
+  autonomy: '/assets/strengths/autonomy.png',
+  communication: '/assets/strengths/communication.png',
+  logic: '/assets/strengths/logic.png',
+};
+
+function StrengthFallbackSvg({
   type,
-  size = 40,
+  size,
 }: {
   type: StrengthIconKey;
-  size?: number;
+  size: number;
 }) {
   switch (type) {
     case 'fastlearn':
       return (
         <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
           <path
-            d="M15.5 7.5C11.5 7.5 8.5 10.2 8.5 14C8.5 15.8 9.2 17.2 10.2 18.2C9.5 19.3 9.5 21.4 11 22.8C12.1 23.8 14 24 15.5 23.4V7.5Z"
-            fill="#FDA4AF"
+            d="M19 4L9 17H16L13 28L23 15H16L19 4Z"
+            fill="#FACC15"
             stroke="#18181B"
-            strokeWidth="1.6"
+            strokeWidth="1.7"
             strokeLinejoin="round"
           />
-          <path
-            d="M16.5 7.5C20.5 7.5 23.5 10.2 23.5 14C23.5 15.8 22.8 17.2 21.8 18.2C22.5 19.3 22.5 21.4 21 22.8C19.9 23.8 18 24 16.5 23.4V7.5Z"
-            fill="#FB7185"
-            stroke="#18181B"
-            strokeWidth="1.6"
-            strokeLinejoin="round"
-          />
-          <path d="M11 13C12.5 13 13.5 14 13.5 15.3" stroke="#18181B" strokeWidth="1.4" strokeLinecap="round" />
-          <path d="M21 13C19.5 13 18.5 14 18.5 15.3" stroke="#18181B" strokeWidth="1.4" strokeLinecap="round" />
         </svg>
       );
     case 'curiosity':
       return (
         <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
           <circle cx="14" cy="14" r="8" fill="#BAE6FD" stroke="#18181B" strokeWidth="1.7" />
-          <circle cx="14" cy="14" r="5" fill="#E0F2FE" stroke="#18181B" strokeWidth="1.2" />
-          <path d="M11.5 12C12.2 11 13.4 10.5 14.5 10.7" stroke="#FFFFFF" strokeWidth="1.5" strokeLinecap="round" />
-          <path d="M20 20L26.5 26.5" stroke="#18181B" strokeWidth="3.2" strokeLinecap="round" />
-          <path d="M20 20L26.5 26.5" stroke="#64748B" strokeWidth="1.6" strokeLinecap="round" />
+          <path d="M20 20L26.5 26.5" stroke="#18181B" strokeWidth="2.8" strokeLinecap="round" />
         </svg>
       );
     case 'analytics':
       return (
         <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-          <circle cx="12.5" cy="18" r="6" fill="#FACC15" stroke="#18181B" strokeWidth="1.6" />
-          <circle cx="12.5" cy="18" r="2.2" fill="#FFFFFF" stroke="#18181B" strokeWidth="1.4" />
-          <path d="M12.5 10.2V12M12.5 24V25.8M4.7 18H6.5M18.5 18H20.3M7.2 12.7L8.5 14M16.5 22L17.8 23.3M17.8 12.7L16.5 14M8.5 22L7.2 23.3" stroke="#18181B" strokeWidth="1.7" strokeLinecap="round" />
-          <circle cx="22.5" cy="11" r="4.2" fill="#94A3B8" stroke="#18181B" strokeWidth="1.5" />
-          <circle cx="22.5" cy="11" r="1.4" fill="#FFFFFF" stroke="#18181B" strokeWidth="1.2" />
+          <circle cx="13" cy="18" r="6" fill="#FACC15" stroke="#18181B" strokeWidth="1.6" />
+          <circle cx="22.5" cy="11" r="4.2" fill="#60A5FA" stroke="#18181B" strokeWidth="1.5" />
         </svg>
       );
     case 'creativity':
@@ -874,17 +870,12 @@ export function StrengthLineIcon({
             strokeWidth="1.7"
           />
           <rect x="13" y="22.5" width="6" height="3.2" rx="1.4" fill="#94A3B8" stroke="#18181B" strokeWidth="1.5" />
-          <line x1="16" y1="2.5" x2="16" y2="4.4" stroke="#18181B" strokeWidth="1.7" strokeLinecap="round" />
-          <line x1="5.5" y1="9" x2="7.2" y2="10" stroke="#18181B" strokeWidth="1.7" strokeLinecap="round" />
-          <line x1="26.5" y1="9" x2="24.8" y2="10" stroke="#18181B" strokeWidth="1.7" strokeLinecap="round" />
         </svg>
       );
     case 'persistence':
       return (
         <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-          <rect x="4.5" y="5.5" width="23" height="21" rx="5" fill="#DDD6FE" stroke="#18181B" strokeWidth="1.6" />
-          <path d="M8 22L14 14L18 17.5L24 10" stroke="#18181B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M19.5 10H24V14.5" stroke="#18181B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <polygon points="16,6 27,26 5,26" fill="#5EEAD4" stroke="#18181B" strokeWidth="1.7" strokeLinejoin="round" />
         </svg>
       );
     case 'autonomy':
@@ -898,21 +889,43 @@ export function StrengthLineIcon({
       return (
         <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
           <path d="M6 8H26V21H14L8.5 25.5V21H6V8Z" fill="#FED7AA" stroke="#18181B" strokeWidth="1.7" strokeLinejoin="round" />
-          <circle cx="12" cy="14.5" r="1.5" fill="#18181B" />
-          <circle cx="16" cy="14.5" r="1.5" fill="#18181B" />
-          <circle cx="20" cy="14.5" r="1.5" fill="#18181B" />
         </svg>
       );
     case 'logic':
     default:
       return (
         <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-          <rect x="5" y="5" width="8.5" height="8.5" rx="2" fill="#86EFAC" stroke="#18181B" strokeWidth="1.7" />
-          <rect x="18.5" y="18.5" width="8.5" height="8.5" rx="2" fill="#93C5FD" stroke="#18181B" strokeWidth="1.7" />
-          <path d="M13.5 9.2H22.8V18.5" stroke="#18181B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <rect x="5" y="5" width="9" height="9" rx="2" fill="#86EFAC" stroke="#18181B" strokeWidth="1.7" />
+          <rect x="18" y="18" width="9" height="9" rx="2" fill="#93C5FD" stroke="#18181B" strokeWidth="1.7" />
         </svg>
       );
   }
+}
+
+export function StrengthLineIcon({
+  type,
+  size = 44,
+}: {
+  type: StrengthIconKey;
+  size?: number;
+}) {
+  const [failed, setFailed] = React.useState(false);
+  const src = STRENGTH_STICKER_ASSETS[type] || STRENGTH_STICKER_ASSETS.logic;
+
+  if (failed) {
+    return <StrengthFallbackSvg type={type} size={size} />;
+  }
+
+  return (
+    <img
+      src={src}
+      alt={type}
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+      style={{ width: `${size}px`, height: `${size}px` }}
+      className="object-contain select-none pointer-events-none block"
+    />
+  );
 }
 
 export function NextTopicLineIcon({

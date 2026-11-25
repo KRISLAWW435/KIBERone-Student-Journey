@@ -51,11 +51,11 @@ export function SkillTag({
           compact
             ? 'pt-[16px] pb-[6px] px-[8px] min-h-[44px]'
             : 'pt-[19px] pb-[7px] px-[10px] min-h-[50px]'
-        } flex items-center justify-center text-center shadow-[0_3px_8px_rgba(17,24,39,0.08)] border border-[#18181B]/10`}
+        } flex items-center justify-center text-center shadow-[0_5px_12px_rgba(17,24,39,0.12),0_2px_4px_rgba(17,24,39,0.08)] border-[1.6px] border-[#18181B]`}
       >
         {/* Protruding Top-Center White Circular Icon Badge */}
         <div
-          className={`absolute left-1/2 -translate-x-1/2 rounded-full bg-white border-[1.6px] border-[#18181B] shadow-[0_2px_4px_rgba(0,0,0,0.08)] flex items-center justify-center ${
+          className={`absolute left-1/2 -translate-x-1/2 rounded-full bg-white border-[1.6px] border-[#18181B] shadow-[0_3px_6px_rgba(17,24,39,0.14)] flex items-center justify-center ${
             compact
               ? '-top-[12px] w-[28px] h-[28px]'
               : '-top-[14px] w-[32px] h-[32px]'

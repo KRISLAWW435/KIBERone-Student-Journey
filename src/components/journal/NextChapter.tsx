@@ -1,4 +1,5 @@
 import React from 'react';
+import { ASSETS } from '../../data/presets';
 import {
   ActiveTextFieldTarget,
   AgeCategory,
@@ -37,26 +38,26 @@ const PIN_COLORS = ['#4ECDC4', '#FFD426', '#F87B72'];
 function MapPinMarker({ color }: { color: string }) {
   return (
     <svg
-      width="24"
-      height="32"
+      width="34"
+      height="44"
       viewBox="0 0 24 32"
       fill="none"
-      className="shrink-0 drop-shadow-[0_2px_3px_rgba(17,24,39,0.22)]"
+      className="shrink-0 drop-shadow-[0_3px_4px_rgba(17,24,39,0.28)]"
     >
       <path
         d="M12 1.5C6.2 1.5 1.5 6.2 1.5 12C1.5 19.6 12 30.5 12 30.5C12 30.5 22.5 19.6 22.5 12C22.5 6.2 17.8 1.5 12 1.5Z"
         fill={color}
         stroke="#18181B"
-        strokeWidth="1.6"
+        strokeWidth="1.7"
         strokeLinejoin="round"
       />
       <circle
         cx="12"
         cy="11.5"
-        r="4"
+        r="4.2"
         fill="#FFFFFF"
         stroke="#18181B"
-        strokeWidth="1.4"
+        strokeWidth="1.5"
       />
     </svg>
   );
@@ -84,29 +85,24 @@ export function NextChapter({
     activeTarget?.page === 2 && activeTarget.block === 'nextBear';
 
   const topics = nextChapter.topics.slice(0, 3);
-  const legacyBgs = new Set(['#BCEFF4', '#BAE6FD', '#A5F3FC', '#E0F2FE']);
-  const backdropColor =
-    !nextChapter.bgColor || legacyBgs.has(nextChapter.bgColor.toUpperCase())
-      ? '#EEF4FA'
-      : nextChapter.bgColor;
 
-  // Staggered coordinates matching the curving road path
+  // Exact (centerX, pinTipY) coordinates lying directly on the winding road centerline
   const stationPositions =
     topics.length <= 2
       ? [
-          { left: 26, top: 126, pinRight: true },
-          { left: 256, top: 68, pinRight: false },
+          { centerX: 185, pinTipY: 212 },
+          { centerX: 415, pinTipY: 158 },
         ]
       : [
-          { left: 16, top: 128, pinRight: true },
-          { left: 194, top: 70, pinRight: false },
-          { left: 356, top: 44, pinRight: false },
+          { centerX: 149, pinTipY: 224 },
+          { centerX: 336, pinTipY: 178 },
+          { centerX: 478, pinTipY: 144 },
         ];
 
   return (
     <section
-      style={{ width: '714px', height: '254px' }}
-      className="relative shrink-0"
+      style={{ width: '794px', height: '266px' }}
+      className="relative shrink-0 overflow-visible"
     >
       <div
         onClick={(e) => {
@@ -114,57 +110,265 @@ export function NextChapter({
           e.stopPropagation();
           onSelectTarget({ page: 2, block: 'nextChapter' });
         }}
-        style={{ width: '714px', height: '254px' }}
-        className={`relative rounded-[26px] overflow-visible ${
+        style={{ width: '794px', height: '266px' }}
+        className={`relative overflow-visible ${
           onSelectTarget ? 'editable-block' : ''
         } ${isActive ? 'editable-block-active' : ''}`}
       >
-        {/* Clipped Curved Sky Backdrop & Winding Road */}
-        <div className="pointer-events-none absolute inset-0 rounded-[26px] overflow-hidden bg-white border border-[#E2E8F0]">
+        {/* Open Winding Road, Meadow Hill & Isometric 3D Figures Seated Cleanly on Green Grass */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <svg
             aria-hidden="true"
-            width="714"
-            height="254"
-            viewBox="0 0 714 254"
+            width="794"
+            height="266"
+            viewBox="0 0 794 266"
             fill="none"
             className="w-full h-full"
           >
-            {/* Soft Sky-Blue Curved Hill Area */}
+            <defs>
+              <linearGradient
+                id="next-meadow-grad"
+                x1="0"
+                y1="70"
+                x2="794"
+                y2="266"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop offset="0%" stopColor="#86EFAC" />
+                <stop offset="55%" stopColor="#4ADE80" />
+                <stop offset="100%" stopColor="#22C55E" />
+              </linearGradient>
+              <filter id="iso-shadow" x="-20%" y="-20%" width="140%" height="150%">
+                <feDropShadow
+                  dx="0"
+                  dy="3"
+                  stdDeviation="2"
+                  floodColor="#111827"
+                  floodOpacity="0.22"
+                />
+              </filter>
+            </defs>
+
+            {/* Open Curved Green Meadow Terrain (No Container Box) */}
             <path
-              d="M0 78C145 8 420 -8 714 28V254H0V78Z"
-              fill={backdropColor}
+              d="M0 174 C 180 124, 470 52, 794 78 V266 H0 Z"
+              fill="url(#next-meadow-grad)"
             />
 
-            {/* Road White Outer Shoulder */}
+            {/* Subtle Sunlit Meadow Highlight */}
             <path
-              d="M 102 268 C 176 184, 290 164, 416 142 C 524 124, 622 104, 728 84"
+              d="M0 206 C 195 164, 450 108, 794 122 V266 H0 Z"
+              fill="#FFFFFF"
+              opacity="0.12"
+            />
+
+            {/* Playful Purple Corner Hill Accent under Bear (Right Corner) */}
+            <path
+              d="M 554 266 C 598 202, 690 156, 794 142 V266 H554 Z"
+              fill="#8B5CF6"
+            />
+
+            {/* Road Comic Dark Outer Edge */}
+            <path
+              d="M 58 278 C 145 204, 240 206, 336 178 C 420 154, 570 124, 804 82"
+              stroke="#18181B"
+              strokeWidth="44"
+              strokeLinecap="round"
+            />
+
+            {/* Road Crisp White Outer Shoulders */}
+            <path
+              d="M 58 278 C 145 204, 240 206, 336 178 C 420 154, 570 124, 804 82"
               stroke="#FFFFFF"
-              strokeWidth="48"
+              strokeWidth="39"
               strokeLinecap="round"
             />
 
-            {/* Dark Slate Road Surface */}
+            {/* Dark Slate Gray Asphalt Surface */}
             <path
-              d="M 102 268 C 176 184, 290 164, 416 142 C 524 124, 622 104, 728 84"
-              stroke="#434A59"
-              strokeWidth="36"
+              d="M 58 278 C 145 204, 240 206, 336 178 C 420 154, 570 124, 804 82"
+              stroke="#475569"
+              strokeWidth="32"
               strokeLinecap="round"
             />
 
-            {/* Dashed White Road Center Line */}
+            {/* White Dashed Road Centerline */}
             <path
-              d="M 102 268 C 176 184, 290 164, 416 142 C 524 124, 622 104, 728 84"
+              d="M 58 278 C 145 204, 240 206, 336 178 C 420 154, 570 124, 804 82"
               stroke="#FFFFFF"
-              strokeWidth="2.4"
+              strokeWidth="2.5"
               strokeLinecap="round"
-              strokeDasharray="10 9"
+              strokeDasharray="11 9"
             />
+
+            {/* ISOMETRIC 3D FIGURE 1: Red Cube + Small Yellow Cube Seated Inside Left Green Meadow (x=12..66, y=188..244) */}
+            <g filter="url(#iso-shadow)">
+              {/* Red Isometric Cube */}
+              <polygon
+                points="46,188 64,197 46,206 28,197"
+                fill="#FDA4AF"
+                stroke="#18181B"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+              <polygon
+                points="28,197 46,206 46,227 28,218"
+                fill="#FB7185"
+                stroke="#18181B"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+              <polygon
+                points="64,197 46,206 46,227 64,218"
+                fill="#E11D48"
+                stroke="#18181B"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+
+              {/* Small Yellow Isometric Cube */}
+              <polygon
+                points="23,220 34,225 23,230 12,225"
+                fill="#FEF08A"
+                stroke="#18181B"
+                strokeWidth="1.3"
+                strokeLinejoin="round"
+              />
+              <polygon
+                points="12,225 23,230 23,244 12,239"
+                fill="#FACC15"
+                stroke="#18181B"
+                strokeWidth="1.3"
+                strokeLinejoin="round"
+              />
+              <polygon
+                points="34,225 23,230 23,244 34,239"
+                fill="#EAB308"
+                stroke="#18181B"
+                strokeWidth="1.3"
+                strokeLinejoin="round"
+              />
+            </g>
+
+            {/* ISOMETRIC 3D FIGURE 2: Twin Blue 3D Pillars Seated Inside Mid-Bottom Green Grass (x=336..378, y=208..254) */}
+            <g filter="url(#iso-shadow)">
+              {/* Tall Blue Pillar */}
+              <polygon
+                points="348,208 361,214 348,220 335,214"
+                fill="#93C5FD"
+                stroke="#18181B"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+              <polygon
+                points="335,214 348,220 348,250 335,244"
+                fill="#60A5FA"
+                stroke="#18181B"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+              <polygon
+                points="361,214 348,220 348,250 361,244"
+                fill="#2563EB"
+                stroke="#18181B"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+
+              {/* Shorter Front Blue Cube */}
+              <polygon
+                points="364,224 377,230 364,236 351,230"
+                fill="#BFDBFE"
+                stroke="#18181B"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+              <polygon
+                points="351,230 364,236 364,254 351,248"
+                fill="#60A5FA"
+                stroke="#18181B"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+              <polygon
+                points="377,230 364,236 364,254 377,248"
+                fill="#3B82F6"
+                stroke="#18181B"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+            </g>
+
+            {/* ISOMETRIC 3D FIGURE 3: Yellow L-Step Block Seated Inside Green Grass Below Road (x=432..474, y=198..246) */}
+            <g filter="url(#iso-shadow)">
+              <polygon
+                points="446,198 459,204 446,210 433,204"
+                fill="#FEF08A"
+                stroke="#18181B"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+              <polygon
+                points="433,204 446,210 446,236 433,230"
+                fill="#FACC15"
+                stroke="#18181B"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+              <polygon
+                points="459,204 446,210 446,236 459,230"
+                fill="#CA8A04"
+                stroke="#18181B"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+
+              <polygon
+                points="461,216 474,222 461,228 448,222"
+                fill="#FEF08A"
+                stroke="#18181B"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+              <polygon
+                points="448,222 461,228 461,246 448,240"
+                fill="#FDE047"
+                stroke="#18181B"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+              <polygon
+                points="474,222 461,228 461,246 474,240"
+                fill="#EAB308"
+                stroke="#18181B"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+            </g>
+
+            {/* ISOMETRIC 3D FIGURE 4: Teal Pyramid Seated Inside Green Grass (x=514..548, y=178..216) */}
+            <g filter="url(#iso-shadow)">
+              <polygon
+                points="531,178 514,209 531,216"
+                fill="#5EEAD4"
+                stroke="#18181B"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+              <polygon
+                points="531,178 548,209 531,216"
+                fill="#0D9488"
+                stroke="#18181B"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+            </g>
           </svg>
         </div>
 
-        {/* Expressive Section Heading */}
+        {/* Expressive Heading Directly Over Open Background */}
         <div
-          style={{ left: '26px', top: '14px', maxWidth: '335px' }}
+          style={{ left: '40px', top: '2px', maxWidth: '340px' }}
           className="absolute z-10"
         >
           <InlineEditableText
@@ -183,101 +387,71 @@ export function NextChapter({
               activeTextField.field === 'nextChapterTitle'
             }
             as="h3"
-            className="font-extrabold text-[20px] leading-[1.08] tracking-tight uppercase text-[#111827] block"
+            className="font-journal-display font-black text-[19px] leading-[1.08] tracking-tight uppercase text-[#111827] block"
           />
         </div>
 
-        {/* Milestones with Map Pins & Circular Icons along the Road */}
+        {/* Vertically Aligned Road Stations: [Module Icon] -> [High-Contrast Label] -> [Large Pin] */}
         {topics.map((topic, idx) => {
           const pos = stationPositions[idx] || stationPositions[0];
           const pinColor = PIN_COLORS[idx % PIN_COLORS.length];
 
-          if (pos.pinRight) {
-            return (
-              <div
-                key={topic.id}
-                style={{ left: `${pos.left}px`, top: `${pos.top}px` }}
-                className="absolute z-10 flex items-center gap-[8px]"
-              >
-                <div className="flex flex-col items-center text-center w-[124px] gap-[5px]">
-                  <div className="w-[48px] h-[48px] rounded-full bg-white border-[1.6px] border-[#18181B] shadow-[0_3px_8px_rgba(17,24,39,0.1)] flex items-center justify-center shrink-0">
-                    <NextTopicLineIcon
-                      type={topic.iconKey}
-                      className="w-[30px] h-[30px]"
-                    />
-                  </div>
-                  <InlineEditableText
-                    value={topic.title}
-                    onSelectText={
-                      onSelectTextField
-                        ? () =>
-                            onSelectTextField({
-                              page: 2,
-                              field: 'nextTopicTitle',
-                              itemId: topic.id,
-                            })
-                        : undefined
-                    }
-                    isSelected={
-                      activeTextField?.page === 2 &&
-                      activeTextField.field === 'nextTopicTitle' &&
-                      activeTextField.itemId === topic.id
-                    }
-                    as="span"
-                    className="text-[14.5px] font-extrabold leading-[1.12] text-[#111827] block w-full"
-                  />
-                </div>
-                <div className="mt-[28px]">
-                  <MapPinMarker color={pinColor} />
-                </div>
-              </div>
-            );
-          }
-
           return (
             <div
               key={topic.id}
-              style={{ left: `${pos.left}px`, top: `${pos.top}px` }}
-              className="absolute z-10 flex flex-col items-center text-center w-[138px] gap-[5px]"
+              style={{
+                left: `${pos.centerX}px`,
+                top: `${pos.pinTipY}px`,
+                transform: 'translate(-50%, -100%)',
+                width: '138px',
+              }}
+              className="absolute z-20 flex flex-col items-center text-center gap-[5px]"
             >
-              <div className="w-[48px] h-[48px] rounded-full bg-white border-[1.6px] border-[#18181B] shadow-[0_3px_8px_rgba(17,24,39,0.1)] flex items-center justify-center shrink-0">
+              {/* 1. Module Sticker Icon Centered Above Pin */}
+              <div className="w-[48px] h-[48px] rounded-full bg-white border-[2px] border-[#18181B] ring-[2.5px] ring-white shadow-[0_5px_11px_rgba(17,24,39,0.22)] flex items-center justify-center shrink-0">
                 <NextTopicLineIcon
                   type={topic.iconKey}
-                  className="w-[30px] h-[30px]"
+                  className="w-[29px] h-[29px]"
                 />
               </div>
-              <InlineEditableText
-                value={topic.title}
-                onSelectText={
-                  onSelectTextField
-                    ? () =>
-                        onSelectTextField({
-                          page: 2,
-                          field: 'nextTopicTitle',
-                          itemId: topic.id,
-                        })
-                    : undefined
-                }
-                isSelected={
-                  activeTextField?.page === 2 &&
-                  activeTextField.field === 'nextTopicTitle' &&
-                  activeTextField.itemId === topic.id
-                }
-                as="span"
-                className="text-[14.5px] font-extrabold leading-[1.12] text-[#111827] block w-full"
-              />
-              <div className="mt-[1px]">
+
+              {/* 2. High-Contrast Readable Label Pill Strictly Between Icon and Pin */}
+              <div className="bg-white/95 border-[1.6px] border-[#18181B] rounded-lg px-[8px] py-[3px] shadow-[2px_2px_0_#18181B] max-w-[136px]">
+                <InlineEditableText
+                  value={topic.title}
+                  onSelectText={
+                    onSelectTextField
+                      ? () =>
+                          onSelectTextField({
+                            page: 2,
+                            field: 'nextTopicTitle',
+                            itemId: topic.id,
+                          })
+                      : undefined
+                  }
+                  isSelected={
+                    activeTextField?.page === 2 &&
+                    activeTextField.field === 'nextTopicTitle' &&
+                    activeTextField.itemId === topic.id
+                  }
+                  as="span"
+                  className="font-journal-display text-[12px] font-extrabold leading-[1.15] text-[#111827] block"
+                />
+              </div>
+
+              {/* 3. Large Map Pin Anchored Directly on Road Centerline */}
+              <div className="pointer-events-none shrink-0 leading-none">
                 <MapPinMarker color={pinColor} />
               </div>
             </div>
           );
         })}
 
-        {/* Full-Body Bear Mascot Standing on Right of Road (Zero Foot Clipping!) */}
+        {/* Full-Body VR Bear Mascot Standing Cleanly on Right Meadow / Grass */}
         <DraggableDesignWrapper
           id="nextBear"
           transform={bearTransform}
-          defaultZIndex={20}
+          defaultZIndex={25}
           designMode={designMode}
           scaleFactor={scaleFactor}
           isActive={isBearActive}
@@ -296,25 +470,30 @@ export function NextChapter({
           onInteractionEnd={onInteractionEnd}
           style={{
             position: 'absolute',
-            right: '8px',
-            bottom: '4px',
-            width: '188px',
-            height: '220px',
+            right: '14px',
+            bottom: '8px',
+            width: '184px',
+            height: '226px',
           }}
           className="flex items-end justify-center"
         >
           <div
-            style={{ width: '188px', height: '220px' }}
+            style={{ width: '184px', height: '226px' }}
             className="flex items-end justify-center"
           >
             <BearCharacter
-              src={nextChapter.bearUrl}
-              alt="Медведь KIBERone приглашает к новому этапу"
+              src={
+                !nextChapter.bearUrl ||
+                nextChapter.bearUrl === '/assets/bear_vr.png'
+                  ? ASSETS.bearVr
+                  : nextChapter.bearUrl
+              }
+              alt="Медведь KIBERone в VR-очках приглашает к новому этапу"
               scale={(ageCategory === '8-10' ? 1.02 : 0.98) * nextChapter.bearScale}
               offsetX={nextChapter.bearOffsetX}
               offsetY={nextChapter.bearOffsetY}
               cropTop={false}
-              className="w-[184px] h-[216px] drop-shadow-[0_10px_14px_rgba(17,24,39,0.18)]"
+              className="w-[180px] h-[222px]"
             />
           </div>
         </DraggableDesignWrapper>

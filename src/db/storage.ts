@@ -5,8 +5,13 @@ import {
   UNIFIED_SKILLS_CATALOG,
 } from '../data/curriculumCatalog';
 import {
+  ASSETS,
   BUILTIN_MEDIA_ASSETS,
+  createDefaultPage2TapeElement,
   DEFAULT_BRANCHES,
+  DEFAULT_PAGE1_DECOR_ELEMENTS,
+  DEFAULT_PAGE2_DECOR_ELEMENTS,
+  DEFAULT_SPEECH_BUBBLE_TEXT,
   SAMPLE_GROUPS,
   SAMPLE_JOURNALS,
   SAMPLE_RESIDENTS,
@@ -154,6 +159,47 @@ function normalizeJournal(doc: JournalDocument): JournalDocument {
           },
         ];
 
+  const p1HasDecor =
+    Array.isArray(p1.decorElements) && p1.decorElements.length > 0;
+  const p1DecorElements =
+    !p1.decorSeeded && !p1HasDecor
+      ? DEFAULT_PAGE1_DECOR_ELEMENTS.map((d) => ({ ...d }))
+      : p1.decorElements ?? [];
+
+  const p2HasDecor =
+    Array.isArray(doc.page2.decorElements) &&
+    doc.page2.decorElements.length > 0;
+  let p2DecorElements =
+    !doc.page2.decorSeeded && !p2HasDecor
+      ? DEFAULT_PAGE2_DECOR_ELEMENTS.map((d) => ({ ...d }))
+      : doc.page2.decorElements ?? [];
+
+  const visibleStrengthsCount = (doc.page2.strengths ?? []).filter(
+    (s) => !s.hidden
+  ).length;
+  if (
+    !doc.page2.tapeSeeded &&
+    !p2DecorElements.some((d) => d.kind === 'tape')
+  ) {
+    p2DecorElements = [
+      ...p2DecorElements,
+      createDefaultPage2TapeElement(visibleStrengthsCount),
+    ];
+  }
+
+  const nextChapterRaw = doc.page2.nextChapter;
+  const shouldMigrateVrBear =
+    !nextChapterRaw.bearUrl ||
+    nextChapterRaw.bearUrl === ASSETS.bearTablet ||
+    nextChapterRaw.bearUrl === '/assets/bear_vr.png';
+
+  const resolvedCoverBubble =
+    p1.coverSpeechBubbleText !== undefined
+      ? p1.coverSpeechBubbleText
+      : nextChapterRaw.speechBubbleText !== undefined
+      ? nextChapterRaw.speechBubbleText
+      : DEFAULT_SPEECH_BUBBLE_TEXT;
+
   const normalized: JournalDocument = {
     ...doc,
     status: doc.status || 'draft',
@@ -164,6 +210,9 @@ function normalizeJournal(doc: JournalDocument): JournalDocument {
     },
     page1: {
       ...p1,
+      decorElements: p1DecorElements,
+      decorSeeded: true,
+      coverSpeechBubbleText: resolvedCoverBubble,
       showProjects: p1.showProjects !== false,
       projects: starterProjects,
       footerWebsite: '',
@@ -172,6 +221,9 @@ function normalizeJournal(doc: JournalDocument): JournalDocument {
     },
     page2: {
       ...doc.page2,
+      decorElements: p2DecorElements,
+      decorSeeded: true,
+      tapeSeeded: true,
       footerWebsite: '',
       mentorNote: {
         ...doc.page2.mentorNote,
@@ -179,6 +231,11 @@ function normalizeJournal(doc: JournalDocument): JournalDocument {
           /в этом квартале/gi,
           'за этот период обучения'
         ),
+      },
+      nextChapter: {
+        ...nextChapterRaw,
+        bearUrl: shouldMigrateVrBear ? ASSETS.bearVr : nextChapterRaw.bearUrl,
+        bearVrMigrated: true,
       },
     },
   };

@@ -90,7 +90,7 @@ export function ProjectsSection({
       className="shrink-0 block opacity-100 visible"
     >
       <section style={{ width: '714px' }} className="block overflow-visible">
-        <h2 className="font-extrabold text-[17px] leading-[20px] tracking-tight uppercase text-[#111827] mb-[6px]">
+        <h2 className="font-journal-display font-black text-[17.5px] leading-[21px] tracking-tight uppercase text-[#111827] mb-[12px]">
           МОИ РЕЗУЛЬТАТЫ
         </h2>
         <div

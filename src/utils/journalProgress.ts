@@ -1,4 +1,11 @@
-import { ASSETS, DESIGN_PALETTES } from '../data/presets';
+import {
+  ASSETS,
+  createDefaultPage2TapeElement,
+  DEFAULT_PAGE1_DECOR_ELEMENTS,
+  DEFAULT_PAGE2_DECOR_ELEMENTS,
+  DEFAULT_SPEECH_BUBBLE_TEXT,
+  DESIGN_PALETTES,
+} from '../data/presets';
 import {
   Branch,
   ConfirmedResidentSkill,
@@ -218,7 +225,8 @@ export function createStudentJournal(
     },
     page1: {
       background: { color: palette.pageBg, showGrid: false, gridStyle: 'dots' },
-      decorElements: [],
+      decorElements: DEFAULT_PAGE1_DECOR_ELEMENTS.map((d) => ({ ...d })),
+      decorSeeded: true,
       objectLayouts: {},
       coverTitle: 'МОЙ ПУТЬ',
       coverSubtitle: 'в мире технологий',
@@ -232,6 +240,7 @@ export function createStudentJournal(
       bearOffsetX: 0,
       bearOffsetY: 0,
       bearCropTop: true,
+      coverSpeechBubbleText: DEFAULT_SPEECH_BUBBLE_TEXT,
       logoUrl: ASSETS.logo,
       showModules: true,
       modules: mappedModules,
@@ -264,7 +273,14 @@ export function createStudentJournal(
     },
     page2: {
       background: { color: palette.pageBg, showGrid: false, gridStyle: 'dots' },
-      decorElements: [],
+      decorElements: [
+        ...DEFAULT_PAGE2_DECOR_ELEMENTS.filter((d) => d.kind !== 'tape').map(
+          (d) => ({ ...d })
+        ),
+        createDefaultPage2TapeElement(0),
+      ],
+      decorSeeded: true,
+      tapeSeeded: true,
       objectLayouts: {},
       headerTitle: 'МОИ ДОСТИЖЕНИЯ',
       headerTealColor: palette.p2Teal,
@@ -304,10 +320,11 @@ export function createStudentJournal(
           ...t,
           id: `nt-${resident.id}-${i}`,
         })),
-        bearUrl: ASSETS.bearTablet,
+        bearUrl: ASSETS.bearVr,
         bearScale: 1,
         bearOffsetX: 0,
         bearOffsetY: 0,
+        bearVrMigrated: true,
       },
       footerWebsite: '',
     },

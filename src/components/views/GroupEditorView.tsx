@@ -53,9 +53,13 @@ import {
 } from '../../data/curriculumCatalog';
 import {
   ASSETS,
+  DEFAULT_SPEECH_BUBBLE_TEXT,
   DESIGN_PALETTES,
   MENTOR_NOTE_TEMPLATES,
   NEXT_TOPIC_LIBRARY,
+  SPEECH_BUBBLE_PRESETS,
+  STICKER_PRESET_OPTIONS,
+  StickerPresetOption,
   STRENGTH_LIBRARY,
 } from '../../data/presets';
 import {
@@ -230,6 +234,7 @@ export function GroupEditorView({
   const textEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const [designTargetPage, setDesignTargetPage] = useState<1 | 2>(1);
   const [designIconPickerOpen, setDesignIconPickerOpen] = useState(false);
+  const [designStickerPickerOpen, setDesignStickerPickerOpen] = useState(false);
   const [activeInspectorStep, setActiveInspectorStep] =
     useState<IndividualSection>('profile');
   const [editingModuleVisual, setEditingModuleVisual] = useState<{
@@ -1304,6 +1309,81 @@ export function GroupEditorView({
     setDesignIconPickerOpen(false);
   };
 
+  const handleAddTapeElement = (page: 1 | 2) => {
+    handleAddDecorElement(page, {
+      kind: 'tape',
+      label: 'Скотч (клейкая лента)',
+      x: 528,
+      y: 402,
+      width: 108,
+      height: 24,
+      rotation: -2,
+      color: '#FDE68A',
+      opacity: 0.9,
+    });
+  };
+
+  const handleAddStickerElement = (
+    page: 1 | 2,
+    preset: StickerPresetOption
+  ) => {
+    if (!activeDoc) return;
+    const id = `sticker-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const nextEl: DecorElement = {
+      id,
+      kind: preset.kind,
+      label: `Стикер: ${preset.label}`,
+      imageUrl: preset.kind === 'image' ? preset.imageUrl : undefined,
+      cropEnabled: false,
+      x: Math.round((794 - preset.width) / 2),
+      y: 380,
+      width: preset.width,
+      height: preset.height,
+      rotation: -6,
+      color: preset.color,
+      opacity: 1,
+      zIndex: 8,
+    };
+    if (page === 1) {
+      onChangeJournal({
+        ...activeDoc,
+        page1: {
+          ...activeDoc.page1,
+          decorElements: [...(activeDoc.page1.decorElements ?? []), nextEl],
+          decorSeeded: true,
+        },
+      });
+    } else {
+      onChangeJournal({
+        ...activeDoc,
+        page2: {
+          ...activeDoc.page2,
+          decorElements: [...(activeDoc.page2.decorElements ?? []), nextEl],
+          decorSeeded: true,
+        },
+      });
+    }
+    lastHistoryPushRef.current.ts = 0;
+    setActiveTarget({ page, block: 'decor', itemId: id });
+    setDesignStickerPickerOpen(false);
+  };
+
+  const handleReplaceDecorWithSticker = (
+    page: 1 | 2,
+    decorId: string,
+    preset: StickerPresetOption
+  ) => {
+    handleUpdateDecor(page, decorId, {
+      kind: preset.kind,
+      label: `Стикер: ${preset.label}`,
+      imageUrl: preset.kind === 'image' ? preset.imageUrl : undefined,
+      cropEnabled: false,
+      color: preset.color,
+      width: preset.width,
+      height: preset.height,
+    });
+  };
+
   const handleSelectTextField = (target: ActiveTextFieldTarget) => {
     setActiveTextField(target);
     if (target && (target.page === 1 || target.page === 2)) {
@@ -1320,6 +1400,10 @@ export function GroupEditorView({
     }
     if (target.page === 1 || target.page === 2) {
       setDesignTargetPage(target.page);
+    }
+    if (target.block === 'decor') {
+      setInspectorMode('design');
+      return;
     }
     if (inspectorMode === 'design') {
       return;
@@ -1355,7 +1439,9 @@ export function GroupEditorView({
         target.block === 'strengths'
       ) {
         focusSection('pride', 2);
-      } else if (target.block === 'nextChapter' || target.block === 'nextBear') {
+      } else if (target.block === 'nextBear') {
+        focusSection('pride', 2);
+      } else if (target.block === 'nextChapter') {
         setEditorTab('common');
         setCommonStep(4);
       }
@@ -4179,6 +4265,47 @@ export function GroupEditorView({
                             ...activeDoc,
                             page1: { ...activeDoc.page1, coverSubtitle: val },
                           });
+                      } else if (activeTextField.field === 'coverSpeechBubble') {
+                        const curBubble =
+                          activeDoc.page1.coverSpeechBubbleText !== undefined
+                            ? activeDoc.page1.coverSpeechBubbleText
+                            : DEFAULT_SPEECH_BUBBLE_TEXT;
+                        fieldLabel = 'Обложка · Облачко мишки (Стр. 1)';
+                        currentValue = curBubble;
+                        updateValue = (val) =>
+                          onChangeJournal({
+                            ...activeDoc,
+                            page1: {
+                              ...activeDoc.page1,
+                              coverSpeechBubbleText: val,
+                            },
+                          });
+                        companionNode = (
+                          <div className="pt-1 space-y-1.5">
+                            <span className="text-[10px] font-semibold text-zinc-500 block">
+                              Готовые фразы (нажмите для выбора):
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {SPEECH_BUBBLE_PRESETS.map((preset) => {
+                                const isMatched = curBubble.trim() === preset;
+                                return (
+                                  <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => updateValue(preset)}
+                                    className={`px-2 py-1 rounded-md border text-[10px] font-medium transition-colors text-left ${
+                                      isMatched
+                                        ? 'border-[#0D9488] bg-[#0D9488] text-white'
+                                        : 'border-zinc-200 bg-white text-zinc-700 hover:border-[#0D9488] hover:text-[#0F766E]'
+                                    }`}
+                                  >
+                                    {preset}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
                       } else if (
                         activeTextField.field === 'moduleTitle' ||
                         activeTextField.field === 'moduleSubtitle' ||
@@ -4570,20 +4697,37 @@ export function GroupEditorView({
                             </p>
                           </div>
 
-                          {/* Add Elements Toolbar (+ Text, + Image, + Icon) */}
+                          {/* Add Elements Toolbar (+ Text, + Sticker, + Image, + Icon) */}
                           <div className="bg-white border border-zinc-200 rounded-lg p-3 space-y-2.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)]">
                             <div className="text-[11px] font-bold text-zinc-800">
                               Добавить на страницу {effectiveDesignPage}
                             </div>
-                            <div className="grid grid-cols-3 gap-1.5">
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDesignIconPickerOpen(false);
+                                  setDesignStickerPickerOpen((prev) => !prev);
+                                }}
+                                className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg border transition-colors ${
+                                  designStickerPickerOpen
+                                    ? 'border-[#0D9488] bg-[#F0FDFA] text-[#0F766E]'
+                                    : 'border-zinc-200 bg-zinc-50/70 hover:border-[#0D9488] hover:bg-[#F0FDFA] text-zinc-800'
+                                }`}
+                              >
+                                <Sparkles className="w-3.5 h-3.5 text-[#0D9488]" />
+                                <span className="text-[11px] font-semibold">
+                                  + Стикер
+                                </span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() =>
                                   handleAddTextElement(effectiveDesignPage)
                                 }
-                                className="flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-lg border border-zinc-200 bg-zinc-50/70 hover:border-[#0D9488] hover:bg-[#F0FDFA] text-zinc-800 transition-colors"
+                                className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg border border-zinc-200 bg-zinc-50/70 hover:border-[#0D9488] hover:bg-[#F0FDFA] text-zinc-800 transition-colors"
                               >
-                                <Type className="w-4 h-4 text-[#0D9488]" />
+                                <Type className="w-3.5 h-3.5 text-[#0D9488]" />
                                 <span className="text-[11px] font-semibold">
                                   + Текст
                                 </span>
@@ -4593,30 +4737,95 @@ export function GroupEditorView({
                                 onClick={() =>
                                   handleAddImageElement(effectiveDesignPage)
                                 }
-                                className="flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-lg border border-zinc-200 bg-zinc-50/70 hover:border-[#0D9488] hover:bg-[#F0FDFA] text-zinc-800 transition-colors"
+                                className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg border border-zinc-200 bg-zinc-50/70 hover:border-[#0D9488] hover:bg-[#F0FDFA] text-zinc-800 transition-colors"
                               >
-                                <ImageIcon className="w-4 h-4 text-[#0D9488]" />
+                                <ImageIcon className="w-3.5 h-3.5 text-[#0D9488]" />
                                 <span className="text-[11px] font-semibold">
                                   + Картинка
                                 </span>
                               </button>
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setDesignIconPickerOpen((prev) => !prev)
-                                }
-                                className={`flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-lg border transition-colors ${
+                                onClick={() => {
+                                  setDesignStickerPickerOpen(false);
+                                  setDesignIconPickerOpen((prev) => !prev);
+                                }}
+                                className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg border transition-colors ${
                                   designIconPickerOpen
                                     ? 'border-[#0D9488] bg-[#F0FDFA] text-[#0F766E]'
                                     : 'border-zinc-200 bg-zinc-50/70 hover:border-[#0D9488] hover:bg-[#F0FDFA] text-zinc-800'
                                 }`}
                               >
-                                <Smile className="w-4 h-4 text-[#0D9488]" />
+                                <Smile className="w-3.5 h-3.5 text-[#0D9488]" />
                                 <span className="text-[11px] font-semibold">
                                   + Иконка
                                 </span>
                               </button>
                             </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleAddTapeElement(effectiveDesignPage)
+                              }
+                              className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg border border-dashed border-amber-300 bg-amber-50/70 hover:bg-amber-100/70 text-amber-900 transition-colors"
+                            >
+                              <span className="w-4 h-2 rounded-[2px] bg-[#FDE68A] border border-amber-500/50 inline-block" />
+                              <span className="text-[11px] font-semibold">
+                                + Скотч (клейкая лента)
+                              </span>
+                            </button>
+
+                            {designStickerPickerOpen && (
+                              <div className="pt-2 border-t border-zinc-100 space-y-1.5">
+                                <div className="flex items-center justify-between text-[10px] font-semibold text-zinc-500">
+                                  <span>Выберите стикер (поверх фона, под текстом):</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDesignStickerPickerOpen(false)}
+                                    className="text-zinc-400 hover:text-zinc-700"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                                <div className="grid grid-cols-4 gap-1.5">
+                                  {STICKER_PRESET_OPTIONS.map((opt) => (
+                                    <button
+                                      key={opt.id}
+                                      type="button"
+                                      onClick={() =>
+                                        handleAddStickerElement(
+                                          effectiveDesignPage,
+                                          opt
+                                        )
+                                      }
+                                      title={opt.label}
+                                      className="p-1.5 rounded-lg border border-zinc-200 hover:border-[#0D9488] hover:bg-[#F0FDFA] flex flex-col items-center gap-1 transition-colors"
+                                    >
+                                      {opt.kind === 'image' && opt.imageUrl ? (
+                                        <img
+                                          src={opt.imageUrl}
+                                          alt={opt.label}
+                                          className="w-7 h-7 object-contain"
+                                        />
+                                      ) : (
+                                        <svg viewBox="0 0 60 60" className="w-7 h-7" fill="none">
+                                          <path
+                                            d="M30 4L36 22L54 24L40 36L44 54L30 44L16 54L20 36L6 24L24 22L30 4Z"
+                                            fill={opt.color}
+                                            stroke="#18181B"
+                                            strokeWidth="2.4"
+                                            strokeLinejoin="round"
+                                          />
+                                        </svg>
+                                      )}
+                                      <span className="text-[9px] text-zinc-600 truncate w-full text-center">
+                                        {opt.label}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
 
                             {designIconPickerOpen && (
                               <div className="pt-2 border-t border-zinc-100 space-y-1.5">
@@ -4673,6 +4882,8 @@ export function GroupEditorView({
                                         ? 'Текстовый блок'
                                         : selectedDecor.kind === 'image'
                                         ? 'Картинка'
+                                        : selectedDecor.kind === 'tape'
+                                        ? 'Скотч (наклейка)'
                                         : 'Иконка')}
                                   </div>
                                 </div>
@@ -5060,6 +5271,261 @@ export function GroupEditorView({
                                   </span>
                                 </div>
                               )}
+
+                              {/* Star Color Picker */}
+                              {selectedDecor.kind === 'star' && (
+                                <div className="pt-2 border-t border-zinc-100 flex items-center justify-between gap-2">
+                                  <span className="text-[10px] font-semibold text-zinc-600">
+                                    Цвет звезды
+                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    {['#FFE14D', '#5EE2E4', '#FF7B6B', '#A78BFA', '#4ADE80'].map(
+                                      (hex) => (
+                                        <button
+                                          key={hex}
+                                          type="button"
+                                          onClick={() =>
+                                            handleUpdateDecor(
+                                              activeTarget.page,
+                                              selectedDecor.id,
+                                              { color: hex }
+                                            )
+                                          }
+                                          style={{ backgroundColor: hex }}
+                                          className={`w-5 h-5 rounded-full border ${
+                                            selectedDecor.color === hex
+                                              ? 'border-zinc-900 ring-2 ring-[#0D9488]/40'
+                                              : 'border-zinc-300'
+                                          }`}
+                                        />
+                                      )
+                                    )}
+                                    <input
+                                      type="color"
+                                      value={selectedDecor.color || '#FFE14D'}
+                                      onChange={(e) =>
+                                        handleUpdateDecor(
+                                          activeTarget.page,
+                                          selectedDecor.id,
+                                          { color: e.target.value }
+                                        )
+                                      }
+                                      className="w-6 h-6 rounded border border-zinc-200 cursor-pointer"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Layering Control (Below Text vs Above Blocks) */}
+                              <div className="pt-2 border-t border-zinc-100 space-y-1.5">
+                                <div className="flex items-center justify-between text-[10px] font-semibold text-zinc-600">
+                                  <span>Порядок слоя (Z-index: {selectedDecor.zIndex})</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdateDecor(
+                                        activeTarget.page,
+                                        selectedDecor.id,
+                                        { zIndex: 8 }
+                                      )
+                                    }
+                                    className={`px-2 py-1.5 rounded-md border text-[10px] font-semibold transition-colors ${
+                                      selectedDecor.zIndex < 12
+                                        ? 'border-[#0D9488] bg-[#F0FDFA] text-[#0F766E]'
+                                        : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                                    }`}
+                                  >
+                                    Под текстом (z=8)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdateDecor(
+                                        activeTarget.page,
+                                        selectedDecor.id,
+                                        { zIndex: 28 }
+                                      )
+                                    }
+                                    className={`px-2 py-1.5 rounded-md border text-[10px] font-semibold transition-colors ${
+                                      selectedDecor.zIndex >= 12
+                                        ? 'border-[#0D9488] bg-[#F0FDFA] text-[#0F766E]'
+                                        : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                                    }`}
+                                  >
+                                    Поверх блоков (z=28)
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Masking Tape ("Скотч") Controls */}
+                              {selectedDecor.kind === 'tape' && (
+                                <div className="pt-2 border-t border-zinc-100 space-y-2.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[10px] font-semibold text-zinc-600">
+                                      Цвет скотча
+                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                      {[
+                                        '#FDE68A',
+                                        '#BAE6FD',
+                                        '#BBF7D0',
+                                        '#FECDD3',
+                                        '#E4E4E7',
+                                      ].map((hex) => (
+                                        <button
+                                          key={hex}
+                                          type="button"
+                                          onClick={() =>
+                                            handleUpdateDecor(
+                                              activeTarget.page,
+                                              selectedDecor.id,
+                                              { color: hex }
+                                            )
+                                          }
+                                          style={{ backgroundColor: hex }}
+                                          className={`w-5 h-5 rounded-full border ${
+                                            selectedDecor.color === hex
+                                              ? 'border-zinc-900 ring-2 ring-[#0D9488]/40'
+                                              : 'border-zinc-300'
+                                          }`}
+                                        />
+                                      ))}
+                                      <input
+                                        type="color"
+                                        value={selectedDecor.color || '#FDE68A'}
+                                        onChange={(e) =>
+                                          handleUpdateDecor(
+                                            activeTarget.page,
+                                            selectedDecor.id,
+                                            { color: e.target.value }
+                                          )
+                                        }
+                                        className="w-6 h-6 rounded border border-zinc-200 cursor-pointer"
+                                      />
+                                    </div>
+                                  </div>
+                                  <label className="block">
+                                    <span className="text-[10px] text-zinc-500">
+                                      Прозрачность (
+                                      {Math.round(
+                                        (selectedDecor.opacity ?? 0.9) * 100
+                                      )}
+                                      %)
+                                    </span>
+                                    <input
+                                      type="range"
+                                      min={0.3}
+                                      max={1}
+                                      step={0.05}
+                                      value={selectedDecor.opacity ?? 0.9}
+                                      onChange={(e) =>
+                                        handleUpdateDecor(
+                                          activeTarget.page,
+                                          selectedDecor.id,
+                                          { opacity: Number(e.target.value) }
+                                        )
+                                      }
+                                      className="w-full accent-[#0D9488] mt-1"
+                                    />
+                                  </label>
+                                </div>
+                              )}
+
+                              {/* Quick Sticker Replacement Grid & Media Library Replace */}
+                              {selectedDecor.kind !== 'text' &&
+                                selectedDecor.kind !== 'tape' && (
+                                <div className="pt-2 border-t border-zinc-100 space-y-2">
+                                  <div className="text-[10px] font-semibold text-zinc-600">
+                                    Заменить стикер
+                                  </div>
+                                  <div className="grid grid-cols-4 gap-1.5">
+                                    {STICKER_PRESET_OPTIONS.map((opt) => (
+                                      <button
+                                        key={opt.id}
+                                        type="button"
+                                        onClick={() =>
+                                          handleReplaceDecorWithSticker(
+                                            activeTarget.page,
+                                            selectedDecor.id,
+                                            opt
+                                          )
+                                        }
+                                        title={`Заменить на «${opt.label}»`}
+                                        className={`p-1.5 rounded-lg border flex flex-col items-center gap-0.5 transition-colors ${
+                                          (opt.imageUrl &&
+                                            selectedDecor.imageUrl ===
+                                              opt.imageUrl) ||
+                                          (opt.kind === 'star' &&
+                                            selectedDecor.kind === 'star' &&
+                                            selectedDecor.color === opt.color)
+                                            ? 'border-[#0D9488] bg-[#F0FDFA]'
+                                            : 'border-zinc-200 hover:border-[#0D9488] hover:bg-zinc-50'
+                                        }`}
+                                      >
+                                        {opt.kind === 'image' && opt.imageUrl ? (
+                                          <img
+                                            src={opt.imageUrl}
+                                            alt={opt.label}
+                                            className="w-6 h-6 object-contain"
+                                          />
+                                        ) : (
+                                          <svg viewBox="0 0 60 60" className="w-6 h-6" fill="none">
+                                            <path
+                                              d="M30 4L36 22L54 24L40 36L44 54L30 44L16 54L20 36L6 24L24 22L30 4Z"
+                                              fill={opt.color}
+                                              stroke="#18181B"
+                                              strokeWidth="2.4"
+                                              strokeLinejoin="round"
+                                            />
+                                          </svg>
+                                        )}
+                                        <span className="text-[8.5px] text-zinc-600 truncate w-full text-center">
+                                          {opt.label}
+                                        </span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      onOpenMediaPicker('decor', (url, asset) => {
+                                        handleUpdateDecor(
+                                          activeTarget.page,
+                                          selectedDecor.id,
+                                          {
+                                            kind: 'image',
+                                            imageUrl: url,
+                                            label:
+                                              asset?.name || selectedDecor.label,
+                                          }
+                                        );
+                                      })
+                                    }
+                                    className="w-full py-1.5 px-2.5 rounded-md border border-zinc-200 bg-zinc-50 hover:border-[#0D9488] hover:bg-[#F0FDFA] text-[11px] font-semibold text-zinc-700 transition-colors"
+                                  >
+                                    Выбрать другой из медиатеки…
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Explicit Delete Button */}
+                              <div className="pt-2 border-t border-zinc-100">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleDeleteDecor(
+                                      activeTarget.page,
+                                      selectedDecor.id
+                                    )
+                                  }
+                                  className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-md border border-red-200 bg-red-50/70 hover:bg-red-100 text-[11px] font-semibold text-red-600 transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Удалить элемент</span>
+                                </button>
+                              </div>
                             </div>
                           ) : selectedBlockId &&
                             selectedBlockTransform &&
@@ -5217,6 +5683,68 @@ export function GroupEditorView({
                                   />
                                 </label>
                               </div>
+
+                              {(selectedBlockId === 'cover' ||
+                                selectedBlockId === 'coverBear') && (
+                                <div className="pt-2.5 border-t border-zinc-100 space-y-2">
+                                  <div className="text-[11px] font-bold text-zinc-800">
+                                    Облачко мишки на обложке (Стр. 1)
+                                  </div>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {SPEECH_BUBBLE_PRESETS.map((preset) => {
+                                      const curVal =
+                                        activeDoc.page1.coverSpeechBubbleText !==
+                                        undefined
+                                          ? activeDoc.page1
+                                              .coverSpeechBubbleText
+                                          : DEFAULT_SPEECH_BUBBLE_TEXT;
+                                      const isMatched = curVal.trim() === preset;
+                                      return (
+                                        <button
+                                          key={preset}
+                                          type="button"
+                                          onClick={() =>
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page1: {
+                                                ...activeDoc.page1,
+                                                coverSpeechBubbleText: preset,
+                                              },
+                                            })
+                                          }
+                                          className={`px-2 py-1 rounded-md border text-[10px] font-medium transition-colors text-left ${
+                                            isMatched
+                                              ? 'border-[#0D9488] bg-[#0D9488] text-white'
+                                              : 'border-zinc-200 bg-white text-zinc-700 hover:border-[#0D9488] hover:text-[#0F766E]'
+                                          }`}
+                                        >
+                                          {preset}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                  <textarea
+                                    rows={2}
+                                    value={
+                                      activeDoc.page1.coverSpeechBubbleText !==
+                                      undefined
+                                        ? activeDoc.page1.coverSpeechBubbleText
+                                        : DEFAULT_SPEECH_BUBBLE_TEXT
+                                    }
+                                    onChange={(e) =>
+                                      onChangeJournal({
+                                        ...activeDoc,
+                                        page1: {
+                                          ...activeDoc.page1,
+                                          coverSpeechBubbleText: e.target.value,
+                                        },
+                                      })
+                                    }
+                                    placeholder="Свой текст для облачка (без имени)…"
+                                    className="w-full rounded-md border border-zinc-200 bg-zinc-50/70 px-2.5 py-1.5 text-[11px] text-zinc-800 focus:outline-none focus:bg-white focus:border-[#0D9488] resize-none"
+                                  />
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <div className="bg-white border border-dashed border-zinc-300 rounded-lg p-3 text-[11px] text-zinc-500 text-center">
@@ -5584,6 +6112,89 @@ export function GroupEditorView({
                                         </option>
                                       </select>
                                     </div>
+                                  </label>
+                                </div>
+
+                                {/* Cover Bear Speech Bubble Card (Page 1 Top) */}
+                                <div className="pt-3 border-t border-zinc-100 space-y-2.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[11px] font-bold text-zinc-800">
+                                      Облачко мишки на обложке (Стр. 1)
+                                    </span>
+                                    <span className="text-[10px] text-zinc-400">
+                                      Вверху у мишки
+                                    </span>
+                                  </div>
+
+                                  <div className="space-y-1.5">
+                                    <span className="text-[10px] font-medium text-zinc-500 block">
+                                      Быстрые пресеты:
+                                    </span>
+                                    <div className="flex flex-col gap-1.5">
+                                      {SPEECH_BUBBLE_PRESETS.map((preset) => {
+                                        const curVal =
+                                          activeDoc.page1
+                                            .coverSpeechBubbleText !== undefined
+                                            ? activeDoc.page1
+                                                .coverSpeechBubbleText
+                                            : DEFAULT_SPEECH_BUBBLE_TEXT;
+                                        const isMatched =
+                                          curVal.trim() === preset;
+                                        return (
+                                          <button
+                                            key={preset}
+                                            type="button"
+                                            onClick={() =>
+                                              onChangeJournal({
+                                                ...activeDoc,
+                                                page1: {
+                                                  ...activeDoc.page1,
+                                                  coverSpeechBubbleText: preset,
+                                                },
+                                              })
+                                            }
+                                            className={`w-full text-left px-2.5 py-1.5 rounded-md border text-[11px] font-medium transition-colors flex items-center justify-between gap-2 ${
+                                              isMatched
+                                                ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-[0_1px_2px_rgba(13,148,136,0.18)]'
+                                                : 'bg-zinc-50/70 text-zinc-700 border-zinc-200 hover:border-[#0D9488] hover:bg-white'
+                                            }`}
+                                          >
+                                            <span>{preset}</span>
+                                            {isMatched && (
+                                              <Check className="w-3.5 h-3.5 shrink-0" />
+                                            )}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+
+                                  <label className="block pt-0.5">
+                                    <span className="text-[10px] font-medium text-zinc-500 mb-1 block">
+                                      Или свой текст (обновляется сразу на обложке):
+                                    </span>
+                                    <textarea
+                                      rows={2}
+                                      value={
+                                        activeDoc.page1
+                                          .coverSpeechBubbleText !== undefined
+                                          ? activeDoc.page1
+                                              .coverSpeechBubbleText
+                                          : DEFAULT_SPEECH_BUBBLE_TEXT
+                                      }
+                                      onChange={(e) =>
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page1: {
+                                            ...activeDoc.page1,
+                                            coverSpeechBubbleText:
+                                              e.target.value,
+                                          },
+                                        })
+                                      }
+                                      placeholder="Например: Вау, вот это результат!"
+                                      className="w-full p-2.5 rounded-lg border border-zinc-200 bg-zinc-50/60 text-xs text-zinc-800 leading-relaxed placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/15 resize-none transition-colors"
+                                    />
                                   </label>
                                 </div>
                               </div>

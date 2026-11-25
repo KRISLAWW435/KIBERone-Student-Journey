@@ -29,10 +29,16 @@ export function StrengthCard({
       style={{ backgroundColor: strength.bgColor || '#CFEFF2' }}
       className={`rounded-2xl ${
         compact ? 'px-[12px] py-[9px]' : 'px-[14px] py-[12px]'
-      } flex flex-col items-center justify-center text-center border border-black/10 shadow-[0_2px_6px_rgba(0,0,0,0.04)] self-stretch h-full`}
+      } flex flex-col items-center justify-center text-center border-[1.6px] border-[#18181B] shadow-[0_7px_16px_rgba(17,24,39,0.12),0_2px_4px_rgba(17,24,39,0.08)] self-stretch h-full`}
     >
-      <div className={`${compact ? 'mb-[5px]' : 'mb-[7px]'} shrink-0`}>
-        <StrengthLineIcon type={strength.iconKey} size={compact ? 30 : 38} />
+      <div
+        style={{
+          filter:
+            'drop-shadow(2px 0 0 #ffffff) drop-shadow(-2px 0 0 #ffffff) drop-shadow(0 2px 0 #ffffff) drop-shadow(0 -2px 0 #ffffff) drop-shadow(0 3px 5px rgba(17,24,39,0.16))',
+        }}
+        className={`${compact ? 'mb-[5px]' : 'mb-[8px]'} shrink-0 flex items-center justify-center`}
+      >
+        <StrengthLineIcon type={strength.iconKey} size={compact ? 38 : 48} />
       </div>
       <InlineEditableText
         value={strength.title}
@@ -52,9 +58,9 @@ export function StrengthCard({
           activeTextField.itemId === strength.id
         }
         as="div"
-        className={`font-extrabold ${
-          compact ? 'text-[13px]' : 'text-[14.5px]'
-        } leading-[1.18] text-[#111827] block w-full`}
+        className={`font-journal-display font-extrabold ${
+          compact ? 'text-[12.5px]' : 'text-[14px]'
+        } leading-[1.2] text-[#111827] block w-full`}
       />
       {(strength.example || onSelectTextField) && (
         <InlineEditableText
@@ -76,9 +82,9 @@ export function StrengthCard({
             activeTextField.itemId === strength.id
           }
           as="p"
-          className={`${
-            compact ? 'text-[10.5px]' : 'text-[11px]'
-          } leading-[1.3] font-medium text-[#27272A] mt-[4px] block w-full`}
+          className={`font-journal-body ${
+            compact ? 'text-[10px]' : 'text-[10.5px]'
+          } leading-[1.42] font-medium text-[#27272A] mt-[4px] block w-full`}
         />
       )}
     </div>
