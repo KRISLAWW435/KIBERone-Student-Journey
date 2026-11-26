@@ -17,6 +17,7 @@ interface AppHeaderProps {
   onCreateGroup: () => void;
   onOpenMediaLibrary: () => void;
   onOpenSettings?: () => void;
+  helpTrigger?: React.ReactNode;
 }
 
 export function AppHeader({
@@ -25,6 +26,7 @@ export function AppHeader({
   onCreateGroup,
   onOpenMediaLibrary,
   onOpenSettings,
+  helpTrigger,
 }: AppHeaderProps) {
   const tabs: Array<{
     id: WorkspaceTab;
@@ -41,7 +43,10 @@ export function AppHeader({
   ];
 
   return (
-    <header className="h-16 bg-white border-b border-zinc-200 px-6 flex items-center justify-between gap-8 sticky top-0 z-20">
+    <header
+      data-tour-id="header-nav"
+      className="h-16 bg-white border-b border-zinc-200 px-6 flex items-center justify-between gap-8 sticky top-0 z-20"
+    >
       <div className="flex items-center gap-5 min-w-0">
         <button
           type="button"
@@ -101,8 +106,11 @@ export function AppHeader({
           </button>
         )}
 
+        {helpTrigger}
+
         <button
           type="button"
+          data-tour-id="home-create-group"
           onClick={onCreateGroup}
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-semibold transition-colors whitespace-nowrap shrink-0 shadow-xs"
         >

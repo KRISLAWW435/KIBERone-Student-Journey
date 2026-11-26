@@ -4,6 +4,12 @@ const TINY_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 test.describe('Полный пользовательский путь KIBERone Student Journey', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('kiberone_student_journey_onboarding_v1', '1');
+    });
+  });
+
   test('создание группы -> добавление ученика -> общие модули -> редактор -> слово наставника -> проект -> разворот', async ({
     page,
   }) => {

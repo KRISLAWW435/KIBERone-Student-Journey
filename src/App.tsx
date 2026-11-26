@@ -10,6 +10,17 @@ import { PreviewView } from './components/views/PreviewView';
 import { TemplatesView } from './components/views/TemplatesView';
 import { DESIGN_PALETTES } from './data/presets';
 import {
+  EditorTourDirective,
+  hasCompletedOnboarding,
+  markOnboardingCompleted,
+  ONBOARDING_STEPS,
+} from './data/onboardingTour';
+import {
+  HelpMenuButton,
+  OnboardingTourOverlay,
+  WelcomeScreen,
+} from './components/onboarding/OnboardingSystem';
+import {
   deleteBranch,
   deleteCategory,
   deleteGroup,
@@ -102,6 +113,19 @@ export default function App() {
     useState<BulkDesignUndoState | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Onboarding Welcome & Interactive Tour state (localStorage persisted, zero data mutation)
+  const [onboardingPhase, setOnboardingPhase] = useState<
+    'closed' | 'welcome' | 'tour'
+  >(() => (hasCompletedOnboarding() ? 'closed' : 'welcome'));
+  const [tourStepIndex, setTourStepIndex] = useState(0);
+  const [editorTourDirective, setEditorTourDirective] =
+    useState<EditorTourDirective | null>(null);
+  const [previewTourLayout, setPreviewTourLayout] = useState<
+    'spread' | 'page1' | 'page2' | null
+  >(null);
+  const tourReturnRouteRef = useRef<AppRoute>('home');
+  const tourDirectiveSeqRef = useRef(0);
 
   // Batch offscreen rendering override for ZIP export
   const [batchRenderDoc, setBatchRenderDoc] = useState<JournalDocument | null>(
@@ -1159,6 +1183,104 @@ export default function App() {
     setCreateGroupSignal((n) => n + 1);
   };
 
+  const applyTourStepView = useCallback(
+    (stepIdx: number) => {
+      const clampedIdx = Math.max(
+        0,
+        Math.min(ONBOARDING_STEPS.length - 1, stepIdx)
+      );
+      const step = ONBOARDING_STEPS[clampedIdx];
+      setTourStepIndex(clampedIdx);
+
+      if (step.requiresExistingGroup) {
+        const targetGroup =
+          groups.find((g) => g.id === activeGroupId) ?? groups[0] ?? null;
+        if (!targetGroup) {
+          setRoute('home');
+          return;
+        }
+
+        const groupJournal =
+          journals.find(
+            (j) =>
+              j.id === activeId &&
+              (j.groupId === targetGroup.id ||
+                residents.some(
+                  (r) => r.groupId === targetGroup.id && r.id === j.residentId
+                ))
+          ) ??
+          journals.find((j) => j.groupId === targetGroup.id) ??
+          journals[0] ??
+          null;
+
+        if (step.route === 'groupEditor') {
+          setActiveGroupId(targetGroup.id);
+          if (groupJournal) {
+            setActiveId(groupJournal.id);
+          }
+          if (step.editorDirective) {
+            tourDirectiveSeqRef.current += 1;
+            setEditorEntryTarget({
+              tab: step.editorDirective.tab,
+              journalId: groupJournal?.id ?? null,
+              studentId: null,
+            });
+            setEditorTourDirective({
+              ...step.editorDirective,
+              nonce: tourDirectiveSeqRef.current,
+            });
+          }
+          setRoute('groupEditor');
+          return;
+        }
+
+        if (step.route === 'preview') {
+          if (!groupJournal) {
+            setRoute('home');
+            return;
+          }
+          setActiveGroupId(groupJournal.groupId || targetGroup.id);
+          setActiveId(groupJournal.id);
+          setPreviewTourLayout(step.previewLayout ?? 'spread');
+          setRoute('preview');
+          return;
+        }
+      }
+
+      setRoute(step.route);
+    },
+    [activeGroupId, activeId, groups, journals, residents]
+  );
+
+  const handleOpenWelcomeFromHelp = useCallback(() => {
+    tourReturnRouteRef.current = route;
+    setOnboardingPhase('welcome');
+  }, [route]);
+
+  const handleStartTourFromWelcome = useCallback(() => {
+    setOnboardingPhase('tour');
+    applyTourStepView(0);
+  }, [applyTourStepView]);
+
+  const handleJumpToTourStep = useCallback(
+    (stepIdx: number) => {
+      tourReturnRouteRef.current = route;
+      setOnboardingPhase('tour');
+      applyTourStepView(stepIdx);
+    },
+    [applyTourStepView, route]
+  );
+
+  const handleCloseOrFinishOnboarding = useCallback(() => {
+    const wasInTour = onboardingPhase === 'tour';
+    markOnboardingCompleted();
+    setOnboardingPhase('closed');
+    setPreviewTourLayout(null);
+    if (wasInTour && route !== tourReturnRouteRef.current) {
+      setRoute(tourReturnRouteRef.current);
+    }
+  }, [onboardingPhase, route]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F6F6F3] flex items-center justify-center text-sm text-zinc-500">
@@ -1197,6 +1319,12 @@ export default function App() {
             onBatchExportGroupZip={handleBatchExportGroupZip}
             batchProgress={batchProgress}
             openCreateGroupSignal={createGroupSignal}
+            helpTrigger={
+              <HelpMenuButton
+                onStartWelcome={handleOpenWelcomeFromHelp}
+                onJumpToStep={handleJumpToTourStep}
+              />
+            }
           />
         )}
 
@@ -1230,6 +1358,12 @@ export default function App() {
                 },
               })
             }
+            helpTrigger={
+              <HelpMenuButton
+                onStartWelcome={handleOpenWelcomeFromHelp}
+                onJumpToStep={handleJumpToTourStep}
+              />
+            }
           />
         )}
 
@@ -1244,6 +1378,12 @@ export default function App() {
             onDeleteTemplate={handleDeleteTemplate}
             onOpenMediaLibrary={() =>
               setMediaModal({ open: true, category: 'all' })
+            }
+            helpTrigger={
+              <HelpMenuButton
+                onStartWelcome={handleOpenWelcomeFromHelp}
+                onJumpToStep={handleJumpToTourStep}
+              />
             }
           />
         )}
@@ -1306,6 +1446,14 @@ export default function App() {
                 },
               })
             }
+            tourDirective={editorTourDirective}
+            helpTrigger={
+              <HelpMenuButton
+                compact
+                onStartWelcome={handleOpenWelcomeFromHelp}
+                onJumpToStep={handleJumpToTourStep}
+              />
+            }
           />
         )}
 
@@ -1333,9 +1481,37 @@ export default function App() {
               handleUpdateJournalStatus(activeDoc.id, 'exported')
             }
             getExportPageElements={getExportPageElements}
+            tourLayout={previewTourLayout}
+            helpTrigger={
+              <HelpMenuButton
+                variant="dark"
+                compact
+                onStartWelcome={handleOpenWelcomeFromHelp}
+                onJumpToStep={handleJumpToTourStep}
+              />
+            }
           />
         )}
       </div>
+
+      {/* ONBOARDING WELCOME SCREEN & INTERACTIVE TOUR */}
+      {onboardingPhase === 'welcome' && (
+        <WelcomeScreen
+          onStartTour={handleStartTourFromWelcome}
+          onSkip={handleCloseOrFinishOnboarding}
+        />
+      )}
+
+      {onboardingPhase === 'tour' && (
+        <OnboardingTourOverlay
+          stepIndex={tourStepIndex}
+          hasGroupData={groups.length > 0 && journals.length > 0}
+          onNext={() => applyTourStepView(tourStepIndex + 1)}
+          onPrev={() => applyTourStepView(tourStepIndex - 1)}
+          onSkip={handleCloseOrFinishOnboarding}
+          onFinish={handleCloseOrFinishOnboarding}
+        />
+      )}
 
       {/* MEDIA LIBRARY MODAL */}
       {mediaModal.open && (

@@ -70,6 +70,7 @@ export function ExportMenu({
     <div className="relative">
       <button
         type="button"
+        data-tour-id="export-menu-button"
         onClick={() => setOpen((prev) => !prev)}
         disabled={Boolean(busyLabel)}
         className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-semibold transition-colors whitespace-nowrap shrink-0 shadow-xs disabled:opacity-60"

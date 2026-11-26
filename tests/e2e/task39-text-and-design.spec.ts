@@ -98,6 +98,12 @@ async function createGroupWithStudent(
 }
 
 test.describe('Задача №39: Перенос текста на А4, автосохранение и глобальный дизайн', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('kiberone_student_journey_onboarding_v1', '1');
+    });
+  });
+
   test('переносит длинный текст без пробелов на А4, предупреждает при выходе за лист, сохраняет в предпросмотре и PDF', async ({
     page,
   }, testInfo) => {

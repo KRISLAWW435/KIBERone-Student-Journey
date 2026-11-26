@@ -108,6 +108,12 @@ async function dragHandle(
 }
 
 test.describe('Задача №40: Аудит изменения размеров, порядка стр. 2, адаптивных сеток 1–6 и PDF', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('kiberone_student_journey_onboarding_v1', '1');
+    });
+  });
+
   test('1. Панельный ресайз (пропорциональный и свободный), вертикальное перемещение блоков, 2D-перемещение мишки, отсутствие ручек на холсте и сохранение', async ({
     page,
   }) => {

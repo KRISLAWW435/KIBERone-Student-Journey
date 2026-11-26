@@ -68,6 +68,7 @@ interface HomeViewProps {
     groupId?: string;
   } | null;
   openCreateGroupSignal?: number;
+  helpTrigger?: React.ReactNode;
 }
 
 const AVATAR_TONES = [
@@ -105,6 +106,7 @@ export function HomeView({
   onBatchExportGroupZip,
   batchProgress,
   openCreateGroupSignal = 0,
+  helpTrigger,
 }: HomeViewProps) {
   const [branchFilter, setBranchFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -200,6 +202,7 @@ export function HomeView({
         onCreateGroup={openCreateGroupModal}
         onOpenMediaLibrary={onOpenMediaLibrary}
         onOpenSettings={() => setSettingsOpen(true)}
+        helpTrigger={helpTrigger}
       />
 
       <main className="flex-1 max-w-[1360px] w-full mx-auto px-6 py-8 space-y-8">
@@ -297,7 +300,7 @@ export function HomeView({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-              {filteredGroups.map((group) => {
+              {filteredGroups.map((group, groupIndex) => {
                 const branch = branchById.get(group.branchId);
                 const groupStudents = residents.filter(
                   (r) => r.groupId === group.id
@@ -323,6 +326,7 @@ export function HomeView({
                 return (
                   <article
                     key={group.id}
+                    data-tour-id={groupIndex === 0 ? 'home-group-card' : undefined}
                     className="bg-white border border-zinc-200 rounded-2xl p-5 flex flex-col justify-between gap-4 hover:border-zinc-300 transition-colors overflow-hidden min-w-0"
                   >
                     {/* Top: Group Info */}

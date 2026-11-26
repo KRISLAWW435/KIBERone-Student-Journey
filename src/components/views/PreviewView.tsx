@@ -23,6 +23,8 @@ interface PreviewViewProps {
     page1: HTMLElement | null;
     page2: HTMLElement | null;
   };
+  helpTrigger?: React.ReactNode;
+  tourLayout?: PreviewLayout | null;
 }
 
 type PreviewLayout = 'spread' | 'page1' | 'page2';
@@ -35,9 +37,17 @@ export function PreviewView({
   onPrint,
   onExportSuccess,
   getExportPageElements,
+  helpTrigger,
+  tourLayout,
 }: PreviewViewProps) {
   const [layout, setLayout] = useState<PreviewLayout>('spread');
   const [zoom, setZoom] = useState<'auto' | 0.75 | 1>('auto');
+
+  useEffect(() => {
+    if (tourLayout) {
+      setLayout(tourLayout);
+    }
+  }, [tourLayout]);
   const [autoScale, setAutoScale] = useState(0.76);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -115,7 +125,10 @@ export function PreviewView({
         </div>
 
         {/* Layout & Zoom Controls */}
-        <div className="flex items-center gap-3">
+        <div
+          data-tour-id="preview-controls"
+          className="flex items-center gap-3"
+        >
           <div className="flex items-center gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-lg">
             {(
               [
@@ -188,6 +201,8 @@ export function PreviewView({
             <Edit3 className="w-3.5 h-3.5" />
             <span>Редактировать</span>
           </button>
+
+          {helpTrigger}
 
           <ExportMenu
             doc={doc}

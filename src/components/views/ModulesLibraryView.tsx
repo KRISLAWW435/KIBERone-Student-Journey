@@ -35,6 +35,7 @@ import {
   SkillGroupName,
 } from '../../types/journal';
 import { AppHeader, WorkspaceTab } from '../AppHeader';
+import { ContextualHint } from '../onboarding/OnboardingSystem';
 
 function ModuleCardPreviewImage({
   src,
@@ -100,6 +101,7 @@ interface ModulesLibraryViewProps {
     category: MediaCategory | 'all',
     onSelect: (url: string, asset?: MediaAsset) => void
   ) => void;
+  helpTrigger?: React.ReactNode;
 }
 
 type CurriculumSubTab =
@@ -140,6 +142,7 @@ export function ModulesLibraryView({
   onSaveGroupTemplate,
   onDeleteGroupTemplate,
   onOpenMediaPicker,
+  helpTrigger,
 }: ModulesLibraryViewProps) {
   const [subTab, setSubTab] = useState<CurriculumSubTab>('catalog');
   const [search, setSearch] = useState('');
@@ -405,15 +408,23 @@ export function ModulesLibraryView({
         onNavigate={onNavigate}
         onCreateGroup={onCreateGroup}
         onOpenMediaLibrary={onOpenMediaLibrary}
+        helpTrigger={helpTrigger}
       />
 
       <main className="flex-1 max-w-[1320px] w-full mx-auto px-6 py-8 space-y-6">
         {/* Page Heading */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
-              Учебная программа KIBERone
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
+                Учебная программа KIBERone
+              </h1>
+              <ContextualHint
+                title="Как работает библиотека модулей"
+                text="Официальное название используется для справочника, а короткое название и понятное описание — для карточки на странице А4."
+                align="left"
+              />
+            </div>
             <p className="text-sm text-zinc-500 mt-1">
               Единая библиотека модулей, категорий, навыков, визуальных карточек и групповых шаблонов обучения
             </p>
@@ -432,7 +443,10 @@ export function ModulesLibraryView({
         </div>
 
         {/* 6 Sub-tabs */}
-        <div className="flex items-center gap-1.5 p-1.5 bg-white border border-zinc-200 rounded-xl overflow-x-auto">
+        <div
+          data-tour-id="modules-library-tabs"
+          className="flex items-center gap-1.5 p-1.5 bg-white border border-zinc-200 rounded-xl overflow-x-auto"
+        >
           {subTabs.map((t) => (
             <button
               key={t.id}

@@ -126,6 +126,8 @@ import {
 } from '../journal/JournalArtwork';
 import { JournalPageOne } from '../journal/JournalPageOne';
 import { JournalPageTwo } from '../journal/JournalPageTwo';
+import { EditorTourDirective } from '../../data/onboardingTour';
+import { ContextualHint } from '../onboarding/OnboardingSystem';
 
 function ModuleThumbImage({
   src,
@@ -238,6 +240,8 @@ interface GroupEditorViewProps {
     category: MediaCategory | 'all',
     onSelect: (url: string, asset?: MediaAsset) => void
   ) => void;
+  helpTrigger?: React.ReactNode;
+  tourDirective?: EditorTourDirective | null;
 }
 
 type EditorTab = 'individual' | 'common';
@@ -286,6 +290,8 @@ export function GroupEditorView({
   onBatchExportGroupZip,
   getExportPageElements,
   onOpenMediaPicker,
+  helpTrigger,
+  tourDirective,
 }: GroupEditorViewProps) {
   const [editorTab, setEditorTab] = useState<EditorTab>(initialTab);
   const [pageFocus, setPageFocus] = useState<PageFocus>(1);
@@ -577,6 +583,39 @@ export function GroupEditorView({
     setActiveTextField(null);
     setActiveTarget(null);
   }, [activeDoc?.id]);
+
+  const lastTourNonceRef = useRef<number>(0);
+  useEffect(() => {
+    if (!tourDirective || tourDirective.nonce === lastTourNonceRef.current) {
+      return;
+    }
+    lastTourNonceRef.current = tourDirective.nonce;
+    setLeftCollapsed(false);
+    setRightCollapsed(false);
+    setEditorTab(tourDirective.tab);
+    if (tourDirective.commonStep) {
+      setCommonStep(tourDirective.commonStep);
+    }
+    if (tourDirective.inspectorMode) {
+      setInspectorMode(tourDirective.inspectorMode);
+    }
+    if (tourDirective.inspectorStep) {
+      setActiveInspectorStep(tourDirective.inspectorStep);
+    }
+    if (tourDirective.pageFocus) {
+      setPageFocus(tourDirective.pageFocus);
+      if (tourDirective.pageFocus === 1 || tourDirective.pageFocus === 2) {
+        setDesignTargetPage(tourDirective.pageFocus);
+      }
+    }
+    if (tourDirective.selectBlockId) {
+      setActiveTarget({
+        kind: 'block',
+        page: tourDirective.pageFocus === 2 ? 2 : 1,
+        blockId: tourDirective.selectBlockId,
+      });
+    }
+  }, [tourDirective]);
 
   const activeTextKey = activeTextField
     ? `${activeTextField.page}:${activeTextField.field}:${
@@ -2747,6 +2786,8 @@ export function GroupEditorView({
                 : 'Выгрузить готовые (ZIP)'}
             </span>
           </button>
+
+          {helpTrigger}
         </div>
       </header>
 
@@ -2906,7 +2947,10 @@ export function GroupEditorView({
           </div>
         ) : (
           <>
-            <aside className="w-full lg:w-[var(--left-panel-w)] shrink-0 bg-white border-b lg:border-b-0 border-zinc-200 flex flex-col min-h-0 max-h-[360px] lg:max-h-none lg:h-full overflow-hidden">
+            <aside
+              data-tour-id="editor-students-sidebar"
+              className="w-full lg:w-[var(--left-panel-w)] shrink-0 bg-white border-b lg:border-b-0 border-zinc-200 flex flex-col min-h-0 max-h-[360px] lg:max-h-none lg:h-full overflow-hidden"
+            >
               {/* Sticky Top Summary */}
               <div className="shrink-0 p-3.5 border-b border-zinc-200 space-y-2.5 bg-white">
                 <div className="flex items-center justify-between gap-2">
@@ -3453,7 +3497,10 @@ export function GroupEditorView({
               <div className="max-w-5xl mx-auto">
                 {/* STEP 1: PARAMETERS (FLAT UI) */}
                 {commonStep === 1 && (
-                  <section className="space-y-7 text-xs">
+                  <section
+                    data-tour-id="editor-period-section"
+                    className="space-y-7 text-xs"
+                  >
                     <div className="pb-4 border-b border-zinc-200/80">
                       <h3 className="text-sm font-bold text-zinc-900">
                         Шаг 1. Параметры группы, локация и даты обучения
@@ -4969,9 +5016,16 @@ export function GroupEditorView({
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <aside className="w-full lg:w-[var(--right-panel-w)] shrink-0 bg-white border-t lg:border-t-0 border-zinc-200 flex flex-col min-h-0 lg:h-full overflow-hidden">
+                <aside
+                  data-tour-id={
+                    inspectorMode === 'design'
+                      ? 'editor-design-inspector'
+                      : 'editor-content-inspector'
+                  }
+                  className="w-full lg:w-[var(--right-panel-w)] shrink-0 bg-white border-t lg:border-t-0 border-zinc-200 flex flex-col min-h-0 lg:h-full overflow-hidden"
+                >
                   {/* Inspector Mode Tabs Only: Контент | Дизайн */}
-                  <div className="shrink-0 px-4 pt-1 border-b border-zinc-200/80 bg-white">
+                  <div className="shrink-0 px-4 pt-1 border-b border-zinc-200/80 bg-white flex items-center justify-between gap-2">
                     <div className="flex items-center gap-5">
                       <button
                         type="button"
@@ -5010,6 +5064,20 @@ export function GroupEditorView({
                         <span>Дизайн</span>
                       </button>
                     </div>
+
+                    <ContextualHint
+                      title={
+                        inspectorMode === 'design'
+                          ? 'Ограничения и геометрия А4'
+                          : 'Автосохранение и А4'
+                      }
+                      text={
+                        inspectorMode === 'design'
+                          ? 'Основные блоки двигаются по вертикали и меняют ширину/высоту в панели. Мишки и стикеры свободно перемещаются в пределах А4.'
+                          : 'Все поля вкладки «Контент» автоматически сохраняются в локальной базе и сразу обновляют разворот А4.'
+                      }
+                      align="right"
+                    />
                   </div>
 
                   {/* Live Right-Panel Text Editor Builder (rendered below step bar in Content mode, at top of Design mode) */}

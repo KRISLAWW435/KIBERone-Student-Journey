@@ -19,6 +19,7 @@ export const ASSETS = {
   bearTablet: '/assets/aistudio/_______________________________96e037e8-Photoroom_ce862c39.png',
   bearTrophy: '/assets/aistudio/Happy_bear_holding_trophy_f58b3db5-Photoroom_bdf3ab99.png',
   bearWelcome: '/assets/aistudio/Create_bear_on_white_background_4b55b3ba_56cc2c68.jpg',
+  bearTourWave: '/assets/aistudio/Bear_c58eb7c3.png',
   bearVr: '/assets/strengths/bear_vr.png',
 };
 

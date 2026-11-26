@@ -24,6 +24,7 @@ interface TemplatesViewProps {
   onSaveTemplate: (tpl: JournalTemplate) => Promise<void>;
   onDeleteTemplate: (id: string) => Promise<void>;
   onOpenMediaLibrary: () => void;
+  helpTrigger?: React.ReactNode;
 }
 
 export function TemplatesView({
@@ -35,6 +36,7 @@ export function TemplatesView({
   onSaveTemplate,
   onDeleteTemplate,
   onOpenMediaLibrary,
+  helpTrigger,
 }: TemplatesViewProps) {
   const [selectedJournalId, setSelectedJournalId] = useState(
     journals[0]?.id ?? ''
@@ -73,6 +75,7 @@ export function TemplatesView({
         onNavigate={onNavigate}
         onCreateGroup={onCreateGroup}
         onOpenMediaLibrary={onOpenMediaLibrary}
+        helpTrigger={helpTrigger}
       />
 
       <main className="flex-1 max-w-[1320px] w-full mx-auto px-6 py-8 space-y-10">
