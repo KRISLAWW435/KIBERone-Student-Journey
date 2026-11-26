@@ -108,7 +108,7 @@ async function dragHandle(
 }
 
 test.describe('Задача №40: Аудит изменения размеров, порядка стр. 2, адаптивных сеток 1–6 и PDF', () => {
-  test('1. Независимое и пропорциональное изменение размеров (гордость, письмо, мишка), сброс, повторное редактирование, отсутствие поворота и сохранение', async ({
+  test('1. Панельный ресайз (пропорциональный и свободный), вертикальное перемещение блоков, 2D-перемещение мишки, отсутствие ручек на холсте и сохранение', async ({
     page,
   }) => {
     page.setDefaultTimeout(10_000);
@@ -134,92 +134,77 @@ test.describe('Задача №40: Аудит изменения размеро�
     // Используем масштаб «Вписать», чтобы вся страница А4 целиком помещалась на экране без перекрытия тулбаром
     await page.getByRole('button', { name: 'Вписать', exact: true }).click();
 
-    // --- А) Карточка «Мой момент гордости» ---
-    // Кликаем по заголовку внутри карточки гордости (в дизайн-режиме клик всплывает к [data-snap-id="pride"])
+    // --- А) Карточка «Мой момент гордости» (структурный блок: только вертикальное смещение, без поворота и без ручек на холсте) ---
     const prideBlock = pageTwoCanvas.locator('[data-snap-id="pride"]');
     await prideBlock.locator('h4').click();
     const prideFrame = pageTwoCanvas.locator('[data-resize-frame="pride"]');
     await expect(prideFrame).toBeVisible();
+    await expect(prideFrame.locator('[data-handle]')).toHaveCount(0);
 
-    const prideInitial = await prideBlock.evaluate((el: HTMLElement) => ({
-      w: el.offsetWidth,
-      h: el.offsetHeight,
-    }));
+    // Дублирующего слайдера «Масштаб» и поля «Поворот (°)» / «Смещение X (px)» для структурных блоков нет
+    await expect(rightSidebar.getByLabel(/Масштаб/)).toHaveCount(0);
+    await expect(rightSidebar.getByLabel('Смещение X (px)')).toHaveCount(0);
+    await expect(rightSidebar.getByLabel('Поворот (°)')).toHaveCount(0);
 
-    // Боковой маркер ширины (справа) -> меняет только ширину
-    await dragHandle(page, prideFrame.locator('[data-handle="e"]'), 55, 0);
-    // Нижний маркер высоты -> меняет только высоту
-    await dragHandle(page, prideFrame.locator('[data-handle="s"]'), 0, 65);
+    // Перетаскивание структурного блока по диагонали на холсте меняет только Y, а X остаётся 0
+    await dragHandle(page, prideBlock.locator('h4'), 70, 28);
 
-    const prideResized = await prideBlock.evaluate((el: HTMLElement) => ({
-      w: el.offsetWidth,
-      h: el.offsetHeight,
-    }));
-    expect(prideResized.w).toBeGreaterThan(prideInitial.w + 30);
-    expect(prideResized.h).toBeGreaterThan(prideInitial.h + 40);
-
-    // Панель дизайна показывает ширину, высоту, «Сохранять пропорции» и «Сбросить размер»
-    await expect(rightSidebar.getByLabel('Ширина (px)')).toBeVisible();
-    await expect(rightSidebar.getByLabel('Высота (px)')).toBeVisible();
+    // Пропорциональное изменение ширины через правую панель автоматически меняет высоту
     const aspectCheckbox = rightSidebar.getByLabel('Сохранять пропорции');
     await expect(aspectCheckbox).toBeChecked();
+    const heightBeforeAspect = Number(
+      await rightSidebar.getByLabel('Высота (px)').inputValue()
+    );
+    await rightSidebar.getByLabel('Ширина (px)').fill('400');
+    const heightAfterAspect = Number(
+      await rightSidebar.getByLabel('Высота (px)').inputValue()
+    );
+    expect(heightAfterAspect).toBeGreaterThan(heightBeforeAspect);
 
-    // Отсутствие случайного поворота
-    await expect(rightSidebar.getByLabel('Поворот (°)')).toHaveValue('0');
-
-    // Повторное редактирование после ресайза через боковой маркер и числовые поля
-    await dragHandle(page, prideFrame.locator('[data-handle="e"]'), -20, 0);
+    // Отключаем сохранение пропорций -> независимое изменение ширины и высоты
+    await aspectCheckbox.uncheck();
     await rightSidebar.getByLabel('Ширина (px)').fill('382');
     await rightSidebar.getByLabel('Высота (px)').fill('375');
     await expect(prideBlock).toHaveCSS('width', '382px');
 
-    // --- Б) Записка наставника (mentorNote): пропорции вкл vs выкл + угловой маркер + повторное редактирование ---
+    // --- Б) Записка наставника (mentorNote): пропорции вкл vs выкл ---
     const mentorBlock = pageTwoCanvas.locator('[data-snap-id="mentorNote"]');
     await mentorBlock.locator('h3').click();
     const mentorFrame = pageTwoCanvas.locator(
       '[data-resize-frame="mentorNote"]'
     );
     await expect(mentorFrame).toBeVisible();
+    await expect(mentorFrame.locator('[data-handle]')).toHaveCount(0);
 
     const mentorStartRatio = await mentorBlock.evaluate(
       (el: HTMLElement) => el.offsetWidth / el.offsetHeight
     );
-    await dragHandle(page, mentorFrame.locator('[data-handle="se"]'), 48, 12);
+    await rightSidebar.getByLabel('Ширина (px)').fill('390');
     const mentorAfterProportional = await mentorBlock.evaluate((el: HTMLElement) => ({
-      w: el.offsetWidth,
-      h: el.offsetHeight,
       ratio: el.offsetWidth / el.offsetHeight,
     }));
     expect(
       Math.abs(mentorAfterProportional.ratio - mentorStartRatio)
     ).toBeLessThan(0.12);
 
-    // Выключаем сохранение пропорций -> свободный ресайз угловым маркером и независимые размеры
     await rightSidebar.getByLabel('Сохранять пропорции').uncheck();
-    await dragHandle(page, mentorFrame.locator('[data-handle="se"]'), -30, 80);
-    await expect(rightSidebar.getByLabel('Поворот (°)')).toHaveValue('0');
+    await rightSidebar.getByLabel('Высота (px)').fill('360');
 
-    // --- В) Медведь (prideBear): независимое изменение размеров, сброс и повторное редактирование ---
+    // --- В) Медведь (prideBear): 2D-перемещение на холсте, числовой поворот и панельный ресайз ---
     const bearBlock = pageTwoCanvas.locator('[data-snap-id="prideBear"]');
     await bearBlock.click();
     const bearFrame = pageTwoCanvas.locator('[data-resize-frame="prideBear"]');
     await expect(bearFrame).toBeVisible();
+    await expect(bearFrame.locator('[data-handle]')).toHaveCount(0);
 
-    const bearStart = await bearBlock.evaluate((el: HTMLElement) => ({
-      w: el.offsetWidth,
-      h: el.offsetHeight,
-    }));
-    await dragHandle(page, bearFrame.locator('[data-handle="w"]'), -35, 0);
-    await dragHandle(page, bearFrame.locator('[data-handle="n"]'), 0, -25);
-    const bearAfterEdgeDrag = await bearBlock.evaluate((el: HTMLElement) => ({
-      w: el.offsetWidth,
-      h: el.offsetHeight,
-    }));
-    expect(bearAfterEdgeDrag.w).toBeGreaterThan(bearStart.w + 15);
-    expect(bearAfterEdgeDrag.h).toBeGreaterThan(bearStart.h + 10);
+    // 2D-перемещение мишки мышью работает по X и Y в пределах А4
+    await dragHandle(page, bearBlock, -24, -16);
+    await expect(rightSidebar.getByLabel('Смещение X (px)')).toBeVisible();
+    await expect(rightSidebar.getByLabel('Поворот (°)')).toHaveValue('0');
 
-    // Сброс размера у медведя и повторное редактирование через инпуты
+    // Сброс размера у медведя и независимое редактирование через инпуты
     await rightSidebar.getByRole('button', { name: 'Сбросить размер' }).click();
+    await rightSidebar.getByLabel('Сохранять пропорции').uncheck();
     await rightSidebar.getByLabel('Ширина (px)').fill('255');
     await rightSidebar.getByLabel('Высота (px)').fill('195');
     await expect(rightSidebar.getByLabel('Поворот (°)')).toHaveValue('0');
@@ -230,9 +215,13 @@ test.describe('Задача №40: Аудит изменения размеро�
         const list = await readJournalsLayoutState(page);
         const doc = list.find((j) => j.residentName === 'Михаил Размеров');
         return {
+          prideX: doc?.page2Layouts.pride?.x,
+          prideYNonZero: (doc?.page2Layouts.pride?.y ?? 0) !== 0,
           prideW: doc?.page2Layouts.pride?.width,
           prideH: doc?.page2Layouts.pride?.height,
           prideRot: doc?.page2Layouts.pride?.rotation,
+          bearXNonZero: (doc?.page2Layouts.prideBear?.x ?? 0) !== 0,
+          bearYNonZero: (doc?.page2Layouts.prideBear?.y ?? 0) !== 0,
           bearW: doc?.page2Layouts.prideBear?.width,
           bearH: doc?.page2Layouts.prideBear?.height,
           bearRot: doc?.page2Layouts.prideBear?.rotation,
@@ -241,9 +230,13 @@ test.describe('Задача №40: Аудит изменения размеро�
         };
       })
       .toEqual({
+        prideX: 0,
+        prideYNonZero: true,
         prideW: 382,
         prideH: 375,
         prideRot: 0,
+        bearXNonZero: true,
+        bearYNonZero: true,
         bearW: 255,
         bearH: 195,
         bearRot: 0,

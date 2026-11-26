@@ -16,12 +16,12 @@ import {
 } from './DecorLayer';
 
 export const COVER_OBJECT_DEFAULTS = {
-  logo: { x: 40, y: 24, width: 108, height: 58, zIndex: 22 },
-  coverTitle: { x: 40, y: 104, width: 340, height: 58, zIndex: 22 },
-  coverSubtitle: { x: 40, y: 170, width: 310, height: 32, zIndex: 22 },
-  coverInfo: { x: 40, y: 234, width: 360, height: 54, zIndex: 24 },
-  coverBubble: { x: 302, y: 14, width: 254, height: 74, zIndex: 28 },
-  coverBear: { x: 524, y: 28, width: 246, height: 296, zIndex: 25 },
+  logo: { x: 40, y: 22, width: 102, height: 54, zIndex: 22 },
+  coverTitle: { x: 40, y: 100, width: 472, height: 58, zIndex: 22 },
+  coverSubtitle: { x: 40, y: 168, width: 472, height: 32, zIndex: 22 },
+  coverInfo: { x: 40, y: 232, width: 360, height: 54, zIndex: 24 },
+  coverBubble: { x: 312, y: 18, width: 242, height: 70, zIndex: 28 },
+  coverBear: { x: 542, y: 38, width: 226, height: 274, zIndex: 25 },
 } as const;
 
 interface CoverSectionProps {
@@ -164,6 +164,7 @@ export function CoverSection({
       {/* 1. Original KIBERone Logo (individually draggable & transformable) */}
       <DraggableDesignWrapper
         id="logo"
+        movementMode="both"
         transform={logoTransform}
         defaultZIndex={COVER_OBJECT_DEFAULTS.logo.zIndex}
         designMode={designMode}
@@ -194,7 +195,7 @@ export function CoverSection({
             logoTransform?.height !== undefined
               ? 'w-full h-full flex items-center justify-center'
               : 'inline-flex'
-          } bg-white rounded-lg p-[7px] shadow-[3px_3px_0_#18181B] border-[1.6px] border-[#18181B]`}
+          } bg-white rounded-lg p-[6px] shadow-[3px_3px_0_#18181B] border-[1.6px] border-[#18181B]`}
         >
           <img
             src={config.logoUrl}
@@ -204,7 +205,7 @@ export function CoverSection({
               logoTransform?.width !== undefined ||
               logoTransform?.height !== undefined
                 ? 'w-full h-full'
-                : 'h-[42px] w-auto'
+                : 'h-[38px] w-auto'
             } object-contain block select-none`}
           />
         </div>
@@ -213,6 +214,7 @@ export function CoverSection({
       {/* 2. Independent Editable Title: «МОЙ ПУТЬ» */}
       <DraggableDesignWrapper
         id="coverTitle"
+        movementMode="vertical"
         transform={titleTransform}
         defaultZIndex={COVER_OBJECT_DEFAULTS.coverTitle.zIndex}
         designMode={designMode}
@@ -276,6 +278,7 @@ export function CoverSection({
       {/* 3. Independent Editable Subtitle: «в мире технологий» */}
       <DraggableDesignWrapper
         id="coverSubtitle"
+        movementMode="vertical"
         transform={subtitleTransform}
         defaultZIndex={COVER_OBJECT_DEFAULTS.coverSubtitle.zIndex}
         designMode={designMode}
@@ -337,6 +340,7 @@ export function CoverSection({
       {/* 4. Independent Transformable Student Metadata Plaque (Имя, Период, Наставник) */}
       <DraggableDesignWrapper
         id="coverInfo"
+        movementMode="vertical"
         transform={infoTransform}
         defaultZIndex={COVER_OBJECT_DEFAULTS.coverInfo.zIndex}
         designMode={designMode}
@@ -383,6 +387,7 @@ export function CoverSection({
       {showSpeechBubble && (
         <DraggableDesignWrapper
           id="coverBubble"
+          movementMode="vertical"
           transform={bubbleTransform}
           defaultZIndex={COVER_OBJECT_DEFAULTS.coverBubble.zIndex}
           designMode={designMode}
@@ -473,6 +478,7 @@ export function CoverSection({
       {config.showCoverBear && (
         <DraggableDesignWrapper
           id="coverBear"
+          movementMode="both"
           transform={bearTransform}
           defaultZIndex={COVER_OBJECT_DEFAULTS.coverBear.zIndex}
           designMode={designMode}
@@ -493,10 +499,10 @@ export function CoverSection({
           onInteractionEnd={onInteractionEnd}
           style={{
             position: 'absolute',
-            right: '24px',
-            bottom: '-8px',
-            width: '246px',
-            height: '296px',
+            right: '26px',
+            bottom: '-4px',
+            width: '226px',
+            height: '274px',
           }}
           className="flex items-end justify-center overflow-visible"
         >

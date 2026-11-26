@@ -82,6 +82,7 @@ export function JournalPageTwo({
       <div key="sec-strengths" data-page2-section="strengths" className="shrink-0 relative z-30">
         <DraggableDesignWrapper
           id="strengths"
+          movementMode="vertical"
           transform={layouts.strengths}
           defaultZIndex={30}
           designMode={designMode}
@@ -117,6 +118,7 @@ export function JournalPageTwo({
                 <DraggableDesignWrapper
                   key={item.id}
                   id={`strength-${item.id}`}
+                  movementMode="none"
                   transform={layouts[`strength-${item.id}`]}
                   designMode={designMode}
                   scaleFactor={scaleFactor}
@@ -175,6 +177,7 @@ export function JournalPageTwo({
       >
         <DraggableDesignWrapper
           id="pride"
+          movementMode="vertical"
           transform={layouts.pride}
           designMode={designMode}
           scaleFactor={scaleFactor}
@@ -235,6 +238,7 @@ export function JournalPageTwo({
       >
         <DraggableDesignWrapper
           id="mentorNote"
+          movementMode="vertical"
           transform={layouts.mentorNote}
           designMode={designMode}
           scaleFactor={scaleFactor}
@@ -283,6 +287,7 @@ export function JournalPageTwo({
       >
         <DraggableDesignWrapper
           id="nextChapter"
+          movementMode="vertical"
           transform={layouts.nextChapter}
           designMode={designMode}
           scaleFactor={scaleFactor}
@@ -440,6 +445,7 @@ export function JournalPageTwo({
         {/* TOP CLEAN TEAL + YELLOW WAVE HEADER (794x128px) */}
         <DraggableDesignWrapper
           id="header"
+          movementMode="vertical"
           transform={layouts.header}
           designMode={designMode}
           scaleFactor={scaleFactor}

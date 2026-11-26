@@ -15,6 +15,9 @@ interface ModuleCardProps {
   mediaAssets?: MediaAsset[];
   compact?: boolean;
   density?: 'spacious' | 'compact' | 'ultra';
+  singleRow?: boolean;
+  itemCount?: number;
+  imageHeightPx?: number;
   wide?: boolean;
   isActive?: boolean;
   activeTextField?: ActiveTextFieldTarget;
@@ -32,7 +35,9 @@ export function ModuleCard({
   mediaAssets,
   compact = false,
   density,
-  wide = false,
+  singleRow = false,
+  itemCount,
+  imageHeightPx,
   isActive = false,
   activeTextField,
   onSelectTextField,
@@ -80,6 +85,24 @@ export function ModuleCard({
   const hasImage = Boolean(resolvedImageUrl) && !imgError;
   const headerBgColor = hasImage ? module.cardBgColor || '#C9F3EE' : '#F4F4F5';
 
+  const resolvedImageHeightPx =
+    imageHeightPx ??
+    (isUltra
+      ? singleRow
+        ? 108
+        : 78
+      : isCompact
+      ? itemCount === 1
+        ? 142
+        : singleRow
+        ? 124
+        : 102
+      : itemCount === 1
+      ? 176
+      : 152);
+
+  const imagePaddingClass = isUltra ? 'p-[3px]' : isCompact ? 'p-[4px]' : 'p-[6px]';
+
   return (
     <div
       data-card-label={`Модуль: ${module.title}`}
@@ -117,9 +140,8 @@ export function ModuleCard({
         />
       </svg>
 
-      {/* Inner surface: graphic rounded cleanly at top; text adapts height cleanly without clipping */}
+      {/* Inner surface: vertical card with prominent illustration on top and text below */}
       <div className="rounded-[10px] w-full min-w-0 box-border overflow-hidden flex flex-col flex-1 bg-white">
-        {/* Badge-top variant header */}
         {variant === 'badge-top' && (
           <div className="flex items-center justify-between gap-1.5 px-[8px] pt-[6px] pb-[4px] bg-white border-b border-black/8 shrink-0 min-w-0">
             <span
@@ -134,25 +156,14 @@ export function ModuleCard({
           </div>
         )}
 
-        {/* Inner content wrapper: horizontal when single wide module, vertical otherwise */}
-        <div
-          className={`flex flex-1 min-w-0 box-border ${
-            wide ? 'flex-row items-stretch' : 'flex-col'
-          }`}
-        >
-          {/* Colored Upper/Left Graphic Container (full uncropped object-contain + center scale/shift) */}
+        <div className="flex flex-1 min-w-0 box-border flex-col">
           {variant !== 'minimal' && (
             <div
-              style={{ backgroundColor: headerBgColor }}
-              className={`${
-                wide
-                  ? 'w-[220px] shrink-0 min-h-[138px] max-h-[164px] p-[8px] border-r-[1.4px] border-[#18181B]/12'
-                  : isUltra
-                  ? 'w-full h-[64px] p-[3px] border-b-[1.4px] border-[#18181B]/12 shrink-0'
-                  : isCompact
-                  ? 'w-full aspect-[4/3] max-h-[132px] p-[3px] border-b-[1.4px] border-[#18181B]/12 shrink-0'
-                  : 'w-full aspect-[4/3] max-h-[164px] p-[4px] border-b-[1.4px] border-[#18181B]/12 shrink-0'
-              } overflow-hidden flex items-center justify-center relative`}
+              style={{
+                backgroundColor: headerBgColor,
+                height: `${resolvedImageHeightPx}px`,
+              }}
+              className={`w-full ${imagePaddingClass} border-b-[1.4px] border-[#18181B]/12 shrink-0 overflow-hidden flex items-center justify-center relative`}
             >
               {hasImage && resolvedImageUrl ? (
                 <img
@@ -171,7 +182,7 @@ export function ModuleCard({
                   <ImageIcon
                     className={
                       isUltra
-                        ? 'w-[22px] h-[22px] stroke-[1.6]'
+                        ? 'w-[24px] h-[24px] stroke-[1.6]'
                         : isCompact
                         ? 'w-[28px] h-[28px] stroke-[1.6]'
                         : 'w-[34px] h-[34px] stroke-[1.6]'
@@ -182,16 +193,14 @@ export function ModuleCard({
             </div>
           )}
 
-          {/* White Text Content Area */}
+          {/* White Text Content Area below illustration */}
           <div
-            className={`bg-white flex-1 flex flex-col w-full min-w-0 box-border ${
-              wide
-                ? 'text-left justify-center px-[16px] py-[12px]'
-                : isUltra
-                ? 'text-center justify-start px-[6px] py-[4px]'
+            className={`bg-white flex-1 flex flex-col w-full min-w-0 box-border text-center justify-start ${
+              isUltra
+                ? 'px-[6px] py-[4px]'
                 : isCompact
-                ? 'text-center justify-start px-[7px] py-[6px]'
-                : 'text-center justify-start px-[10px] py-[8px]'
+                ? 'px-[8px] py-[6px]'
+                : 'px-[10px] py-[8px]'
             }`}
           >
             <InlineEditableText
@@ -213,13 +222,11 @@ export function ModuleCard({
               }
               as="h3"
               className={`font-journal-display font-extrabold ${
-                wide
-                  ? 'text-[16px] leading-[1.18]'
-                  : isUltra
+                isUltra
                   ? 'text-[11px] leading-[1.12]'
                   : isCompact
-                  ? 'text-[12px] leading-[1.16]'
-                  : 'text-[13.5px] leading-[1.16]'
+                  ? 'text-[12.5px] leading-[1.16]'
+                  : 'text-[14px] leading-[1.18]'
               } text-[#111827] block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]`}
             />
             {variant !== 'badge-top' && (module.subtitle || onSelectTextField) && (
@@ -243,13 +250,11 @@ export function ModuleCard({
                 }
                 as="div"
                 className={`font-bold ${
-                  wide
-                    ? 'text-[11.5px] leading-tight mt-[3px]'
-                    : isUltra
-                    ? 'text-[8.5px] leading-tight mt-[1px]'
+                  isUltra
+                    ? 'text-[8.5px] leading-[1.1] mt-[1px]'
                     : isCompact
                     ? 'text-[9.5px] leading-tight mt-[2px]'
-                    : 'text-[10.5px] leading-tight mt-[2px]'
+                    : 'text-[10.5px] leading-tight mt-[2.5px]'
                 } text-[#111827]/85 block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]`}
               />
             )}
@@ -273,13 +278,11 @@ export function ModuleCard({
               }
               as="p"
               className={`font-journal-body ${
-                wide
-                  ? 'text-[11.5px] leading-[1.4] mt-[6px]'
-                  : isUltra
-                  ? 'text-[8.5px] leading-[1.22] mt-[2px]'
+                isUltra
+                  ? 'text-[8.5px] leading-[1.18] mt-[1.5px]'
                   : isCompact
-                  ? 'text-[9.5px] leading-[1.3] mt-[2px]'
-                  : 'text-[10.5px] leading-[1.38] mt-[4px]'
+                  ? 'text-[9.5px] leading-[1.28] mt-[3px]'
+                  : 'text-[10.5px] leading-[1.34] mt-[4px]'
               } text-[#27272A] block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]`}
             />
           </div>

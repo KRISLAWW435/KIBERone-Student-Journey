@@ -13,6 +13,10 @@ interface ProjectsSectionProps {
   layouts?: Record<string, CanvasObjectTransform>;
   compact?: boolean;
   density?: 'spacious' | 'compact' | 'ultra';
+  gridMaxWidthPx?: number;
+  gridGapPx?: number;
+  imageHeightPx?: number;
+  headingMbPx?: number;
   stretchHeight?: boolean;
   designMode?: boolean;
   scaleFactor?: number;
@@ -51,6 +55,10 @@ export function ProjectsSection({
   layouts = {},
   compact = false,
   density,
+  gridMaxWidthPx,
+  gridGapPx,
+  imageHeightPx,
+  headingMbPx,
   stretchHeight = false,
   designMode = false,
   scaleFactor = 1,
@@ -73,13 +81,42 @@ export function ProjectsSection({
   const count = itemsToRender.length;
   const resolvedDensity = density ?? (compact ? 'compact' : 'spacious');
   const isUltra = resolvedDensity === 'ultra';
+  const isCompact = resolvedDensity !== 'spacious';
   const layoutVariant: 'single' | 'double' | 'multi' =
     count === 1 ? 'single' : count === 2 || count === 4 ? 'double' : 'multi';
-  const canStretch = stretchHeight && count <= 2 && resolvedDensity === 'spacious';
+
+  const gridMaxWidth =
+    gridMaxWidthPx !== undefined
+      ? `${gridMaxWidthPx}px`
+      : count === 1
+      ? isUltra
+        ? '226px'
+        : isCompact
+        ? '252px'
+        : '292px'
+      : count === 2
+      ? isUltra
+        ? '460px'
+        : isCompact
+        ? '488px'
+        : '540px'
+      : count === 4
+      ? isUltra
+        ? '428px'
+        : '468px'
+      : isUltra
+      ? '636px'
+      : '714px';
+
+  const resolvedGapPx =
+    gridGapPx ?? (isUltra ? 9 : count >= 4 ? 10 : 14);
+  const resolvedHeadingMbPx =
+    headingMbPx ?? (isUltra ? 5 : isCompact ? 7 : 10);
 
   return (
     <DraggableDesignWrapper
       id="projectsBlock"
+      movementMode="vertical"
       transform={layouts.projectsBlock}
       designMode={designMode}
       scaleFactor={scaleFactor}
@@ -99,32 +136,33 @@ export function ProjectsSection({
       onSnapLinesChange={onSnapLinesChange}
       onInteractionStart={onInteractionStart}
       onInteractionEnd={onInteractionEnd}
-      className={`shrink-0 opacity-100 visible ${
-        canStretch ? 'flex-1 min-h-0 flex flex-col' : 'block'
-      }`}
+      className="shrink-0 opacity-100 visible block"
     >
       <section
         data-card-label="Блок «Мои результаты»"
         style={{ width: '714px' }}
-        className={`overflow-visible ${
-          canStretch ? 'flex-1 min-h-0 flex flex-col' : 'block'
-        }`}
+        className="overflow-visible block"
       >
         <h2
+          style={{ marginBottom: `${resolvedHeadingMbPx}px` }}
           className={`font-journal-display font-black ${
             isUltra
-              ? 'text-[15px] leading-[17px] mb-[6px]'
-              : 'text-[17.5px] leading-[21px] mb-[12px]'
+              ? 'text-[14.5px] leading-[17px]'
+              : isCompact
+              ? 'text-[16px] leading-[19px]'
+              : 'text-[17.5px] leading-[21px]'
           } tracking-tight uppercase text-[#111827] shrink-0`}
         >
           МОИ РЕЗУЛЬТАТЫ
         </h2>
         <div
           data-projects-count={count}
-          style={{ width: '714px' }}
-          className={`grid items-stretch auto-rows-fr ${
-            isUltra ? 'gap-[8px]' : count >= 4 ? 'gap-[10px]' : 'gap-[14px]'
-          } ${canStretch ? 'flex-1 min-h-0' : ''} ${
+          style={{
+            width: '100%',
+            maxWidth: gridMaxWidth,
+            gap: `${resolvedGapPx}px`,
+          }}
+          className={`mx-auto grid items-stretch auto-rows-fr ${
             count === 1
               ? 'grid-cols-1'
               : count === 2 || count === 4
@@ -138,10 +176,13 @@ export function ProjectsSection({
             <DraggableDesignWrapper
               key={proj.id}
               id={`project-${proj.id}`}
+              movementMode="none"
               transform={layouts[`project-${proj.id}`]}
               designMode={designMode}
               scaleFactor={scaleFactor}
+              stretchInnerHeight
               isActive={
+                !designMode &&
                 !isFallback &&
                 activeTarget?.page === 1 &&
                 activeTarget.block === 'project' &&
@@ -151,7 +192,7 @@ export function ProjectsSection({
                 onSelectTarget
                   ? () =>
                       onSelectTarget(
-                        isFallback
+                        designMode || isFallback
                           ? { page: 1, block: 'projectsBlock' }
                           : { page: 1, block: 'project', itemId: proj.id }
                       )
@@ -167,19 +208,23 @@ export function ProjectsSection({
               onInteractionEnd={onInteractionEnd}
               className={`h-full min-w-0 ${
                 count === 5
-                  ? idx < 3
-                    ? 'col-span-2'
-                    : 'col-span-3'
+                  ? idx === 3
+                    ? 'col-start-2 col-span-2'
+                    : 'col-span-2'
                   : ''
               }`}
             >
               <ProjectCard
                 project={proj}
-                compact={resolvedDensity !== 'spacious'}
+                compact={isCompact}
                 density={resolvedDensity}
                 layoutVariant={layoutVariant}
-                stretchHeight={canStretch}
+                singleRow={count <= 3}
+                itemCount={count}
+                imageHeightPx={imageHeightPx}
+                stretchHeight={false}
                 isActive={
+                  !designMode &&
                   !isFallback &&
                   activeTarget?.page === 1 &&
                   activeTarget.block === 'project' &&
@@ -191,7 +236,7 @@ export function ProjectsSection({
                   onSelectTarget
                     ? () =>
                         onSelectTarget(
-                          isFallback
+                          designMode || isFallback
                             ? { page: 1, block: 'projectsBlock' }
                             : { page: 1, block: 'project', itemId: proj.id }
                         )

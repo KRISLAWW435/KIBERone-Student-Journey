@@ -75,33 +75,34 @@ export function JournalPageOne({
   const visibleProjects = page1.projects.filter((p) => !p.hidden).slice(0, 6);
   const visibleSkills = page1.skills.filter((s) => !s.hidden).slice(0, 8);
 
-  const modulesCount = visibleModules.length;
-  const projectsCount = visibleProjects.length;
-  const skillsCount = visibleSkills.length;
+  const modulesCount = page1.showModules ? visibleModules.length : 0;
+  const projectsCount =
+    page1.showProjects === false
+      ? 0
+      : visibleProjects.length > 0
+      ? visibleProjects.length
+      : 2;
+  const skillsCount = page1.showSkills ? visibleSkills.length : 0;
+
+  const moduleRows = modulesCount === 0 ? 0 : modulesCount <= 3 ? 1 : 2;
+  const projectRows = projectsCount === 0 ? 0 : projectsCount <= 3 ? 1 : 2;
+  const skillRows = skillsCount === 0 ? 0 : skillsCount <= 4 ? 1 : 2;
+  const totalCardRows = moduleRows + projectRows;
 
   const page1Density: 'spacious' | 'compact' | 'ultra' =
-    (modulesCount >= 4 && projectsCount >= 3) ||
-    modulesCount + projectsCount >= 8 ||
-    (modulesCount >= 4 && skillsCount > 4 && projectsCount >= 2)
-      ? 'ultra'
-      : modulesCount > 3 || projectsCount > 3 || skillsCount > 4
-      ? 'compact'
-      : 'spacious';
+    totalCardRows >= 4 ? 'ultra' : totalCardRows === 3 ? 'compact' : 'spacious';
 
   const isUltra = page1Density === 'ultra';
   const isCompact = page1Density !== 'spacious';
   const layouts = page1.objectLayouts ?? {};
 
-  const skillsGridColsClass =
-    skillsCount === 1
-      ? 'grid-cols-1'
-      : skillsCount === 2
-      ? 'grid-cols-2'
-      : skillsCount === 3
-      ? 'grid-cols-3'
-      : skillsCount <= 6 && skillsCount >= 5
-      ? 'grid-cols-3'
-      : 'grid-cols-4';
+  const avgModuleDescLen =
+    visibleModules.length > 0
+      ? visibleModules.reduce(
+          (sum, m) => sum + (m.description?.trim().length ?? 0),
+          0
+        ) / visibleModules.length
+      : 0;
 
   const modulesGridColsClass =
     modulesCount === 1
@@ -111,6 +112,120 @@ export function JournalPageOne({
       : modulesCount === 5
       ? 'grid-cols-6'
       : 'grid-cols-3';
+
+  const modulesGridMaxWidthPx =
+    modulesCount === 1
+      ? isUltra
+        ? 204
+        : isCompact
+        ? 228
+        : 246
+      : modulesCount === 2
+      ? isUltra
+        ? 428
+        : isCompact
+        ? 456
+        : 492
+      : modulesCount === 3
+      ? isUltra
+        ? 618
+        : isCompact
+        ? 654
+        : 678
+      : modulesCount === 4
+      ? isUltra
+        ? 404
+        : 440
+      : isUltra
+      ? 594
+      : 648;
+
+  const modulesGridGapPx = isUltra
+    ? 9
+    : isCompact
+    ? modulesCount >= 4
+      ? 11
+      : 13
+    : 16;
+
+  const projectsGridMaxWidthPx =
+    projectsCount === 1
+      ? isUltra
+        ? 212
+        : isCompact
+        ? 240
+        : 272
+      : projectsCount === 2
+      ? isUltra
+        ? 428
+        : isCompact
+        ? 456
+        : 492
+      : projectsCount === 3
+      ? isUltra
+        ? 618
+        : isCompact
+        ? 654
+        : 678
+      : projectsCount === 4
+      ? isUltra
+        ? 404
+        : 440
+      : isUltra
+      ? 594
+      : 648;
+
+  const projectsGridGapPx = isUltra
+    ? 9
+    : isCompact
+    ? projectsCount >= 4
+      ? 11
+      : 13
+    : 16;
+
+  const bodyPaddingTop = isUltra ? 8 : isCompact ? 14 : 18;
+  const bodyPaddingBottom = isUltra ? 12 : isCompact ? 18 : 26;
+  const sectionGapPx = isUltra
+    ? 7
+    : isCompact
+    ? skillRows <= 1
+      ? 16
+      : 12
+    : skillRows <= 1
+    ? 32
+    : 24;
+  const headingMbPx = isUltra ? 5 : isCompact ? 7 : 8;
+
+  const skillBonusUltra = skillRows <= 1 ? 10 : 0;
+  const skillBonusCompact = skillRows <= 1 ? 10 : 0;
+  const skillBonusSpacious =
+    skillRows === 0 ? 20 : skillRows === 1 ? 12 : 0;
+
+  const moduleImageHeightPx = isUltra
+    ? (avgModuleDescLen > 112 ? 68 : 72) + skillBonusUltra
+    : isCompact
+    ? (moduleRows === 1 ? 110 : 86) + skillBonusCompact
+    : (modulesCount === 1 ? 140 : modulesCount === 2 ? 124 : 104) +
+      skillBonusSpacious;
+
+  const projectImageHeightPx = isUltra
+    ? (projectsCount === 1
+        ? 114
+        : projectsCount === 2 || projectsCount === 4
+        ? 78
+        : 76) + skillBonusUltra
+    : isCompact
+    ? (projectsCount === 1
+        ? 158
+        : projectsCount === 2
+        ? 142
+        : projectsCount === 3
+        ? 122
+        : projectsCount === 4
+        ? 98
+        : 90) + skillBonusCompact
+    : (projectsCount === 1 ? 164 : projectsCount === 2 ? 150 : 128) +
+      skillBonusSpacious;
 
   return (
     <article
@@ -183,6 +298,7 @@ export function JournalPageOne({
         {/* 1. COVER SECTION (strict 794x316px) */}
         <DraggableDesignWrapper
           id="cover"
+          movementMode="vertical"
           transform={layouts.cover}
           designMode={designMode}
           scaleFactor={scaleFactor}
@@ -226,25 +342,25 @@ export function JournalPageOne({
           />
         </DraggableDesignWrapper>
 
-        {/* MAIN BODY (balanced flow within 807px with generous breathing room) */}
+        {/* MAIN BODY (adaptive flow within 807px with balanced vertical distribution) */}
         <div
           data-a4-body="1"
           style={{
             width: '794px',
             height: '807px',
+            paddingTop: `${bodyPaddingTop}px`,
+            paddingBottom: `${bodyPaddingBottom}px`,
+            gap: `${sectionGapPx}px`,
           }}
-          className={`pointer-events-none relative z-[12] px-[40px] flex flex-col justify-start shrink-0 overflow-visible box-border ${
-            isUltra
-              ? 'pt-[10px] pb-[8px] gap-[8px]'
-              : isCompact
-              ? 'pt-[18px] pb-[12px] gap-[13px]'
-              : 'pt-[34px] pb-[16px] gap-[26px]'
-          }`}
+          className={`pointer-events-none relative z-[12] px-[40px] flex flex-col ${
+            totalCardRows <= 2 ? 'justify-between' : 'justify-start'
+          } shrink-0 overflow-visible box-border`}
         >
           {/* 2. МОИ ОТКРЫТИЯ */}
           {page1.showModules && modulesCount > 0 && (
             <DraggableDesignWrapper
               id="modulesBlock"
+              movementMode="vertical"
               transform={layouts.modulesBlock}
               designMode={designMode}
               scaleFactor={scaleFactor}
@@ -269,35 +385,37 @@ export function JournalPageOne({
             >
               <section data-card-label="Блок «Мои открытия»" style={{ width: '714px' }}>
                 <h2
+                  style={{ marginBottom: `${headingMbPx}px` }}
                   className={`font-journal-display font-black ${
                     isUltra
-                      ? 'text-[15px] leading-[17px] mb-[6px]'
+                      ? 'text-[14.5px] leading-[17px]'
                       : isCompact
-                      ? 'text-[16px] leading-[19px] mb-[9px]'
-                      : 'text-[17.5px] leading-[21px] mb-[13px]'
+                      ? 'text-[16px] leading-[19px]'
+                      : 'text-[17.5px] leading-[21px]'
                   } tracking-tight uppercase text-[#111827]`}
                 >
                   МОИ ОТКРЫТИЯ
                 </h2>
                 <div
                   data-modules-count={modulesCount}
-                  style={{ width: '714px' }}
-                  className={`grid items-stretch auto-rows-fr ${
-                    isUltra
-                      ? 'gap-[8px]'
-                      : isCompact
-                      ? 'gap-[10px]'
-                      : 'gap-[14px]'
-                  } ${modulesGridColsClass}`}
+                  style={{
+                    width: '100%',
+                    maxWidth: `${modulesGridMaxWidthPx}px`,
+                    gap: `${modulesGridGapPx}px`,
+                  }}
+                  className={`mx-auto grid items-stretch auto-rows-fr ${modulesGridColsClass}`}
                 >
                   {visibleModules.map((mod, idx) => (
                     <DraggableDesignWrapper
                       key={mod.id}
                       id={`module-${mod.id}`}
+                      movementMode="none"
                       transform={layouts[`module-${mod.id}`]}
                       designMode={designMode}
                       scaleFactor={scaleFactor}
+                      stretchInnerHeight
                       isActive={
+                        !designMode &&
                         activeTarget?.page === 1 &&
                         activeTarget.block === 'module' &&
                         activeTarget.itemId === mod.id
@@ -305,11 +423,15 @@ export function JournalPageOne({
                       onSelect={
                         onSelectTarget
                           ? () =>
-                              onSelectTarget({
-                                page: 1,
-                                block: 'module',
-                                itemId: mod.id,
-                              })
+                              onSelectTarget(
+                                designMode
+                                  ? { page: 1, block: 'modulesBlock' }
+                                  : {
+                                      page: 1,
+                                      block: 'module',
+                                      itemId: mod.id,
+                                    }
+                              )
                           : undefined
                       }
                       onUpdateTransform={
@@ -323,9 +445,9 @@ export function JournalPageOne({
                       onInteractionEnd={onInteractionEnd}
                       className={`h-full min-w-0 ${
                         modulesCount === 5
-                          ? idx < 3
-                            ? 'col-span-2'
-                            : 'col-span-3'
+                          ? idx === 3
+                            ? 'col-start-2 col-span-2'
+                            : 'col-span-2'
                           : ''
                       }`}
                     >
@@ -335,9 +457,13 @@ export function JournalPageOne({
                         mediaAssets={mediaAssets}
                         compact={isCompact}
                         density={page1Density}
-                        wide={modulesCount === 1}
+                        singleRow={modulesCount <= 3}
+                        itemCount={modulesCount}
+                        imageHeightPx={moduleImageHeightPx}
+                        wide={false}
                         ageCategory={resident.ageCategory}
                         isActive={
+                          !designMode &&
                           activeTarget?.page === 1 &&
                           activeTarget.block === 'module' &&
                           activeTarget.itemId === mod.id
@@ -347,11 +473,15 @@ export function JournalPageOne({
                         onClick={
                           onSelectTarget
                             ? () =>
-                                onSelectTarget({
-                                  page: 1,
-                                  block: 'module',
-                                  itemId: mod.id,
-                                })
+                                onSelectTarget(
+                                  designMode
+                                    ? { page: 1, block: 'modulesBlock' }
+                                    : {
+                                        page: 1,
+                                        block: 'module',
+                                        itemId: mod.id,
+                                      }
+                                )
                             : undefined
                         }
                         onUpdateField={
@@ -373,6 +503,7 @@ export function JournalPageOne({
           {page1.showSkills && skillsCount > 0 && (
             <DraggableDesignWrapper
               id="skills"
+              movementMode="vertical"
               transform={layouts.skills}
               designMode={designMode}
               scaleFactor={scaleFactor}
@@ -396,14 +527,15 @@ export function JournalPageOne({
             >
               <section data-card-label="Блок «Чему я научился»" style={{ width: '714px' }}>
                 <div
-                  className={`${
-                    isUltra ? 'mb-[5px]' : isCompact ? 'mb-[8px]' : 'mb-[10px]'
-                  } flex items-baseline gap-[10px]`}
+                  style={{ marginBottom: `${headingMbPx}px` }}
+                  className="flex items-baseline gap-[10px]"
                 >
                   <h2
                     className={`font-journal-display font-black ${
                       isUltra
-                        ? 'text-[15px] leading-[17px]'
+                        ? 'text-[14.5px] leading-[17px]'
+                        : isCompact
+                        ? 'text-[16px] leading-[19px]'
                         : 'text-[17.5px] leading-[21px]'
                     } tracking-tight uppercase text-[#111827]`}
                   >
@@ -414,14 +546,15 @@ export function JournalPageOne({
                   </span>
                 </div>
                 <div
-                  style={{
-                    width: skillsCount === 1 ? '220px' : '714px',
-                  }}
-                  className={`grid items-stretch ${
+                  data-skills-count={skillsCount}
+                  style={{ width: '714px' }}
+                  className={`flex flex-wrap items-stretch justify-start ${
                     isUltra
-                      ? 'gap-x-[10px] gap-y-[6px]'
-                      : 'gap-x-[12px] gap-y-[8px]'
-                  } ${skillsGridColsClass}`}
+                      ? 'gap-x-[8px] gap-y-[6px]'
+                      : isCompact
+                      ? 'gap-x-[9px] gap-y-[7px]'
+                      : 'gap-x-[10px] gap-y-[8px]'
+                  }`}
                 >
                   {visibleSkills.map((skill, idx) => (
                     <SkillTag
@@ -449,21 +582,17 @@ export function JournalPageOne({
 
           {/* 4. МОИ РЕЗУЛЬТАТЫ */}
           {page1.showProjects !== false && (
-            <div
-              className={`${
-                projectsCount <= 2 && !isCompact
-                  ? 'flex-1 min-h-0 flex flex-col'
-                  : ''
-              } ${
-                isUltra ? 'mt-[2px]' : isCompact ? 'mt-[4px]' : 'mt-[14px]'
-              }`}
-            >
+            <div className="shrink-0">
               <ProjectsSection
                 projects={page1.projects}
                 layouts={layouts}
                 compact={isCompact}
                 density={page1Density}
-                stretchHeight={projectsCount <= 2 && !isCompact}
+                gridMaxWidthPx={projectsGridMaxWidthPx}
+                gridGapPx={projectsGridGapPx}
+                imageHeightPx={projectImageHeightPx}
+                headingMbPx={headingMbPx}
+                stretchHeight={false}
                 designMode={designMode}
                 scaleFactor={scaleFactor}
                 activeTarget={activeTarget}

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Cpu, Rocket, RotateCw, Sparkles, Terminal } from 'lucide-react';
+import { Cpu, Rocket, Sparkles, Terminal } from 'lucide-react';
 import {
   CanvasObjectTransform,
   DecorElement,
@@ -426,6 +426,7 @@ export function InlineEditableText({
 
 interface DraggableDesignWrapperProps {
   id: string;
+  movementMode?: 'none' | 'vertical' | 'both';
   transform?: CanvasObjectTransform;
   defaultZIndex?: number;
   designMode?: boolean;
@@ -439,6 +440,7 @@ interface DraggableDesignWrapperProps {
   onInteractionEnd?: () => void;
   style?: React.CSSProperties;
   className?: string;
+  stretchInnerHeight?: boolean;
   children: React.ReactNode;
 }
 
@@ -451,6 +453,7 @@ const IMAGE_ONLY_BLOCK_IDS = new Set([
 
 export function DraggableDesignWrapper({
   id,
+  movementMode = 'vertical',
   transform,
   defaultZIndex,
   designMode = false,
@@ -464,39 +467,28 @@ export function DraggableDesignWrapper({
   onInteractionEnd,
   style: externalStyle,
   className = '',
+  stretchInnerHeight = false,
   children,
 }: DraggableDesignWrapperProps) {
   const slotRef = useRef<HTMLDivElement | null>(null);
   const innerRef = useRef<HTMLDivElement | null>(null);
-  const [slotSize, setSlotSize] = useState<{ w: number; h: number } | null>(
-    null
-  );
   const [liveBadge, setLiveBadge] = useState<string | null>(null);
 
-  const x = transform?.x ?? 0;
-  const y = transform?.y ?? 0;
-  const scale = transform?.scale ?? 1;
-  const rotation = transform?.rotation ?? 0;
-  const explicitWidth = transform?.width;
-  const explicitHeight = transform?.height;
+  const isLockedCardMode = movementMode === 'none';
+  const isVerticalOnly = movementMode === 'vertical';
+  const isFree2D = movementMode === 'both';
+
+  const rawX = transform?.x ?? 0;
+  const rawY = transform?.y ?? 0;
+  const x = isFree2D ? rawX : 0;
+  const y = isLockedCardMode ? 0 : rawY;
+  const rotation = isFree2D ? transform?.rotation ?? 0 : 0;
+  const explicitWidth = isLockedCardMode ? undefined : transform?.width;
+  const explicitHeight = isLockedCardMode ? undefined : transform?.height;
   const preserveAspectRatio = transform?.preserveAspectRatio;
-  const keepAspect = preserveAspectRatio !== false;
   const resolvedZIndex =
     transform?.zIndex !== undefined ? transform.zIndex : defaultZIndex;
   const locked = Boolean(transform?.locked);
-  const isMoved = x !== 0 || y !== 0;
-
-  useEffect(() => {
-    if (isMoved && !slotSize && slotRef.current) {
-      const el = slotRef.current;
-      if (el.offsetWidth > 0 && el.offsetHeight > 0) {
-        setSlotSize({ w: el.offsetWidth, h: el.offsetHeight });
-      }
-    }
-    if (!isMoved && slotSize) {
-      setSlotSize(null);
-    }
-  }, [isMoved, slotSize]);
 
   if (transform?.hidden) return null;
 
@@ -511,12 +503,12 @@ export function DraggableDesignWrapper({
     }
     e.stopPropagation();
     onSelect?.();
-    if (locked || !onUpdateTransform) return;
+    if (isLockedCardMode || locked || !onUpdateTransform) return;
 
     const el = slotRef.current;
     const innerEl = innerRef.current;
-    const measuredW = el?.offsetWidth || slotSize?.w;
-    const measuredH = el?.offsetHeight || slotSize?.h;
+    const measuredW = el?.offsetWidth;
+    const measuredH = el?.offsetHeight;
 
     const canvasEl = innerEl?.closest('.a4-canvas') as HTMLElement | null;
     const safeScale = Math.max(0.2, scaleFactor);
@@ -540,22 +532,31 @@ export function DraggableDesignWrapper({
     const baseX = x;
     const baseY = y;
     const baseZ = resolvedZIndex ?? 10;
+
+    // Strictly clamp drag delta inside A4 bounds (794 x 1123)
+    const minX = Math.round(baseX - startBoxX);
+    const maxX = Math.round(baseX + (A4_WIDTH - startBoxW - startBoxX));
+    const safeMinX = Math.min(minX, maxX);
+    const safeMaxX = Math.max(minX, maxX);
+
+    const minY = Math.round(baseY - startBoxY);
+    const maxY = Math.round(baseY + (A4_HEIGHT - startBoxH - startBoxY));
+    const safeMinY = Math.min(minY, maxY);
+    const safeMaxY = Math.max(minY, maxY);
+
     let startedDrag = false;
 
     const handleMove = (moveEvent: PointerEvent) => {
       const rawDx = moveEvent.clientX - startX;
       const rawDy = moveEvent.clientY - startY;
-      if (!startedDrag && Math.hypot(rawDx, rawDy) < 3) {
+      if (!startedDrag && Math.hypot(rawDx, rawDy) < 4) {
         return;
       }
       if (!startedDrag) {
         startedDrag = true;
         onInteractionStart?.();
-        if (measuredW && measuredH && !slotSize) {
-          setSlotSize({ w: measuredW, h: measuredH });
-        }
       }
-      const dx = rawDx / safeScale;
+      const dx = isVerticalOnly ? 0 : rawDx / safeScale;
       const dy = rawDy / safeScale;
 
       const snapped = computeSnappedBox(
@@ -567,23 +568,28 @@ export function DraggableDesignWrapper({
         },
         snapTargets
       );
-      onSnapLinesChange?.(snapped.lines);
+      onSnapLinesChange?.(
+        isVerticalOnly
+          ? { vertical: [], horizontal: snapped.lines.horizontal }
+          : snapped.lines
+      );
 
-      const snappedDeltaX = snapped.x - startBoxX;
+      const snappedDeltaX = isVerticalOnly ? 0 : snapped.x - startBoxX;
       const snappedDeltaY = snapped.y - startBoxY;
-      const clampedX = Math.max(
-        -720,
-        Math.min(720, Math.round(baseX + snappedDeltaX))
-      );
+      const clampedX = isVerticalOnly
+        ? 0
+        : Math.max(safeMinX, Math.min(safeMaxX, Math.round(baseX + snappedDeltaX)));
       const clampedY = Math.max(
-        -960,
-        Math.min(960, Math.round(baseY + snappedDeltaY))
+        safeMinY,
+        Math.min(safeMaxY, Math.round(baseY + snappedDeltaY))
       );
-      setLiveBadge(`x:${clampedX} y:${clampedY}`);
+      setLiveBadge(
+        isVerticalOnly ? `y: ${clampedY}px` : `x:${clampedX} y:${clampedY}`
+      );
       onUpdateTransform({
         x: clampedX,
         y: clampedY,
-        scale,
+        scale: 1,
         rotation,
         zIndex: baseZ,
         ...(explicitWidth !== undefined ? { width: explicitWidth } : {}),
@@ -608,208 +614,12 @@ export function DraggableDesignWrapper({
     window.addEventListener('pointerup', handleUp);
   };
 
-  const handleResizeHandleDown = (
-    e: React.PointerEvent<HTMLDivElement>,
-    dir: ResizeHandleDir
-  ) => {
-    if (!designMode || locked || !onUpdateTransform) return;
-    e.stopPropagation();
-    e.preventDefault();
-    onInteractionStart?.();
-
-    const safeScale = Math.max(0.2, scaleFactor);
-    const innerEl = innerRef.current;
-    const slotEl = slotRef.current;
-    const startW = Math.max(
-      48,
-      Math.round(
-        explicitWidth ??
-          innerEl?.offsetWidth ??
-          slotEl?.offsetWidth ??
-          160
-      )
-    );
-    const startH = Math.max(
-      28,
-      Math.round(
-        explicitHeight ??
-          innerEl?.offsetHeight ??
-          slotEl?.offsetHeight ??
-          80
-      )
-    );
-    const startClientX = e.clientX;
-    const startClientY = e.clientY;
-    const startX = x;
-    const startY = y;
-    const startScale = scale;
-    const baseZ = resolvedZIndex ?? 10;
-    const rad = (rotation * Math.PI) / 180;
-    const cosR = Math.cos(rad);
-    const sinR = Math.sin(rad);
-    const isCorner =
-      dir === 'nw' || dir === 'ne' || dir === 'sw' || dir === 'se';
-
-    const onMove = (me: PointerEvent) => {
-      const rawDx =
-        (me.clientX - startClientX) / (safeScale * Math.max(0.25, startScale));
-      const rawDy =
-        (me.clientY - startClientY) / (safeScale * Math.max(0.25, startScale));
-      const dx = rawDx * cosR + rawDy * sinR;
-      const dy = -rawDx * sinR + rawDy * cosR;
-
-      let nextX = startX;
-      let nextY = startY;
-      let nextW: number | undefined = explicitWidth;
-      let nextH: number | undefined = explicitHeight;
-
-      if (isCorner) {
-        const signX = dir === 'nw' || dir === 'sw' ? -1 : 1;
-        const signY = dir === 'nw' || dir === 'ne' ? -1 : 1;
-
-        if (keepAspect) {
-          const scaleFromX = (startW + dx * signX) / startW;
-          const scaleFromY = (startH + dy * signY) / startH;
-          const rawRatio =
-            Math.abs(dx * signX) >= Math.abs(dy * signY)
-              ? scaleFromX
-              : scaleFromY;
-          const minRatio = Math.max(48 / startW, 28 / startH);
-          const maxRatio = Math.min(760 / startW, 920 / startH);
-          const ratio = Math.max(minRatio, Math.min(maxRatio, rawRatio));
-          nextW = Math.round(startW * ratio);
-          nextH = Math.round(startH * ratio);
-        } else {
-          nextW = Math.max(48, Math.min(760, Math.round(startW + dx * signX)));
-          nextH = Math.max(28, Math.min(920, Math.round(startH + dy * signY)));
-        }
-
-        if (dir === 'nw' || dir === 'sw') {
-          nextX = Math.max(
-            -720,
-            Math.min(720, Math.round(startX + (startW - nextW) * startScale))
-          );
-        }
-        if (dir === 'nw' || dir === 'ne') {
-          nextY = Math.max(
-            -960,
-            Math.min(960, Math.round(startY + (startH - nextH) * startScale))
-          );
-        }
-        setLiveBadge(`${nextW}×${nextH}`);
-      } else if (dir === 'e') {
-        nextW = Math.max(48, Math.min(760, Math.round(startW + dx)));
-        setLiveBadge(`${nextW}×${nextH ?? startH}`);
-      } else if (dir === 'w') {
-        nextW = Math.max(48, Math.min(760, Math.round(startW - dx)));
-        nextX = Math.max(
-          -720,
-          Math.min(720, Math.round(startX + (startW - nextW) * startScale))
-        );
-        setLiveBadge(`${nextW}×${nextH ?? startH}`);
-      } else if (dir === 's') {
-        nextH = Math.max(28, Math.min(920, Math.round(startH + dy)));
-        setLiveBadge(`${nextW ?? startW}×${nextH}`);
-      } else if (dir === 'n') {
-        nextH = Math.max(28, Math.min(920, Math.round(startH - dy)));
-        nextY = Math.max(
-          -960,
-          Math.min(960, Math.round(startY + (startH - nextH) * startScale))
-        );
-        setLiveBadge(`${nextW ?? startW}×${nextH}`);
-      }
-
-      onUpdateTransform({
-        x: nextX,
-        y: nextY,
-        scale: startScale,
-        rotation,
-        zIndex: baseZ,
-        ...(nextW !== undefined ? { width: nextW } : {}),
-        ...(nextH !== undefined ? { height: nextH } : {}),
-        ...(preserveAspectRatio !== undefined ? { preserveAspectRatio } : {}),
-        hidden: transform?.hidden,
-        locked,
-      });
-    };
-
-    const onUp = () => {
-      setLiveBadge(null);
-      onInteractionEnd?.();
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-  };
-
-  const handleRotateHandleDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!designMode || locked || !onUpdateTransform) return;
-    e.stopPropagation();
-    e.preventDefault();
-    onInteractionStart?.();
-
-    const rect = innerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const startPointerAngle =
-      Math.atan2(e.clientY - cy, e.clientX - cx) * (180 / Math.PI);
-    const startRotation = rotation;
-    const baseZ = resolvedZIndex ?? 10;
-
-    const onMove = (me: PointerEvent) => {
-      const curAngle =
-        Math.atan2(me.clientY - cy, me.clientX - cx) * (180 / Math.PI);
-      let nextRot = startRotation + (curAngle - startPointerAngle);
-      while (nextRot > 180) nextRot -= 360;
-      while (nextRot < -180) nextRot += 360;
-      if (me.shiftKey) {
-        nextRot = Math.round(nextRot / 15) * 15;
-      } else {
-        nextRot = Math.round(nextRot);
-      }
-      setLiveBadge(`${nextRot}°`);
-      onUpdateTransform({
-        x,
-        y,
-        scale,
-        rotation: nextRot,
-        zIndex: baseZ,
-        ...(explicitWidth !== undefined ? { width: explicitWidth } : {}),
-        ...(explicitHeight !== undefined ? { height: explicitHeight } : {}),
-        ...(preserveAspectRatio !== undefined ? { preserveAspectRatio } : {}),
-        hidden: transform?.hidden,
-        locked,
-      });
-    };
-
-    const onUp = () => {
-      setLiveBadge(null);
-      onInteractionEnd?.();
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-  };
-
-  const hasCustomTransform = scale !== 1 || rotation !== 0;
-  const isAbsoluteSlot = externalStyle?.position === 'absolute';
   const isImageBox = IMAGE_ONLY_BLOCK_IDS.has(id);
   const resolvedInnerWidth =
     explicitWidth !== undefined
       ? `${explicitWidth}px`
       : externalStyle?.width
       ? externalStyle.width
-      : isAbsoluteSlot
-      ? isMoved
-        ? 'max-content'
-        : '100%'
-      : isMoved && slotSize
-      ? `${slotSize.w}px`
       : '100%';
   const resolvedInnerHeight =
     explicitHeight !== undefined
@@ -818,31 +628,21 @@ export function DraggableDesignWrapper({
         : 'auto'
       : externalStyle?.height
       ? externalStyle.height
-      : isAbsoluteSlot
-      ? undefined
-      : isMoved && slotSize
-      ? isImageBox
-        ? `${slotSize.h}px`
-        : 'auto'
+      : stretchInnerHeight
+      ? '100%'
       : undefined;
   const resolvedInnerMinHeight =
     explicitHeight !== undefined && !isImageBox
       ? `${explicitHeight}px`
       : undefined;
-  const anchorSlotWidth = isMoved
-    ? externalStyle?.width ?? (slotSize && !isAbsoluteSlot ? `${slotSize.w}px` : undefined)
-    : explicitWidth !== undefined
-    ? `${explicitWidth}px`
-    : externalStyle?.width ??
-      (slotSize && !isAbsoluteSlot ? `${slotSize.w}px` : undefined);
-  const anchorSlotHeight = isMoved
-    ? externalStyle?.height ??
-      (slotSize && !isAbsoluteSlot && isImageBox ? `${slotSize.h}px` : undefined)
-    : explicitHeight !== undefined
-    ? isImageBox
-      ? `${explicitHeight}px`
-      : 'auto'
-    : externalStyle?.height ?? undefined;
+  const anchorSlotWidth =
+    explicitWidth !== undefined ? `${explicitWidth}px` : externalStyle?.width;
+  const anchorSlotHeight =
+    explicitHeight !== undefined
+      ? isImageBox
+        ? `${explicitHeight}px`
+        : 'auto'
+      : externalStyle?.height;
 
   return (
     <div
@@ -851,9 +651,9 @@ export function DraggableDesignWrapper({
         ...externalStyle,
         width: anchorSlotWidth,
         maxWidth:
-          !isMoved && explicitWidth !== undefined ? 'none' : externalStyle?.maxWidth,
+          explicitWidth !== undefined ? 'none' : externalStyle?.maxWidth,
         height: anchorSlotHeight,
-        minHeight: !isMoved ? resolvedInnerMinHeight : undefined,
+        minHeight: resolvedInnerMinHeight,
         position: externalStyle?.position ?? 'relative',
         zIndex: isActive ? Math.max(resolvedZIndex ?? 10, 40) : resolvedZIndex,
       }}
@@ -876,9 +676,9 @@ export function DraggableDesignWrapper({
           }
         }}
         style={{
-          position: isMoved ? 'absolute' : 'relative',
-          left: isMoved ? `${x}px` : undefined,
-          top: isMoved ? `${y}px` : undefined,
+          position: 'relative',
+          left: isFree2D && x !== 0 ? `${x}px` : undefined,
+          top: !isLockedCardMode && y !== 0 ? `${y}px` : undefined,
           width: resolvedInnerWidth,
           maxWidth:
             explicitWidth !== undefined ? 'none' : externalStyle?.maxWidth,
@@ -888,13 +688,16 @@ export function DraggableDesignWrapper({
             explicitHeight !== undefined && !isImageBox ? 'flex' : undefined,
           flexDirection:
             explicitHeight !== undefined && !isImageBox ? 'column' : undefined,
-          transform: hasCustomTransform
-            ? `scale(${scale}) rotate(${rotation}deg)`
-            : undefined,
+          transform:
+            isFree2D && rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
           cursor: designMode
-            ? locked
+            ? isLockedCardMode
+              ? 'pointer'
+              : locked
               ? 'not-allowed'
-              : 'grab'
+              : isVerticalOnly
+              ? 'ns-resize'
+              : 'move'
             : onSelect
             ? 'pointer'
             : undefined,
@@ -905,82 +708,12 @@ export function DraggableDesignWrapper({
       >
         {children}
 
-        {/* Figma-style Blue Bounding Box, Rotation Handle, 4 Corner Handles & 4 Side Handles */}
-        {designMode && isActive && (
+        {/* Selection Frame (no canvas resize or rotate handles; size & rotation controlled in right panel) */}
+        {designMode && isActive && !isLockedCardMode && (
           <div
             data-resize-frame={id}
             className="no-print pointer-events-none absolute -inset-[2px] border-[1.5px] border-[#2563EB] rounded-[4px] z-50"
           >
-            {!locked && (
-              <>
-                {/* Top Rotation Handle */}
-                <div className="absolute -top-[24px] left-1/2 -translate-x-1/2 flex flex-col items-center">
-                  <div
-                    data-handle="rotate"
-                    onPointerDown={handleRotateHandleDown}
-                    title="Потяните, чтобы повернуть (Shift — шаг 15°)"
-                    className="pointer-events-auto w-[16px] h-[16px] rounded-full bg-white border-[1.5px] border-[#2563EB] shadow-xs flex items-center justify-center cursor-grab active:cursor-grabbing hover:bg-[#2563EB] hover:text-white text-[#2563EB] transition-colors"
-                  >
-                    <RotateCw className="w-[9px] h-[9px]" />
-                  </div>
-                  <div className="w-[1.5px] h-[8px] bg-[#2563EB]" />
-                </div>
-
-                {/* 4 Corner Handles */}
-                {(
-                  [
-                    { corner: 'nw', pos: '-top-[5px] -left-[5px]', cur: 'nwse-resize' },
-                    { corner: 'ne', pos: '-top-[5px] -right-[5px]', cur: 'nesw-resize' },
-                    { corner: 'sw', pos: '-bottom-[5px] -left-[5px]', cur: 'nesw-resize' },
-                    { corner: 'se', pos: '-bottom-[5px] -right-[5px]', cur: 'nwse-resize' },
-                  ] as const
-                ).map((h) => (
-                  <div
-                    key={h.corner}
-                    data-handle={h.corner}
-                    onPointerDown={(e) => handleResizeHandleDown(e, h.corner)}
-                    style={{ cursor: h.cur }}
-                    title={
-                      keepAspect
-                        ? 'Потяните для пропорционального изменения размера'
-                        : 'Потяните для свободного изменения ширины и высоты'
-                    }
-                    className={`pointer-events-auto absolute ${h.pos} w-[9px] h-[9px] bg-white border-[1.5px] border-[#2563EB] rounded-[1.5px] shadow-xs hover:bg-[#2563EB]`}
-                  />
-                ))}
-
-                {/* 4 Side-Center Handles (Independent Width / Height) */}
-                <div
-                  data-handle="w"
-                  onPointerDown={(e) => handleResizeHandleDown(e, 'w')}
-                  style={{ cursor: 'ew-resize' }}
-                  title="Изменить ширину слева"
-                  className="pointer-events-auto absolute top-1/2 -left-[4px] -translate-y-1/2 w-[7px] h-[16px] bg-white border-[1.5px] border-[#2563EB] rounded-[2px] shadow-xs hover:bg-[#2563EB]"
-                />
-                <div
-                  data-handle="e"
-                  onPointerDown={(e) => handleResizeHandleDown(e, 'e')}
-                  style={{ cursor: 'ew-resize' }}
-                  title="Изменить ширину справа"
-                  className="pointer-events-auto absolute top-1/2 -right-[4px] -translate-y-1/2 w-[7px] h-[16px] bg-white border-[1.5px] border-[#2563EB] rounded-[2px] shadow-xs hover:bg-[#2563EB]"
-                />
-                <div
-                  data-handle="n"
-                  onPointerDown={(e) => handleResizeHandleDown(e, 'n')}
-                  style={{ cursor: 'ns-resize' }}
-                  title="Изменить высоту сверху"
-                  className="pointer-events-auto absolute left-1/2 -top-[4px] -translate-x-1/2 w-[16px] h-[7px] bg-white border-[1.5px] border-[#2563EB] rounded-[2px] shadow-xs hover:bg-[#2563EB]"
-                />
-                <div
-                  data-handle="s"
-                  onPointerDown={(e) => handleResizeHandleDown(e, 's')}
-                  style={{ cursor: 'ns-resize' }}
-                  title="Изменить высоту снизу"
-                  className="pointer-events-auto absolute left-1/2 -bottom-[4px] -translate-x-1/2 w-[16px] h-[7px] bg-white border-[1.5px] border-[#2563EB] rounded-[2px] shadow-xs hover:bg-[#2563EB]"
-                />
-              </>
-            )}
-
             <span className="absolute -bottom-[22px] left-1/2 -translate-x-1/2 rounded bg-[#2563EB] px-1.5 py-0.5 text-[9px] font-mono font-semibold text-white shadow-xs whitespace-nowrap">
               {locked
                 ? 'Закреплено'
@@ -989,9 +722,9 @@ export function DraggableDesignWrapper({
                     ? `${explicitWidth ?? 'auto'}×${explicitHeight ?? 'auto'}${
                         rotation ? ` · ${rotation}°` : ''
                       }`
-                    : `${Math.round(scale * 100)}%${
-                        rotation ? ` · ${rotation}°` : ''
-                      }`)}
+                    : isVerticalOnly
+                    ? `y: ${y}px`
+                    : `${rotation ? `${rotation}°` : `x:${x} y:${y}`}`)}
             </span>
           </div>
         )}
@@ -1074,16 +807,15 @@ export function DecorLayer({
 
               const dx = rawDx / safeScale;
               const dy = rawDy / safeScale;
+              const maxDecorX = Math.max(0, A4_WIDTH - el.width);
+              const maxDecorY = Math.max(0, A4_HEIGHT - el.height);
               const candidateX = Math.max(
                 0,
-                Math.min(A4_WIDTH - Math.min(el.width, 80), Math.round(baseX + dx))
+                Math.min(maxDecorX, Math.round(baseX + dx))
               );
               const candidateY = Math.max(
                 0,
-                Math.min(
-                  A4_HEIGHT - Math.min(el.height, 60),
-                  Math.round(baseY + dy)
-                )
+                Math.min(maxDecorY, Math.round(baseY + dy))
               );
 
               const snapped = computeSnappedBox(
@@ -1097,14 +829,8 @@ export function DecorLayer({
               );
               onSnapLinesChange?.(snapped.lines);
 
-              const nextX = Math.max(
-                0,
-                Math.min(A4_WIDTH - Math.min(el.width, 80), snapped.x)
-              );
-              const nextY = Math.max(
-                0,
-                Math.min(A4_HEIGHT - Math.min(el.height, 60), snapped.y)
-              );
+              const nextX = Math.max(0, Math.min(maxDecorX, snapped.x));
+              const nextY = Math.max(0, Math.min(maxDecorY, snapped.y));
               onMoveDecor(el.id, nextX, nextY);
             };
             const onUp = () => {
@@ -1116,51 +842,6 @@ export function DecorLayer({
               window.removeEventListener('pointermove', onMove);
               window.removeEventListener('pointerup', onUp);
             };
-            window.addEventListener('pointermove', onMove);
-            window.addEventListener('pointerup', onUp);
-          };
-
-          const handleRotatePointerDown = (
-            e: React.PointerEvent<HTMLDivElement>
-          ) => {
-            if (!designMode || el.locked || !onUpdateDecor) return;
-            e.stopPropagation();
-            e.preventDefault();
-            onInteractionStart?.();
-            setInteractingId(el.id);
-
-            const itemEl = e.currentTarget.closest(
-              '[data-snap-id]'
-            ) as HTMLElement | null;
-            const rect = itemEl?.getBoundingClientRect();
-            if (!rect) return;
-            const cx = rect.left + rect.width / 2;
-            const cy = rect.top + rect.height / 2;
-            const startPointerAngle =
-              Math.atan2(e.clientY - cy, e.clientX - cx) * (180 / Math.PI);
-            const startRotation = el.rotation ?? 0;
-
-            const onMove = (me: PointerEvent) => {
-              const curAngle =
-                Math.atan2(me.clientY - cy, me.clientX - cx) * (180 / Math.PI);
-              let nextRot = startRotation + (curAngle - startPointerAngle);
-              while (nextRot > 180) nextRot -= 360;
-              while (nextRot < -180) nextRot += 360;
-              if (me.shiftKey) {
-                nextRot = Math.round(nextRot / 15) * 15;
-              } else {
-                nextRot = Math.round(nextRot);
-              }
-              onUpdateDecor(el.id, { rotation: nextRot });
-            };
-
-            const onUp = () => {
-              setInteractingId(null);
-              onInteractionEnd?.();
-              window.removeEventListener('pointermove', onMove);
-              window.removeEventListener('pointerup', onUp);
-            };
-
             window.addEventListener('pointermove', onMove);
             window.addEventListener('pointerup', onUp);
           };
@@ -1348,7 +1029,7 @@ export function DecorLayer({
             >
               <DecorGraphic element={el} />
 
-              {/* Figma-style Blue Bounding Box with Rotation, 4 Corner & 4 Side Resize Handles */}
+              {/* Selection Bounding Box with 4 Corner & 4 Side Resize Handles (rotation is numeric in right panel only) */}
               {designMode && isActive && (
                 <div
                   data-resize-frame={el.id}
@@ -1356,18 +1037,6 @@ export function DecorLayer({
                 >
                   {!el.locked && (
                     <>
-                      {/* Top Rotation Handle */}
-                      <div className="absolute -top-[24px] left-1/2 -translate-x-1/2 flex flex-col items-center">
-                        <div
-                          data-handle="rotate"
-                          onPointerDown={handleRotatePointerDown}
-                          title="Потяните, чтобы повернуть (Shift — шаг 15°)"
-                          className="pointer-events-auto w-[16px] h-[16px] rounded-full bg-white border-[1.5px] border-[#2563EB] shadow-xs flex items-center justify-center cursor-grab active:cursor-grabbing hover:bg-[#2563EB] hover:text-white text-[#2563EB] transition-colors"
-                        >
-                          <RotateCw className="w-[9px] h-[9px]" />
-                        </div>
-                        <div className="w-[1.5px] h-[8px] bg-[#2563EB]" />
-                      </div>
 
                       {/* 4 Corner Handles */}
                       {(

@@ -453,6 +453,7 @@ export function NextChapter({
         {/* Full-Body VR Bear Mascot Standing Cleanly on Right Meadow / Grass */}
         <DraggableDesignWrapper
           id="nextBear"
+          movementMode="both"
           transform={bearTransform}
           defaultZIndex={25}
           designMode={designMode}

@@ -8,6 +8,9 @@ interface ProjectCardProps {
   compact?: boolean;
   density?: 'spacious' | 'compact' | 'ultra';
   layoutVariant?: 'single' | 'double' | 'multi';
+  singleRow?: boolean;
+  itemCount?: number;
+  imageHeightPx?: number;
   stretchHeight?: boolean;
   isActive?: boolean;
   activeTextField?: ActiveTextFieldTarget;
@@ -23,7 +26,9 @@ export function ProjectCard({
   compact = false,
   density,
   layoutVariant = 'multi',
-  stretchHeight = false,
+  singleRow = false,
+  itemCount,
+  imageHeightPx,
   isActive = false,
   activeTextField,
   onSelectTextField,
@@ -45,23 +50,33 @@ export function ProjectCard({
     'Краткое описание проекта';
 
   const fixedImageHeight =
-    layoutVariant === 'single'
+    imageHeightPx !== undefined
+      ? `${imageHeightPx}px`
+      : layoutVariant === 'single'
       ? isUltra
-        ? '108px'
-        : isCompact
         ? '132px'
-        : '192px'
+        : isCompact
+        ? '168px'
+        : '214px'
       : layoutVariant === 'double'
       ? isUltra
-        ? '86px'
+        ? singleRow
+          ? '128px'
+          : '80px'
         : isCompact
-        ? '116px'
-        : '174px'
+        ? singleRow
+          ? '152px'
+          : '108px'
+        : '188px'
       : isUltra
-      ? '62px'
+      ? singleRow
+        ? '102px'
+        : '78px'
       : isCompact
-      ? '72px'
-      : '108px';
+      ? singleRow
+        ? '132px'
+        : '104px'
+      : '164px';
 
   return (
     <div
@@ -78,7 +93,7 @@ export function ProjectCard({
       {/* Slim Browser Window Header Bar */}
       <div
         className={`${
-          isUltra ? 'h-[13px] px-[8px]' : 'h-[16px] px-[10px]'
+          isUltra ? 'h-[14px] px-[8px]' : 'h-[16px] px-[10px]'
         } bg-[#F1F5F9] border-b border-[#18181B]/15 flex items-center justify-between shrink-0`}
       >
         <div className="flex items-center gap-[5px]">
@@ -93,11 +108,9 @@ export function ProjectCard({
 
       {/* Edge-to-Edge Screenshot / Illustration */}
       <div
-        style={stretchHeight ? undefined : { height: fixedImageHeight }}
-        className={`self-stretch overflow-hidden border-b border-[#18181B]/12 ${
+        style={{ height: fixedImageHeight }}
+        className={`self-stretch overflow-hidden border-b border-[#18181B]/12 shrink-0 ${
           imgFit === 'contain' ? 'bg-zinc-50 p-1' : 'bg-zinc-100'
-        } ${
-          stretchHeight ? 'flex-1 min-h-[130px] max-h-[250px]' : 'shrink-0'
         }`}
       >
         {project.imageUrl ? (
@@ -120,14 +133,12 @@ export function ProjectCard({
 
       {/* Print-Legible Project Title, Caption & Description */}
       <div
-        className={`w-full min-w-0 box-border ${
+        className={`w-full min-w-0 box-border flex-1 flex flex-col justify-center text-center ${
           isUltra
             ? 'px-[6px] py-[4px]'
             : isCompact
             ? 'px-[8px] py-[6px]'
             : 'px-[10px] py-[8px]'
-        } text-center ${
-          stretchHeight ? 'shrink-0' : 'flex-1 flex flex-col justify-center'
         }`}
       >
         <InlineEditableText
@@ -153,8 +164,8 @@ export function ProjectCard({
             isUltra
               ? 'text-[11px] leading-[1.12]'
               : isCompact
-              ? 'text-[12.5px] leading-[1.2]'
-              : layoutVariant === 'single'
+              ? 'text-[12.5px] leading-[1.18]'
+              : itemCount === 1
               ? 'text-[15.5px] leading-[1.2]'
               : 'text-[14px] leading-[1.2]'
           } text-[#111827] block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]`}
@@ -181,10 +192,12 @@ export function ProjectCard({
           as="div"
           className={`font-journal-body ${
             isUltra
-              ? 'text-[8.5px] leading-[1.22] mt-[2px]'
-              : layoutVariant === 'single'
-              ? 'text-[11px] leading-[1.4] mt-[4px]'
-              : 'text-[10px] leading-[1.4] mt-[4px]'
+              ? 'text-[8.5px] leading-[1.18] mt-[1.5px]'
+              : isCompact
+              ? 'text-[10px] leading-[1.3] mt-[3px]'
+              : itemCount === 1
+              ? 'text-[11px] leading-[1.38] mt-[4px]'
+              : 'text-[10.5px] leading-[1.36] mt-[3.5px]'
           } text-[#3F3F46] block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]`}
         />
         {project.caption?.trim() &&
@@ -210,10 +223,12 @@ export function ProjectCard({
               as="p"
               className={`font-journal-body m-0 ${
                 isUltra
-                  ? 'text-[8px] leading-[1.2] mt-[1.5px]'
-                  : layoutVariant === 'single'
+                  ? 'text-[8px] leading-[1.16] mt-[1px]'
+                  : isCompact
+                  ? 'text-[9.5px] leading-[1.28] mt-[2px]'
+                  : itemCount === 1
                   ? 'text-[10.5px] leading-[1.35] mt-[3px]'
-                  : 'text-[9.5px] leading-[1.35] mt-[3px]'
+                  : 'text-[10px] leading-[1.32] mt-[2.5px]'
               } text-[#52525B] block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]`}
             />
           )}

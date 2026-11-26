@@ -51,28 +51,25 @@ export function SkillTag({
   return (
     <div
       data-card-label={`Навык: ${skill.label}`}
-      className={`${
-        isUltra ? 'pt-[9px]' : isCompact ? 'pt-[12px]' : 'pt-[14px]'
-      } h-full min-w-0 box-border flex`}
+      className="min-w-0 box-border flex"
     >
       <div
         style={{ backgroundColor: cardBg }}
-        className={`relative w-full min-w-0 box-border rounded-[12px] ${
+        className={`relative w-full min-w-[100px] max-w-[162px] box-border rounded-[11px] ${
           isUltra
-            ? 'pt-[12px] pb-[4px] px-[6px] min-h-[34px]'
+            ? 'px-[6.5px] py-[3.5px] min-h-[32px] gap-[5px]'
             : isCompact
-            ? 'pt-[16px] pb-[6px] px-[8px] min-h-[44px]'
-            : 'pt-[19px] pb-[7px] px-[10px] min-h-[50px]'
-        } flex items-center justify-center text-center shadow-[0_5px_12px_rgba(17,24,39,0.12),0_2px_4px_rgba(17,24,39,0.08)] border-[1.6px] border-[#18181B]`}
+            ? 'px-[7px] py-[4px] min-h-[34px] gap-[5px]'
+            : 'px-[8px] py-[4.5px] min-h-[36px] gap-[6px]'
+        } flex items-center justify-start text-left shadow-[0_4px_10px_rgba(17,24,39,0.10),0_1.5px_3px_rgba(17,24,39,0.07)] border-[1.6px] border-[#18181B]`}
       >
-        {/* Protruding Top-Center White Circular Icon Badge */}
         <div
-          className={`absolute left-1/2 -translate-x-1/2 rounded-full bg-white border-[1.6px] border-[#18181B] shadow-[0_3px_6px_rgba(17,24,39,0.14)] flex items-center justify-center ${
+          className={`shrink-0 rounded-full bg-white border-[1.4px] border-[#18181B] shadow-[0_2px_4px_rgba(17,24,39,0.12)] flex items-center justify-center ${
             isUltra
-              ? '-top-[9px] w-[22px] h-[22px]'
+              ? 'w-[20px] h-[20px]'
               : isCompact
-              ? '-top-[12px] w-[28px] h-[28px]'
-              : '-top-[14px] w-[32px] h-[32px]'
+              ? 'w-[21px] h-[21px]'
+              : 'w-[22px] h-[22px]'
           }`}
         >
           <SkillCircleIcon
@@ -80,10 +77,10 @@ export function SkillTag({
             index={index}
             className={
               isUltra
-                ? 'w-[13px] h-[13px]'
+                ? 'w-[12px] h-[12px]'
                 : isCompact
-                ? 'w-[17px] h-[17px]'
-                : 'w-[19px] h-[19px]'
+                ? 'w-[12.5px] h-[12.5px]'
+                : 'w-[13px] h-[13px]'
             }
           />
         </div>
@@ -107,8 +104,12 @@ export function SkillTag({
           }
           as="span"
           className={`font-extrabold ${
-            isUltra ? 'text-[10px] leading-[1.1]' : isCompact ? 'text-[11px] leading-[1.14]' : 'text-[12px] leading-[1.14]'
-          } text-[#111827] text-center block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]`}
+            isUltra
+              ? 'text-[9.5px] leading-[1.12]'
+              : isCompact
+              ? 'text-[9.5px] leading-[1.14]'
+              : 'text-[10px] leading-[1.15]'
+          } text-[#111827] text-left block min-w-0 flex-1 box-border whitespace-pre-wrap [overflow-wrap:anywhere]`}
         />
       </div>
     </div>

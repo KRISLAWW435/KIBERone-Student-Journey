@@ -1398,12 +1398,32 @@ export function GroupEditorView({
       ? activeTarget?.page ?? designTargetPage
       : pageFocus;
 
-  const getBlockIdFromTarget = (target: EditorSectionTarget): string | null => {
+  useEffect(() => {
+    if (pageFocus === 'spread') return;
+    setActiveTarget((prev) => (prev && prev.page !== pageFocus ? null : prev));
+    setActiveTextField((prev) => (prev && prev.page !== pageFocus ? null : prev));
+  }, [pageFocus]);
+
+  const FREE_2D_DESIGN_BLOCKS = new Set([
+    'coverBear',
+    'prideBear',
+    'nextBear',
+    'logo',
+  ]);
+
+  const getBlockIdFromTarget = (
+    target: EditorSectionTarget,
+    forDesignMode = false
+  ): string | null => {
     if (!target || target.block === 'background' || target.block === 'decor') {
       return null;
     }
-    if (target.block === 'module') return `module-${target.itemId}`;
-    if (target.block === 'project') return `project-${target.itemId}`;
+    if (target.block === 'module') {
+      return forDesignMode ? 'modulesBlock' : `module-${target.itemId}`;
+    }
+    if (target.block === 'project') {
+      return forDesignMode ? 'projectsBlock' : `project-${target.itemId}`;
+    }
     return target.block;
   };
 
@@ -1482,6 +1502,22 @@ export function GroupEditorView({
     next: CanvasObjectTransform
   ) => {
     if (!activeDoc) return;
+    const is2D = FREE_2D_DESIGN_BLOCKS.has(blockId);
+    const sanitized: CanvasObjectTransform = {
+      ...next,
+      x: is2D ? Math.max(-720, Math.min(720, Math.round(next.x))) : 0,
+      y: Math.max(-960, Math.min(960, Math.round(next.y))),
+      scale: 1,
+      rotation: is2D
+        ? Math.max(-180, Math.min(180, Math.round(next.rotation)))
+        : 0,
+      ...(next.width !== undefined
+        ? { width: Math.max(48, Math.min(794, Math.round(next.width))) }
+        : {}),
+      ...(next.height !== undefined
+        ? { height: Math.max(28, Math.min(1123, Math.round(next.height))) }
+        : {}),
+    };
     if (page === 1) {
       onChangeJournal({
         ...activeDoc,
@@ -1489,7 +1525,7 @@ export function GroupEditorView({
           ...activeDoc.page1,
           objectLayouts: {
             ...(activeDoc.page1.objectLayouts ?? {}),
-            [blockId]: next,
+            [blockId]: sanitized,
           },
         },
       });
@@ -1500,7 +1536,7 @@ export function GroupEditorView({
           ...activeDoc.page2,
           objectLayouts: {
             ...(activeDoc.page2.objectLayouts ?? {}),
-            [blockId]: next,
+            [blockId]: sanitized,
           },
         },
       });
@@ -1509,13 +1545,18 @@ export function GroupEditorView({
 
   const handleMoveDecor = (page: 1 | 2, decorId: string, x: number, y: number) => {
     if (!activeDoc) return;
+    const clampDecorPos = (el: DecorElement) => ({
+      ...el,
+      x: Math.max(0, Math.min(Math.max(0, 794 - el.width), Math.round(x))),
+      y: Math.max(0, Math.min(Math.max(0, 1123 - el.height), Math.round(y))),
+    });
     if (page === 1) {
       onChangeJournal({
         ...activeDoc,
         page1: {
           ...activeDoc.page1,
           decorElements: (activeDoc.page1.decorElements ?? []).map((el) =>
-            el.id === decorId ? { ...el, x, y } : el
+            el.id === decorId ? clampDecorPos(el) : el
           ),
         },
       });
@@ -1525,7 +1566,7 @@ export function GroupEditorView({
         page2: {
           ...activeDoc.page2,
           decorElements: (activeDoc.page2.decorElements ?? []).map((el) =>
-            el.id === decorId ? { ...el, x, y } : el
+            el.id === decorId ? clampDecorPos(el) : el
           ),
         },
       });
@@ -1538,13 +1579,24 @@ export function GroupEditorView({
     patch: Partial<DecorElement>
   ) => {
     if (!activeDoc) return;
+    const applySanitizedPatch = (el: DecorElement): DecorElement => {
+      const merged = { ...el, ...patch };
+      const maxX = Math.max(0, 794 - merged.width);
+      const maxY = Math.max(0, 1123 - merged.height);
+      return {
+        ...merged,
+        x: Math.max(0, Math.min(maxX, Math.round(merged.x))),
+        y: Math.max(0, Math.min(maxY, Math.round(merged.y))),
+        rotation: Math.max(-180, Math.min(180, Math.round(merged.rotation))),
+      };
+    };
     if (page === 1) {
       onChangeJournal({
         ...activeDoc,
         page1: {
           ...activeDoc.page1,
           decorElements: (activeDoc.page1.decorElements ?? []).map((el) =>
-            el.id === decorId ? { ...el, ...patch } : el
+            el.id === decorId ? applySanitizedPatch(el) : el
           ),
         },
       });
@@ -1554,7 +1606,7 @@ export function GroupEditorView({
         page2: {
           ...activeDoc.page2,
           decorElements: (activeDoc.page2.decorElements ?? []).map((el) =>
-            el.id === decorId ? { ...el, ...patch } : el
+            el.id === decorId ? applySanitizedPatch(el) : el
           ),
         },
       });
@@ -5535,7 +5587,16 @@ export function GroupEditorView({
                           ? decors.find((d) => d.id === activeTarget.itemId) ??
                             null
                           : null;
-                      const selectedBlockId = getBlockIdFromTarget(activeTarget);
+                      const selectedBlockId = getBlockIdFromTarget(
+                        activeTarget,
+                        true
+                      );
+                      const selectedBlockDisplayTarget: EditorSectionTarget =
+                        activeTarget?.block === 'module'
+                          ? { page: 1, block: 'modulesBlock' }
+                          : activeTarget?.block === 'project'
+                          ? { page: 1, block: 'projectsBlock' }
+                          : activeTarget;
                       const selectedBlockPage = activeTarget?.page ?? effectiveDesignPage;
                       const selectedBlockLayouts =
                         selectedBlockPage === 1
@@ -5926,113 +5987,174 @@ export function GroupEditorView({
                               {/* Coordinates & Dimensions */}
                               <div className="grid grid-cols-2 gap-2">
                                 <label className="block">
-                                  <span className="text-[10px] text-zinc-500">
-                                    X (px)
-                                  </span>
-                                  <input
-                                    type="number"
-                                    value={selectedDecor.x}
-                                    onChange={(e) =>
-                                      handleUpdateDecor(
-                                        activeTarget.page,
-                                        selectedDecor.id,
-                                        { x: Number(e.target.value) || 0 }
-                                      )
-                                    }
-                                    className={flatInputClass}
-                                  />
-                                </label>
-                                <label className="block">
-                                  <span className="text-[10px] text-zinc-500">
-                                    Y (px)
-                                  </span>
-                                  <input
-                                    type="number"
-                                    value={selectedDecor.y}
-                                    onChange={(e) =>
-                                      handleUpdateDecor(
-                                        activeTarget.page,
-                                        selectedDecor.id,
-                                        { y: Number(e.target.value) || 0 }
-                                      )
-                                    }
-                                    className={flatInputClass}
-                                  />
-                                </label>
-                                <label className="block">
-                                  <span className="text-[10px] text-zinc-500">
-                                    Ширина (px)
-                                  </span>
-                                  <input
-                                    type="number"
-                                    min={32}
-                                    max={760}
-                                    value={selectedDecor.width}
-                                    onChange={(e) =>
-                                      handleUpdateDecor(
-                                        activeTarget.page,
-                                        selectedDecor.id,
-                                        {
-                                          width: Math.max(
-                                            32,
-                                            Math.min(
-                                              760,
-                                              Number(e.target.value) || 80
-                                            )
-                                          ),
-                                        }
-                                      )
-                                    }
-                                    className={flatInputClass}
-                                  />
-                                </label>
-                                <label className="block">
-                                  <span className="text-[10px] text-zinc-500">
-                                    Высота (px)
-                                  </span>
-                                  <input
-                                    type="number"
-                                    min={20}
-                                    max={900}
-                                    value={selectedDecor.height}
-                                    onChange={(e) =>
-                                      handleUpdateDecor(
-                                        activeTarget.page,
-                                        selectedDecor.id,
-                                        {
-                                          height: Math.max(
+                                    <span className="text-[10px] text-zinc-500">
+                                      X (px)
+                                    </span>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={Math.max(0, 794 - selectedDecor.width)}
+                                      value={selectedDecor.x}
+                                      onChange={(e) =>
+                                        handleUpdateDecor(
+                                          activeTarget.page,
+                                          selectedDecor.id,
+                                          { x: Number(e.target.value) || 0 }
+                                        )
+                                      }
+                                      className={flatInputClass}
+                                    />
+                                  </label>
+                                  <label className="block">
+                                    <span className="text-[10px] text-zinc-500">
+                                      Y (px)
+                                    </span>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={Math.max(0, 1123 - selectedDecor.height)}
+                                      value={selectedDecor.y}
+                                      onChange={(e) =>
+                                        handleUpdateDecor(
+                                          activeTarget.page,
+                                          selectedDecor.id,
+                                          { y: Number(e.target.value) || 0 }
+                                        )
+                                      }
+                                      className={flatInputClass}
+                                    />
+                                  </label>
+                                  <label className="block">
+                                    <span className="text-[10px] text-zinc-500">
+                                      Ширина (px)
+                                    </span>
+                                    <input
+                                      type="number"
+                                      min={32}
+                                      max={760}
+                                      value={selectedDecor.width}
+                                      onChange={(e) => {
+                                        const nextW = Math.max(
+                                          32,
+                                          Math.min(
+                                            760,
+                                            Number(e.target.value) || 80
+                                          )
+                                        );
+                                        const keepElAspect =
+                                          selectedDecor.preserveAspectRatio !==
+                                          false;
+                                        const curW = Math.max(
+                                          32,
+                                          selectedDecor.width || 80
+                                        );
+                                        const curH = Math.max(
+                                          20,
+                                          selectedDecor.height || 40
+                                        );
+                                        const patch: Partial<DecorElement> = {
+                                          width: nextW,
+                                        };
+                                        if (keepElAspect) {
+                                          patch.height = Math.max(
                                             20,
                                             Math.min(
                                               900,
-                                              Number(e.target.value) || 40
+                                              Math.round((nextW * curH) / curW)
                                             )
-                                          ),
+                                          );
+                                          if (selectedDecor.kind === 'text') {
+                                            patch.fontSize = Math.max(
+                                              10,
+                                              Math.min(
+                                                96,
+                                                Math.round(
+                                                  (selectedDecor.fontSize ??
+                                                    18) *
+                                                    (nextW / curW)
+                                                )
+                                              )
+                                            );
+                                          }
                                         }
-                                      )
-                                    }
-                                    className={flatInputClass}
-                                  />
-                                </label>
-                                <label className="block col-span-2">
-                                  <span className="text-[10px] text-zinc-500">
-                                    Поворот (°)
-                                  </span>
-                                  <input
-                                    type="number"
-                                    min={-180}
-                                    max={180}
-                                    value={selectedDecor.rotation}
-                                    onChange={(e) =>
-                                      handleUpdateDecor(
-                                        activeTarget.page,
-                                        selectedDecor.id,
-                                        { rotation: Number(e.target.value) || 0 }
-                                      )
-                                    }
-                                    className={flatInputClass}
-                                  />
-                                </label>
-                              </div>
+                                        handleUpdateDecor(
+                                          activeTarget.page,
+                                          selectedDecor.id,
+                                          patch
+                                        );
+                                      }}
+                                      className={flatInputClass}
+                                    />
+                                  </label>
+                                  <label className="block">
+                                    <span className="text-[10px] text-zinc-500">
+                                      Высота (px)
+                                    </span>
+                                    <input
+                                      type="number"
+                                      min={20}
+                                      max={900}
+                                      value={selectedDecor.height}
+                                      onChange={(e) => {
+                                        const nextH = Math.max(
+                                          20,
+                                          Math.min(
+                                            900,
+                                            Number(e.target.value) || 40
+                                          )
+                                        );
+                                        const keepElAspect =
+                                          selectedDecor.preserveAspectRatio !==
+                                          false;
+                                        const curW = Math.max(
+                                          32,
+                                          selectedDecor.width || 80
+                                        );
+                                        const curH = Math.max(
+                                          20,
+                                          selectedDecor.height || 40
+                                        );
+                                        const patch: Partial<DecorElement> = {
+                                          height: nextH,
+                                        };
+                                        if (keepElAspect) {
+                                          patch.width = Math.max(
+                                            32,
+                                            Math.min(
+                                              760,
+                                              Math.round((nextH * curW) / curH)
+                                            )
+                                          );
+                                        }
+                                        handleUpdateDecor(
+                                          activeTarget.page,
+                                          selectedDecor.id,
+                                          patch
+                                        );
+                                      }}
+                                      className={flatInputClass}
+                                    />
+                                  </label>
+                                  <label className="block col-span-2">
+                                    <span className="text-[10px] text-zinc-500">
+                                      Поворот (°)
+                                    </span>
+                                    <input
+                                      type="number"
+                                      min={-180}
+                                      max={180}
+                                      value={selectedDecor.rotation}
+                                      onChange={(e) =>
+                                        handleUpdateDecor(
+                                          activeTarget.page,
+                                          selectedDecor.id,
+                                          { rotation: Number(e.target.value) || 0 }
+                                        )
+                                      }
+                                      className={flatInputClass}
+                                    />
+                                  </label>
+                                </div>
 
                               <div className="flex items-center justify-between gap-2 pt-1">
                                 <label className="inline-flex items-center gap-1.5 text-[11px] text-zinc-700 cursor-pointer select-none">
@@ -6619,7 +6741,7 @@ export function GroupEditorView({
                                     Выбран блок · Стр. {activeTarget.page}
                                   </div>
                                   <div className="text-xs font-bold text-zinc-900 truncate">
-                                    {getBlockLabel(activeTarget)}
+                                    {getBlockLabel(selectedBlockDisplayTarget)}
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0">
@@ -6677,8 +6799,10 @@ export function GroupEditorView({
                                 </div>
                               </div>
 
-                              {/* X / Y / Width / Height / Aspect / Reset / Scale / Rotation */}
+                              {/* Position (Vertical-only for structural blocks; 2D for bears/logo) & Proportional Width / Height */}
                               {(() => {
+                                const is2DBlock =
+                                  FREE_2D_DESIGN_BLOCKS.has(selectedBlockId);
                                 const coverDefaults =
                                   selectedBlockId === 'coverTitle' ||
                                   selectedBlockId === 'coverSubtitle' ||
@@ -6691,8 +6815,15 @@ export function GroupEditorView({
                                   { width: number; height: number }
                                 > = {
                                   cover: { width: 794, height: 316 },
-                                  coverBear: { width: 240, height: 240 },
-                                  logo: { width: 150, height: 48 },
+                                  coverBear: {
+                                    width: COVER_OBJECT_DEFAULTS.coverBear.width,
+                                    height:
+                                      COVER_OBJECT_DEFAULTS.coverBear.height,
+                                  },
+                                  logo: {
+                                    width: COVER_OBJECT_DEFAULTS.logo.width,
+                                    height: COVER_OBJECT_DEFAULTS.logo.height,
+                                  },
                                   modulesBlock: { width: 714, height: 260 },
                                   skills: { width: 714, height: 90 },
                                   projectsBlock: { width: 714, height: 260 },
@@ -6735,9 +6866,14 @@ export function GroupEditorView({
                                   (measuredH && measuredH > 0
                                     ? Math.round(measuredH)
                                     : fallbackDims.height);
-                                const displayX = coverDefaults
-                                  ? coverDefaults.x + selectedBlockTransform.x
-                                  : selectedBlockTransform.x;
+                                const currentW =
+                                  selectedBlockTransform.width ?? defaultW;
+                                const currentH =
+                                  selectedBlockTransform.height ?? defaultH;
+                                const keepAspect =
+                                  selectedBlockTransform.preserveAspectRatio !==
+                                  false;
+                                const displayX = selectedBlockTransform.x;
                                 const displayY = coverDefaults
                                   ? coverDefaults.y + selectedBlockTransform.y
                                   : selectedBlockTransform.y;
@@ -6745,40 +6881,46 @@ export function GroupEditorView({
                                 return (
                                   <div className="space-y-2.5">
                                     <div className="grid grid-cols-2 gap-2">
-                                      <label className="block">
+                                      {is2DBlock && (
+                                        <label className="block">
+                                          <span className="text-[10px] text-zinc-500">
+                                            Смещение X (px)
+                                          </span>
+                                          <input
+                                            type="number"
+                                            min={-720}
+                                            max={720}
+                                            value={displayX}
+                                            onChange={(e) => {
+                                              const rawVal =
+                                                Number(e.target.value) || 0;
+                                              handleUpdatePageTransform(
+                                                activeTarget.page,
+                                                selectedBlockId,
+                                                {
+                                                  ...selectedBlockTransform,
+                                                  x: rawVal,
+                                                }
+                                              );
+                                            }}
+                                            className={flatInputClass}
+                                          />
+                                        </label>
+                                      )}
+                                      <label
+                                        className={`block ${
+                                          is2DBlock ? '' : 'col-span-2'
+                                        }`}
+                                      >
                                         <span className="text-[10px] text-zinc-500">
                                           {coverDefaults
-                                            ? 'X (px)'
-                                            : 'Смещение X (px)'}
+                                            ? 'Позиция Y (px)'
+                                            : 'Смещение по вертикали Y (px)'}
                                         </span>
                                         <input
                                           type="number"
-                                          value={displayX}
-                                          onChange={(e) => {
-                                            const rawVal =
-                                              Number(e.target.value) || 0;
-                                            handleUpdatePageTransform(
-                                              activeTarget.page,
-                                              selectedBlockId,
-                                              {
-                                                ...selectedBlockTransform,
-                                                x: coverDefaults
-                                                  ? rawVal - coverDefaults.x
-                                                  : rawVal,
-                                              }
-                                            );
-                                          }}
-                                          className={flatInputClass}
-                                        />
-                                      </label>
-                                      <label className="block">
-                                        <span className="text-[10px] text-zinc-500">
-                                          {coverDefaults
-                                            ? 'Y (px)'
-                                            : 'Смещение Y (px)'}
-                                        </span>
-                                        <input
-                                          type="number"
+                                          min={coverDefaults ? 0 : -960}
+                                          max={1123}
                                           value={displayY}
                                           onChange={(e) => {
                                             const rawVal =
@@ -6805,28 +6947,45 @@ export function GroupEditorView({
                                         <input
                                           type="number"
                                           min={48}
-                                          max={760}
-                                          value={
-                                            selectedBlockTransform.width ??
-                                            defaultW
-                                          }
-                                          onChange={(e) =>
+                                          max={794}
+                                          value={currentW}
+                                          onChange={(e) => {
+                                            const nextW = Math.max(
+                                              48,
+                                              Math.min(
+                                                794,
+                                                Number(e.target.value) ||
+                                                  defaultW
+                                              )
+                                            );
+                                            const safeCurW = Math.max(
+                                              48,
+                                              currentW
+                                            );
+                                            const nextH = keepAspect
+                                              ? Math.max(
+                                                  28,
+                                                  Math.min(
+                                                    1123,
+                                                    Math.round(
+                                                      (nextW * currentH) /
+                                                        safeCurW
+                                                    )
+                                                  )
+                                                )
+                                              : selectedBlockTransform.height;
                                             handleUpdatePageTransform(
                                               activeTarget.page,
                                               selectedBlockId,
                                               {
                                                 ...selectedBlockTransform,
-                                                width: Math.max(
-                                                  48,
-                                                  Math.min(
-                                                    760,
-                                                    Number(e.target.value) ||
-                                                      defaultW
-                                                  )
-                                                ),
+                                                width: nextW,
+                                                ...(nextH !== undefined
+                                                  ? { height: nextH }
+                                                  : {}),
                                               }
-                                            )
-                                          }
+                                            );
+                                          }}
                                           className={flatInputClass}
                                         />
                                       </label>
@@ -6837,94 +6996,83 @@ export function GroupEditorView({
                                         <input
                                           type="number"
                                           min={28}
-                                          max={920}
-                                          value={
-                                            selectedBlockTransform.height ??
-                                            defaultH
-                                          }
-                                          onChange={(e) =>
+                                          max={1123}
+                                          value={currentH}
+                                          onChange={(e) => {
+                                            const nextH = Math.max(
+                                              28,
+                                              Math.min(
+                                                1123,
+                                                Number(e.target.value) ||
+                                                  defaultH
+                                              )
+                                            );
+                                            const safeCurH = Math.max(
+                                              28,
+                                              currentH
+                                            );
+                                            const nextW = keepAspect
+                                              ? Math.max(
+                                                  48,
+                                                  Math.min(
+                                                    794,
+                                                    Math.round(
+                                                      (nextH * currentW) /
+                                                        safeCurH
+                                                    )
+                                                  )
+                                                )
+                                              : selectedBlockTransform.width;
                                             handleUpdatePageTransform(
                                               activeTarget.page,
                                               selectedBlockId,
                                               {
                                                 ...selectedBlockTransform,
-                                                height: Math.max(
-                                                  28,
-                                                  Math.min(
-                                                    920,
-                                                    Number(e.target.value) ||
-                                                      defaultH
-                                                  )
-                                                ),
+                                                height: nextH,
+                                                ...(nextW !== undefined
+                                                  ? { width: nextW }
+                                                  : {}),
                                               }
-                                            )
-                                          }
+                                            );
+                                          }}
                                           className={flatInputClass}
                                         />
                                       </label>
 
-                                      <label className="block">
-                                        <span className="text-[10px] text-zinc-500">
-                                          Масштаб (
-                                          {selectedBlockTransform.scale.toFixed(
-                                            2
-                                          )}
-                                          x)
-                                        </span>
-                                        <input
-                                          type="range"
-                                          min={0.5}
-                                          max={1.8}
-                                          step={0.05}
-                                          value={selectedBlockTransform.scale}
-                                          onChange={(e) =>
-                                            handleUpdatePageTransform(
-                                              activeTarget.page,
-                                              selectedBlockId,
-                                              {
-                                                ...selectedBlockTransform,
-                                                scale: Number(e.target.value),
-                                              }
-                                            )
-                                          }
-                                          className="w-full accent-[#0D9488] mt-1.5"
-                                        />
-                                      </label>
-                                      <label className="block">
-                                        <span className="text-[10px] text-zinc-500">
-                                          Поворот (°)
-                                        </span>
-                                        <input
-                                          type="number"
-                                          min={-180}
-                                          max={180}
-                                          value={
-                                            selectedBlockTransform.rotation
-                                          }
-                                          onChange={(e) =>
-                                            handleUpdatePageTransform(
-                                              activeTarget.page,
-                                              selectedBlockId,
-                                              {
-                                                ...selectedBlockTransform,
-                                                rotation:
-                                                  Number(e.target.value) || 0,
-                                              }
-                                            )
-                                          }
-                                          className={flatInputClass}
-                                        />
-                                      </label>
+                                      {is2DBlock && (
+                                        <label className="block col-span-2">
+                                          <span className="text-[10px] text-zinc-500">
+                                            Поворот (°)
+                                          </span>
+                                          <input
+                                            type="number"
+                                            min={-180}
+                                            max={180}
+                                            value={
+                                              selectedBlockTransform.rotation
+                                            }
+                                            onChange={(e) =>
+                                              handleUpdatePageTransform(
+                                                activeTarget.page,
+                                                selectedBlockId,
+                                                {
+                                                  ...selectedBlockTransform,
+                                                  rotation:
+                                                    Number(e.target.value) || 0,
+                                                }
+                                              )
+                                            }
+                                            className={flatInputClass}
+                                          />
+                                        </label>
+                                      )}
                                     </div>
 
                                     <div className="flex items-center justify-between gap-2 pt-0.5">
                                       <label className="inline-flex items-center gap-1.5 text-[11px] text-zinc-700 cursor-pointer select-none">
                                         <input
                                           type="checkbox"
-                                          checked={
-                                            selectedBlockTransform.preserveAspectRatio !==
-                                            false
-                                          }
+                                          checked={keepAspect}
                                           onChange={(e) =>
                                             handleUpdatePageTransform(
                                               activeTarget.page,
@@ -7522,95 +7670,16 @@ export function GroupEditorView({
                                             },
                                           })
                                         }
-                                        className={flatInputClass}
-                                      />
-                                    </label>
+                                      className={flatInputClass}
+                                    />
+                                  </label>
                                   )}
-                                  <div className="grid grid-cols-3 gap-2">
-                                    <label className="block">
-                                      <span className="text-[10px] text-zinc-500">
-                                        Мишка масштаб
-                                      </span>
-                                      <input
-                                        type="number"
-                                        min={0.5}
-                                        max={1.8}
-                                        step={0.05}
-                                        value={activeDoc.page2.nextChapter.bearScale}
-                                        onChange={(e) =>
-                                          onChangeJournal({
-                                            ...activeDoc,
-                                            page2: {
-                                              ...activeDoc.page2,
-                                              nextChapter: {
-                                                ...activeDoc.page2.nextChapter,
-                                                bearScale: Math.max(
-                                                  0.5,
-                                                  Math.min(
-                                                    1.8,
-                                                    Number(e.target.value) || 1
-                                                  )
-                                                ),
-                                              },
-                                            },
-                                          })
-                                        }
-                                        className={flatInputClass}
-                                      />
-                                    </label>
-                                    <label className="block">
-                                      <span className="text-[10px] text-zinc-500">
-                                        Сдвиг X
-                                      </span>
-                                      <input
-                                        type="number"
-                                        value={activeDoc.page2.nextChapter.bearOffsetX}
-                                        onChange={(e) =>
-                                          onChangeJournal({
-                                            ...activeDoc,
-                                            page2: {
-                                              ...activeDoc.page2,
-                                              nextChapter: {
-                                                ...activeDoc.page2.nextChapter,
-                                                bearOffsetX:
-                                                  Number(e.target.value) || 0,
-                                              },
-                                            },
-                                          })
-                                        }
-                                        className={flatInputClass}
-                                      />
-                                    </label>
-                                    <label className="block">
-                                      <span className="text-[10px] text-zinc-500">
-                                        Сдвиг Y
-                                      </span>
-                                      <input
-                                        type="number"
-                                        value={activeDoc.page2.nextChapter.bearOffsetY}
-                                        onChange={(e) =>
-                                          onChangeJournal({
-                                            ...activeDoc,
-                                            page2: {
-                                              ...activeDoc.page2,
-                                              nextChapter: {
-                                                ...activeDoc.page2.nextChapter,
-                                                bearOffsetY:
-                                                  Number(e.target.value) || 0,
-                                              },
-                                            },
-                                          })
-                                        }
-                                        className={flatInputClass}
-                                      />
-                                    </label>
-                                  </div>
                                 </div>
                               )}
                             </div>
                           ) : (
                             <div className="bg-white border border-dashed border-zinc-300 rounded-lg p-3 text-[11px] text-zinc-500 text-center">
-                              Нажмите на любой объект на листе А4, чтобы перемещать, масштабировать, поворачивать или менять его порядок наложения.
+                              Нажмите на любой объект на листе А4, чтобы настроить его позицию, размеры или порядок наложения.
                             </div>
                           )}
 
@@ -8035,203 +8104,6 @@ export function GroupEditorView({
                                     </div>
                                   </label>
                                 </div>
-
-                                {/* Contextual Cover Object Geometry & Typography Card in Content Mode */}
-                                {activeTarget?.page === 1 &&
-                                  (activeTarget.block === 'coverTitle' ||
-                                    activeTarget.block === 'coverSubtitle' ||
-                                    activeTarget.block === 'coverInfo' ||
-                                    activeTarget.block === 'coverBubble') && (() => {
-                                    const blockId = activeTarget.block;
-                                    const defaults = COVER_OBJECT_DEFAULTS[blockId];
-                                    const curT: CanvasObjectTransform =
-                                      (activeDoc.page1.objectLayouts ?? {})[
-                                        blockId
-                                      ] ?? {
-                                        x: 0,
-                                        y: 0,
-                                        scale: 1,
-                                        rotation: 0,
-                                        zIndex: defaults.zIndex,
-                                      };
-                                    return (
-                                      <div className="pt-3 border-t border-zinc-100 space-y-2">
-                                        <div className="flex items-center justify-between gap-2">
-                                          <span className="text-[11px] font-bold text-zinc-800">
-                                            Позиция и размер: {getBlockLabel(activeTarget)}
-                                          </span>
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              setInspectorMode('design')
-                                            }
-                                            className="text-[10px] font-semibold text-[#0D9488] hover:underline"
-                                          >
-                                            В режим «Дизайн» →
-                                          </button>
-                                        </div>
-                                        <div className="grid grid-cols-3 gap-2">
-                                          <label className="block">
-                                            <span className="text-[10px] text-zinc-500">
-                                              X (px)
-                                            </span>
-                                            <input
-                                              type="number"
-                                              value={defaults.x + curT.x}
-                                              onChange={(e) =>
-                                                handleUpdatePageTransform(
-                                                  1,
-                                                  blockId,
-                                                  {
-                                                    ...curT,
-                                                    x:
-                                                      (Number(e.target.value) ||
-                                                        0) - defaults.x,
-                                                  }
-                                                )
-                                              }
-                                              className={flatInputClass}
-                                            />
-                                          </label>
-                                          <label className="block">
-                                            <span className="text-[10px] text-zinc-500">
-                                              Y (px)
-                                            </span>
-                                            <input
-                                              type="number"
-                                              value={defaults.y + curT.y}
-                                              onChange={(e) =>
-                                                handleUpdatePageTransform(
-                                                  1,
-                                                  blockId,
-                                                  {
-                                                    ...curT,
-                                                    y:
-                                                      (Number(e.target.value) ||
-                                                        0) - defaults.y,
-                                                  }
-                                                )
-                                              }
-                                              className={flatInputClass}
-                                            />
-                                          </label>
-                                          <label className="block">
-                                            <span className="text-[10px] text-zinc-500">
-                                              Поворот (°)
-                                            </span>
-                                            <input
-                                              type="number"
-                                              min={-180}
-                                              max={180}
-                                              value={curT.rotation}
-                                              onChange={(e) =>
-                                                handleUpdatePageTransform(
-                                                  1,
-                                                  blockId,
-                                                  {
-                                                    ...curT,
-                                                    rotation:
-                                                      Number(e.target.value) || 0,
-                                                  }
-                                                )
-                                              }
-                                              className={flatInputClass}
-                                            />
-                                          </label>
-                                          <label className="block">
-                                            <span className="text-[10px] text-zinc-500">
-                                              Ширина (px)
-                                            </span>
-                                            <input
-                                              type="number"
-                                              min={60}
-                                              max={760}
-                                              value={curT.width ?? defaults.width}
-                                              onChange={(e) =>
-                                                handleUpdatePageTransform(
-                                                  1,
-                                                  blockId,
-                                                  {
-                                                    ...curT,
-                                                    width: Math.max(
-                                                      60,
-                                                      Math.min(
-                                                        760,
-                                                        Number(e.target.value) ||
-                                                          defaults.width
-                                                      )
-                                                    ),
-                                                  }
-                                                )
-                                              }
-                                              className={flatInputClass}
-                                            />
-                                          </label>
-                                          <label className="block">
-                                            <span className="text-[10px] text-zinc-500">
-                                              Высота (px)
-                                            </span>
-                                            <input
-                                              type="number"
-                                              min={24}
-                                              max={400}
-                                              value={
-                                                curT.height ?? defaults.height
-                                              }
-                                              onChange={(e) =>
-                                                handleUpdatePageTransform(
-                                                  1,
-                                                  blockId,
-                                                  {
-                                                    ...curT,
-                                                    height: Math.max(
-                                                      24,
-                                                      Math.min(
-                                                        400,
-                                                        Number(e.target.value) ||
-                                                          defaults.height
-                                                      )
-                                                    ),
-                                                  }
-                                                )
-                                              }
-                                              className={flatInputClass}
-                                            />
-                                          </label>
-                                          <label className="block">
-                                            <span className="text-[10px] text-zinc-500">
-                                              Масштаб
-                                            </span>
-                                            <input
-                                              type="number"
-                                              min={0.5}
-                                              max={1.8}
-                                              step={0.05}
-                                              value={curT.scale}
-                                              onChange={(e) =>
-                                                handleUpdatePageTransform(
-                                                  1,
-                                                  blockId,
-                                                  {
-                                                    ...curT,
-                                                    scale: Math.max(
-                                                      0.5,
-                                                      Math.min(
-                                                        1.8,
-                                                        Number(e.target.value) ||
-                                                          1
-                                                      )
-                                                    ),
-                                                  }
-                                                )
-                                              }
-                                              className={flatInputClass}
-                                            />
-                                          </label>
-                                        </div>
-                                      </div>
-                                    );
-                                  })()}
 
                                 {/* Cover Titles Quick Editor in Step 1 */}
                                 <div className="pt-3 border-t border-zinc-100 space-y-2.5">

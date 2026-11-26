@@ -224,6 +224,7 @@ export function PrideSection({
           <div className="relative z-10 flex-1 flex items-center justify-center min-h-[110px] py-[2px]">
             <DraggableDesignWrapper
               id="prideBear"
+              movementMode="both"
               transform={bearTransform}
               defaultZIndex={20}
               designMode={designMode}
