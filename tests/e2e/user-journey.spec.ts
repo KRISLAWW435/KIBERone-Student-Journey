@@ -493,8 +493,18 @@ test.describe('Полный пользовательский путь KIBERone S
     const gridCheckbox = rightSidebar.getByLabel('Сетка выравнивания на А4');
     await gridCheckbox.check();
 
-    // Нажимаем кнопку пакетного применения дизайна ко всей группе
+    // Нажимаем кнопку пакетного применения дизайна ко всей группе и подтверждаем в модальном окне
     await applyAllBtn.click();
+    const bulkConfirmDialog = page.getByRole('dialog', {
+      name: 'Подтверждение применения дизайна',
+    });
+    await expect(bulkConfirmDialog).toBeVisible();
+    await expect(bulkConfirmDialog).toContainText(
+      /Вы собираетесь применить изменения к 1 резидентам\. Продолжить\?/
+    );
+    await bulkConfirmDialog
+      .getByRole('button', { name: 'Применить', exact: true })
+      .click();
     await expect(
       page.getByText(/Дизайн применён к 1 журналу \(вся группа\)/)
     ).toBeVisible();

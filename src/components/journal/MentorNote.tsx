@@ -8,6 +8,7 @@ import { InlineEditableText } from './DecorLayer';
 
 interface MentorNoteProps {
   config: Page2Config;
+  hasExplicitHeight?: boolean;
   activeTarget?: EditorSectionTarget;
   activeTextField?: ActiveTextFieldTarget;
   onSelectTarget?: (target: EditorSectionTarget) => void;
@@ -19,6 +20,7 @@ interface MentorNoteProps {
 
 export function MentorNote({
   config,
+  hasExplicitHeight = false,
   activeTarget,
   activeTextField,
   onSelectTarget,
@@ -34,16 +36,16 @@ export function MentorNote({
 
   return (
     <section
-      style={{ width: '345px' }}
-      className="shrink-0 flex flex-col h-full"
+      data-card-label="Слово наставника"
+      className="shrink-0 w-full min-w-0 box-border flex flex-col min-h-full"
     >
       <h3 className="font-journal-display font-black text-[17.5px] leading-[21px] tracking-tight uppercase text-[#111827] mb-[10px] shrink-0">
         СЛОВО НАСТАВНИКА
       </h3>
 
       <div
-        style={{ width: '345px', minHeight: '280px' }}
-        className="relative flex-1 min-h-0 flex flex-col pt-[8px]"
+        style={{ minHeight: hasExplicitHeight ? undefined : '280px' }}
+        className="relative flex-1 w-full min-w-0 box-border flex flex-col pt-[8px]"
       >
         {/* Stacked striped notebook backing sheet */}
         <div
@@ -66,7 +68,7 @@ export function MentorNote({
           style={{
             transform: `rotate(${mentorNote.tiltDeg ?? -0.8}deg)`,
           }}
-          className={`relative flex-1 min-h-0 mentor-notebook-paper rounded-md border-[1.7px] border-[#18181B] shadow-[0_8px_18px_rgba(17,24,39,0.12)] px-[20px] pt-[10px] pb-[12px] flex flex-col justify-between ${
+          className={`relative flex-1 w-full min-w-0 box-border overflow-visible mentor-notebook-paper rounded-md border-[1.7px] border-[#18181B] shadow-[0_8px_18px_rgba(17,24,39,0.12)] px-[20px] pt-[10px] pb-[12px] flex flex-col justify-between ${
             onSelectTarget ? 'editable-block' : ''
           } ${isActive ? 'editable-block-active' : ''}`}
         >
@@ -99,7 +101,7 @@ export function MentorNote({
           </div>
 
           {/* Handwritten Letter Body aligned to 28px notebook lines */}
-          <div className="pl-[6px] flex-1 min-h-0 min-w-0 overflow-hidden">
+          <div className="pl-[6px] flex-1 w-full min-w-0 box-border overflow-visible">
             <div className="font-bold text-[14px] leading-[28px] text-[#111827]">
               Слово наставника:
             </div>
@@ -111,7 +113,7 @@ export function MentorNote({
                 fontSize: `${resolvedFontSize}px`,
                 lineHeight: '28px',
               }}
-              className="text-[#111827] min-w-0"
+              className="text-[#111827] w-full min-w-0 box-border"
             >
               {(mentorNote.greeting || onSelectTextField) && (
                 <InlineEditableText

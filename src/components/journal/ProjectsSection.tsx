@@ -12,6 +12,7 @@ interface ProjectsSectionProps {
   projects: ProjectItem[];
   layouts?: Record<string, CanvasObjectTransform>;
   compact?: boolean;
+  density?: 'spacious' | 'compact' | 'ultra';
   stretchHeight?: boolean;
   designMode?: boolean;
   scaleFactor?: number;
@@ -49,6 +50,7 @@ export function ProjectsSection({
   projects,
   layouts = {},
   compact = false,
+  density,
   stretchHeight = false,
   designMode = false,
   scaleFactor = 1,
@@ -64,12 +66,16 @@ export function ProjectsSection({
 }: ProjectsSectionProps) {
   const visibleProjects = projects.filter((p) => !p.hidden);
   const itemsToRender =
-    visibleProjects.length > 0 ? visibleProjects.slice(0, 4) : STARTER_FALLBACK_PROJECTS;
+    visibleProjects.length > 0
+      ? visibleProjects.slice(0, 6)
+      : STARTER_FALLBACK_PROJECTS;
   const isFallback = visibleProjects.length === 0;
   const count = itemsToRender.length;
+  const resolvedDensity = density ?? (compact ? 'compact' : 'spacious');
+  const isUltra = resolvedDensity === 'ultra';
   const layoutVariant: 'single' | 'double' | 'multi' =
-    count === 1 ? 'single' : count === 2 ? 'double' : 'multi';
-  const canStretch = stretchHeight && count <= 2 && !compact;
+    count === 1 ? 'single' : count === 2 || count === 4 ? 'double' : 'multi';
+  const canStretch = stretchHeight && count <= 2 && resolvedDensity === 'spacious';
 
   return (
     <DraggableDesignWrapper
@@ -98,30 +104,37 @@ export function ProjectsSection({
       }`}
     >
       <section
+        data-card-label="Блок «Мои результаты»"
         style={{ width: '714px' }}
         className={`overflow-visible ${
           canStretch ? 'flex-1 min-h-0 flex flex-col' : 'block'
         }`}
       >
-        <h2 className="font-journal-display font-black text-[17.5px] leading-[21px] tracking-tight uppercase text-[#111827] mb-[12px] shrink-0">
+        <h2
+          className={`font-journal-display font-black ${
+            isUltra
+              ? 'text-[15px] leading-[17px] mb-[6px]'
+              : 'text-[17.5px] leading-[21px] mb-[12px]'
+          } tracking-tight uppercase text-[#111827] shrink-0`}
+        >
           МОИ РЕЗУЛЬТАТЫ
         </h2>
         <div
           data-projects-count={count}
           style={{ width: '714px' }}
-          className={`grid items-stretch auto-rows-fr gap-[14px] ${
-            canStretch ? 'flex-1 min-h-0' : ''
-          } ${
+          className={`grid items-stretch auto-rows-fr ${
+            isUltra ? 'gap-[8px]' : count >= 4 ? 'gap-[10px]' : 'gap-[14px]'
+          } ${canStretch ? 'flex-1 min-h-0' : ''} ${
             count === 1
               ? 'grid-cols-1'
-              : count === 2
+              : count === 2 || count === 4
               ? 'grid-cols-2'
-              : count === 4
-              ? 'grid-cols-4'
+              : count === 5
+              ? 'grid-cols-6'
               : 'grid-cols-3'
           }`}
         >
-          {itemsToRender.map((proj) => (
+          {itemsToRender.map((proj, idx) => (
             <DraggableDesignWrapper
               key={proj.id}
               id={`project-${proj.id}`}
@@ -152,11 +165,18 @@ export function ProjectsSection({
               onSnapLinesChange={onSnapLinesChange}
               onInteractionStart={onInteractionStart}
               onInteractionEnd={onInteractionEnd}
-              className="h-full"
+              className={`h-full min-w-0 ${
+                count === 5
+                  ? idx < 3
+                    ? 'col-span-2'
+                    : 'col-span-3'
+                  : ''
+              }`}
             >
               <ProjectCard
                 project={proj}
-                compact={compact}
+                compact={resolvedDensity !== 'spacious'}
+                density={resolvedDensity}
                 layoutVariant={layoutVariant}
                 stretchHeight={canStretch}
                 isActive={

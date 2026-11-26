@@ -26,10 +26,11 @@ export function StrengthCard({
 }: StrengthCardProps) {
   return (
     <div
+      data-card-label={`Сильная сторона: ${strength.title}`}
       style={{ backgroundColor: strength.bgColor || '#CFEFF2' }}
       className={`rounded-2xl ${
         compact ? 'px-[12px] py-[9px]' : 'px-[14px] py-[12px]'
-      } w-full min-w-0 overflow-hidden flex flex-col items-center justify-center text-center border-[1.6px] border-[#18181B] shadow-[0_7px_16px_rgba(17,24,39,0.12),0_2px_4px_rgba(17,24,39,0.08)] self-stretch h-full`}
+      } w-full min-w-0 box-border overflow-visible flex flex-col items-center justify-center text-center border-[1.6px] border-[#18181B] shadow-[0_7px_16px_rgba(17,24,39,0.12),0_2px_4px_rgba(17,24,39,0.08)] self-stretch min-h-full`}
     >
       <div
         style={{
@@ -60,7 +61,7 @@ export function StrengthCard({
         as="div"
         className={`font-journal-display font-extrabold ${
           compact ? 'text-[12.5px]' : 'text-[14px]'
-        } leading-[1.2] text-[#111827] block w-full min-w-0 break-words whitespace-pre-wrap [overflow-wrap:anywhere]`}
+        } leading-[1.2] text-[#111827] block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]`}
       />
       {(strength.example || onSelectTextField) && (
         <InlineEditableText

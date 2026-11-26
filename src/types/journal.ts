@@ -168,6 +168,7 @@ export interface CanvasObjectTransform {
   zIndex: number;
   width?: number;
   height?: number;
+  preserveAspectRatio?: boolean;
   hidden?: boolean;
   locked?: boolean;
 }
@@ -203,6 +204,7 @@ export interface DecorElement {
   y: number;
   width: number;
   height: number;
+  preserveAspectRatio?: boolean;
   rotation: number;
   color: string;
   opacity: number;
@@ -329,12 +331,15 @@ export interface NextTopicItem {
   iconKey: NextTopicIconKey;
 }
 
+export type Page2SectionKey = 'strengths' | 'pride' | 'mentorNote' | 'nextChapter';
+
 export interface Page2Config {
   background?: PageBackgroundConfig;
   decorElements?: DecorElement[];
   decorSeeded?: boolean;
   tapeSeeded?: boolean;
   objectLayouts?: Record<string, CanvasObjectTransform>;
+  sectionOrder?: Page2SectionKey[];
   headerTitle: string;
   headerTealColor: string;
   headerYellowColor: string;
@@ -591,3 +596,11 @@ export type ActiveTextFieldTarget =
   | { page: 2; field: 'decorText'; itemId: string }
   | null;
 
+export interface BulkDesignUndoState {
+  id: string;
+  scope: DesignScope;
+  affectedCount: number;
+  sourceJournalId: string;
+  previousJournals: JournalDocument[];
+  createdAt: string;
+}

@@ -6,6 +6,7 @@ import { ProjectFallbackGraphic } from './JournalArtwork';
 interface ProjectCardProps {
   project: ProjectItem;
   compact?: boolean;
+  density?: 'spacious' | 'compact' | 'ultra';
   layoutVariant?: 'single' | 'double' | 'multi';
   stretchHeight?: boolean;
   isActive?: boolean;
@@ -20,6 +21,7 @@ interface ProjectCardProps {
 export function ProjectCard({
   project,
   compact = false,
+  density,
   layoutVariant = 'multi',
   stretchHeight = false,
   isActive = false,
@@ -27,6 +29,10 @@ export function ProjectCard({
   onSelectTextField,
   onClick,
 }: ProjectCardProps) {
+  const resolvedDensity = density ?? (compact ? 'compact' : 'spacious');
+  const isUltra = resolvedDensity === 'ultra';
+  const isCompact = resolvedDensity === 'compact' || isUltra;
+
   const imgScale = project.imageScale ?? 1;
   const imgX = project.imagePosX ?? 0;
   const imgY = project.imagePosY ?? 0;
@@ -40,30 +46,41 @@ export function ProjectCard({
 
   const fixedImageHeight =
     layoutVariant === 'single'
-      ? compact
+      ? isUltra
+        ? '108px'
+        : isCompact
         ? '132px'
         : '192px'
       : layoutVariant === 'double'
-      ? compact
-        ? '122px'
-        : '184px'
-      : compact
+      ? isUltra
+        ? '86px'
+        : isCompact
+        ? '116px'
+        : '174px'
+      : isUltra
+      ? '62px'
+      : isCompact
       ? '72px'
       : '108px';
 
   return (
     <div
+      data-card-label={`Проект: ${displayTitle}`}
       onClick={(e) => {
         if (!onClick) return;
         e.stopPropagation();
         onClick();
       }}
-      className={`bg-white border-[1.6px] border-[#18181B] rounded-xl overflow-hidden shadow-[0_7px_16px_rgba(17,24,39,0.11),0_2px_4px_rgba(17,24,39,0.07)] flex flex-col self-stretch h-full ${
+      className={`w-full h-full min-w-0 box-border bg-white border-[1.6px] border-[#18181B] rounded-xl overflow-hidden shadow-[0_7px_16px_rgba(17,24,39,0.11),0_2px_4px_rgba(17,24,39,0.07)] flex flex-col self-stretch min-h-full ${
         onClick ? 'editable-block' : ''
       } ${isActive ? 'editable-block-active' : ''}`}
     >
       {/* Slim Browser Window Header Bar */}
-      <div className="h-[16px] bg-[#F1F5F9] border-b border-[#18181B]/15 px-[10px] flex items-center justify-between shrink-0">
+      <div
+        className={`${
+          isUltra ? 'h-[13px] px-[8px]' : 'h-[16px] px-[10px]'
+        } bg-[#F1F5F9] border-b border-[#18181B]/15 flex items-center justify-between shrink-0`}
+      >
         <div className="flex items-center gap-[5px]">
           <span className="w-[6px] h-[6px] rounded-full bg-[#FB7185] border border-black/15" />
           <span className="w-[6px] h-[6px] rounded-full bg-[#FBBF24] border border-black/15" />
@@ -80,7 +97,7 @@ export function ProjectCard({
         className={`self-stretch overflow-hidden border-b border-[#18181B]/12 ${
           imgFit === 'contain' ? 'bg-zinc-50 p-1' : 'bg-zinc-100'
         } ${
-          stretchHeight ? 'flex-1 min-h-[150px] max-h-[250px]' : 'shrink-0'
+          stretchHeight ? 'flex-1 min-h-[130px] max-h-[250px]' : 'shrink-0'
         }`}
       >
         {project.imageUrl ? (
@@ -101,10 +118,14 @@ export function ProjectCard({
         )}
       </div>
 
-      {/* Print-Legible Project Title & Caption */}
+      {/* Print-Legible Project Title, Caption & Description */}
       <div
-        className={`${
-          compact ? 'px-[8px] py-[6px]' : 'px-[10px] py-[8px]'
+        className={`w-full min-w-0 box-border ${
+          isUltra
+            ? 'px-[6px] py-[4px]'
+            : isCompact
+            ? 'px-[8px] py-[6px]'
+            : 'px-[10px] py-[8px]'
         } text-center ${
           stretchHeight ? 'shrink-0' : 'flex-1 flex flex-col justify-center'
         }`}
@@ -129,12 +150,14 @@ export function ProjectCard({
           }
           as="div"
           className={`font-journal-display font-extrabold ${
-            compact
-              ? 'text-[12.5px]'
+            isUltra
+              ? 'text-[11px] leading-[1.12]'
+              : isCompact
+              ? 'text-[12.5px] leading-[1.2]'
               : layoutVariant === 'single'
-              ? 'text-[15.5px]'
-              : 'text-[14px]'
-          } leading-[1.2] text-[#111827] block`}
+              ? 'text-[15.5px] leading-[1.2]'
+              : 'text-[14px] leading-[1.2]'
+          } text-[#111827] block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]`}
         />
         <InlineEditableText
           value={project.caption || project.description}
@@ -157,9 +180,43 @@ export function ProjectCard({
           }
           as="div"
           className={`font-journal-body ${
-            layoutVariant === 'single' ? 'text-[11px]' : 'text-[10px]'
-          } leading-[1.4] text-[#3F3F46] mt-[4px] block`}
+            isUltra
+              ? 'text-[8.5px] leading-[1.22] mt-[2px]'
+              : layoutVariant === 'single'
+              ? 'text-[11px] leading-[1.4] mt-[4px]'
+              : 'text-[10px] leading-[1.4] mt-[4px]'
+          } text-[#3F3F46] block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]`}
         />
+        {project.caption?.trim() &&
+          project.description?.trim() &&
+          project.description.trim() !== project.caption.trim() && (
+            <InlineEditableText
+              value={project.description}
+              onSelectText={
+                onSelectTextField
+                  ? () =>
+                      onSelectTextField({
+                        page: 1,
+                        field: 'projectDescription',
+                        itemId: project.id,
+                      })
+                  : undefined
+              }
+              isSelected={
+                activeTextField?.page === 1 &&
+                activeTextField.field === 'projectDescription' &&
+                activeTextField.itemId === project.id
+              }
+              as="p"
+              className={`font-journal-body m-0 ${
+                isUltra
+                  ? 'text-[8px] leading-[1.2] mt-[1.5px]'
+                  : layoutVariant === 'single'
+                  ? 'text-[10.5px] leading-[1.35] mt-[3px]'
+                  : 'text-[9.5px] leading-[1.35] mt-[3px]'
+              } text-[#52525B] block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]`}
+            />
+          )}
       </div>
     </div>
   );

@@ -18,6 +18,7 @@ import {
   JournalProgressLevel,
   LibraryModule,
   ModuleItem,
+  Page2SectionKey,
   ResidentRecord,
   SkillDefinition,
   StudentGroup,
@@ -25,6 +26,42 @@ import {
 } from '../types/journal';
 
 export const STRENGTH_EXAMPLE_MAX_CHARS = 180;
+export const MAX_PAGE1_MODULES = 6;
+export const MAX_PAGE1_PROJECTS = 6;
+export const PAGE1_CARD_LIMIT_MESSAGE =
+  'Достигнуто максимальное количество карточек для этой страницы. Удалите один из элементов или выберите наиболее значимые результаты';
+
+export const DEFAULT_PAGE2_SECTION_ORDER: Page2SectionKey[] = [
+  'strengths',
+  'pride',
+  'mentorNote',
+  'nextChapter',
+];
+
+export function normalizePage2SectionOrder(
+  order?: Page2SectionKey[]
+): Page2SectionKey[] {
+  if (!Array.isArray(order) || order.length === 0) {
+    return [...DEFAULT_PAGE2_SECTION_ORDER];
+  }
+  const valid = order.filter((k): k is Page2SectionKey =>
+    DEFAULT_PAGE2_SECTION_ORDER.includes(k)
+  );
+  const seen = new Set<Page2SectionKey>();
+  const deduped: Page2SectionKey[] = [];
+  for (const k of valid) {
+    if (!seen.has(k)) {
+      seen.add(k);
+      deduped.push(k);
+    }
+  }
+  for (const k of DEFAULT_PAGE2_SECTION_ORDER) {
+    if (!seen.has(k)) {
+      deduped.push(k);
+    }
+  }
+  return deduped;
+}
 
 export function computeActiveModuleSuggestedSkillIds(
   modules: ModuleItem[],
@@ -641,11 +678,75 @@ function cloneDecorElements(elements?: DecorElement[]): DecorElement[] {
   return elements.map((el) => ({ ...el }));
 }
 
+function findMatchingSourceModule(
+  targetMod: ModuleItem,
+  sourceModules: ModuleItem[]
+): ModuleItem | undefined {
+  if (targetMod.libraryModuleId) {
+    const byLib = sourceModules.find(
+      (sm) =>
+        sm.libraryModuleId && sm.libraryModuleId === targetMod.libraryModuleId
+    );
+    if (byLib) return byLib;
+  }
+  const targetKey = (targetMod.officialTitle || targetMod.title || '')
+    .trim()
+    .toLowerCase();
+  if (!targetKey) return undefined;
+  return sourceModules.find(
+    (sm) =>
+      (sm.officialTitle || sm.title || '').trim().toLowerCase() === targetKey
+  );
+}
+
 export function applyDesignSnapshotToJournal(
   target: JournalDocument,
   source: JournalDocument
 ): JournalDocument {
   const now = new Date().toISOString();
+
+  // Preserve target's personal project transforms; copy fixed page1 layouts & remap matched module transforms
+  const sourceLayouts1 = cloneObjectLayouts(source.page1.objectLayouts);
+  const nextPage1Layouts: Record<string, CanvasObjectTransform> = {};
+  Object.entries(sourceLayouts1).forEach(([key, val]) => {
+    if (!key.startsWith('project-') && !key.startsWith('module-')) {
+      nextPage1Layouts[key] = val;
+    }
+  });
+  Object.entries(target.page1.objectLayouts ?? {}).forEach(([key, val]) => {
+    if (key.startsWith('project-') && val) {
+      nextPage1Layouts[key] = { ...val };
+    }
+  });
+
+  // Transfer ONLY common illustration & display settings for matching module cards
+  const updatedModules = target.page1.modules.map((targetMod) => {
+    const matchedSource = findMatchingSourceModule(
+      targetMod,
+      source.page1.modules
+    );
+    if (!matchedSource) {
+      return targetMod;
+    }
+    const sourceModTransform =
+      sourceLayouts1[`module-${matchedSource.id}`];
+    if (sourceModTransform) {
+      nextPage1Layouts[`module-${targetMod.id}`] = { ...sourceModTransform };
+    }
+    return {
+      ...targetMod,
+      visualMode: matchedSource.visualMode,
+      customImageUrl: matchedSource.customImageUrl,
+      imageMediaId: matchedSource.imageMediaId,
+      imageScale: matchedSource.imageScale,
+      imagePosX: matchedSource.imagePosX,
+      imagePosY: matchedSource.imagePosY,
+      cardBgColor: matchedSource.cardBgColor,
+      layoutVariant: matchedSource.layoutVariant,
+      size: matchedSource.size,
+    };
+  });
+
   const updated: JournalDocument = {
     ...target,
     updatedAt: now,
@@ -656,7 +757,7 @@ export function applyDesignSnapshotToJournal(
         : target.page1.background,
       decorElements: cloneDecorElements(source.page1.decorElements),
       decorSeeded: source.page1.decorSeeded ?? target.page1.decorSeeded,
-      objectLayouts: cloneObjectLayouts(source.page1.objectLayouts),
+      objectLayouts: nextPage1Layouts,
       coverTitle: source.page1.coverTitle,
       coverTitleSize: source.page1.coverTitleSize,
       coverTitleColor: source.page1.coverTitleColor,
@@ -679,6 +780,7 @@ export function applyDesignSnapshotToJournal(
       coverBubbleBgColor: source.page1.coverBubbleBgColor,
       logoUrl: source.page1.logoUrl,
       showModules: source.page1.showModules,
+      modules: updatedModules,
       showSkills: source.page1.showSkills,
       showProjects: source.page1.showProjects,
       footerWebsite: source.page1.footerWebsite,
@@ -692,6 +794,9 @@ export function applyDesignSnapshotToJournal(
       decorSeeded: source.page2.decorSeeded ?? target.page2.decorSeeded,
       tapeSeeded: source.page2.tapeSeeded ?? target.page2.tapeSeeded,
       objectLayouts: cloneObjectLayouts(source.page2.objectLayouts),
+      sectionOrder: source.page2.sectionOrder
+        ? [...source.page2.sectionOrder]
+        : target.page2.sectionOrder,
       headerTitle: source.page2.headerTitle,
       headerTealColor: source.page2.headerTealColor,
       headerYellowColor: source.page2.headerYellowColor,
@@ -732,3 +837,87 @@ export function applyDesignSnapshotToJournal(
   updated.completionProgress = computeJournalProgress(updated);
   return updated;
 }
+
+export function getJournalDesignSignature(doc: JournalDocument): string {
+  return JSON.stringify({
+    p1: {
+      background: doc.page1.background ?? null,
+      decorElements: doc.page1.decorElements ?? [],
+      objectLayouts: doc.page1.objectLayouts ?? {},
+      coverTitleSize: doc.page1.coverTitleSize ?? null,
+      coverTitleColor: doc.page1.coverTitleColor ?? null,
+      coverSubtitleSize: doc.page1.coverSubtitleSize ?? null,
+      coverSubtitleColor: doc.page1.coverSubtitleColor ?? null,
+      coverBgStart: doc.page1.coverBgStart,
+      coverBgEnd: doc.page1.coverBgEnd,
+      showAge: doc.page1.showAge,
+      showBranch: doc.page1.showBranch,
+      showCoverBear: doc.page1.showCoverBear,
+      bearImageUrl: doc.page1.bearImageUrl,
+      bearScale: doc.page1.bearScale,
+      bearOffsetX: doc.page1.bearOffsetX,
+      bearOffsetY: doc.page1.bearOffsetY,
+      bearCropTop: doc.page1.bearCropTop,
+      coverBubbleFontSize: doc.page1.coverBubbleFontSize ?? null,
+      coverBubbleTextColor: doc.page1.coverBubbleTextColor ?? null,
+      coverBubbleBgColor: doc.page1.coverBubbleBgColor ?? null,
+      logoUrl: doc.page1.logoUrl,
+      showModules: doc.page1.showModules,
+      showSkills: doc.page1.showSkills,
+      showProjects: doc.page1.showProjects,
+      moduleVisuals: doc.page1.modules.map((m) => ({
+        id: m.id,
+        visualMode: m.visualMode,
+        customImageUrl: m.customImageUrl ?? null,
+        imageMediaId: m.imageMediaId ?? null,
+        imageScale: m.imageScale ?? 1,
+        imagePosX: m.imagePosX ?? 0,
+        imagePosY: m.imagePosY ?? 0,
+        cardBgColor: m.cardBgColor ?? null,
+        layoutVariant: m.layoutVariant ?? 'classic',
+        size: m.size ?? 'normal',
+      })),
+    },
+    p2: {
+      background: doc.page2.background ?? null,
+      decorElements: doc.page2.decorElements ?? [],
+      objectLayouts: doc.page2.objectLayouts ?? {},
+      sectionOrder: doc.page2.sectionOrder ?? null,
+      headerTealColor: doc.page2.headerTealColor,
+      headerYellowColor: doc.page2.headerYellowColor,
+      showHeaderDecor: doc.page2.showHeaderDecor,
+      showStrengths: doc.page2.showStrengths,
+      strengthsColumns: doc.page2.strengthsColumns,
+      showPride: doc.page2.showPride,
+      prideBgColor: doc.page2.prideBgColor,
+      prideBearUrl: doc.page2.prideBearUrl,
+      prideBearScale: doc.page2.prideBearScale,
+      prideBearOffsetX: doc.page2.prideBearOffsetX,
+      prideBearOffsetY: doc.page2.prideBearOffsetY,
+      showPrideConfetti: doc.page2.showPrideConfetti,
+      showMentorNote: doc.page2.showMentorNote,
+      mentorNoteStyle: {
+        fontStyle: doc.page2.mentorNote.fontStyle,
+        fontSize: doc.page2.mentorNote.fontSize,
+        tiltDeg: doc.page2.mentorNote.tiltDeg,
+        mentorPhotoUrl: doc.page2.mentorNote.mentorPhotoUrl ?? null,
+      },
+      showNextChapter: doc.page2.showNextChapter,
+      nextChapterStyle: {
+        bgColor: doc.page2.nextChapter.bgColor,
+        bearUrl: doc.page2.nextChapter.bearUrl,
+        bearScale: doc.page2.nextChapter.bearScale,
+        bearOffsetX: doc.page2.nextChapter.bearOffsetX,
+        bearOffsetY: doc.page2.nextChapter.bearOffsetY,
+      },
+    },
+  });
+}
+
+export function hasJournalDesignChanged(
+  prev: JournalDocument,
+  next: JournalDocument
+): boolean {
+  return getJournalDesignSignature(prev) !== getJournalDesignSignature(next);
+}
+

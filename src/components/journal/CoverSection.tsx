@@ -188,12 +188,24 @@ export function CoverSection({
           top: `${COVER_OBJECT_DEFAULTS.logo.y}px`,
         }}
       >
-        <div className="inline-flex bg-white rounded-lg p-[7px] shadow-[3px_3px_0_#18181B] border-[1.6px] border-[#18181B]">
+        <div
+          className={`${
+            logoTransform?.width !== undefined ||
+            logoTransform?.height !== undefined
+              ? 'w-full h-full flex items-center justify-center'
+              : 'inline-flex'
+          } bg-white rounded-lg p-[7px] shadow-[3px_3px_0_#18181B] border-[1.6px] border-[#18181B]`}
+        >
           <img
             src={config.logoUrl}
             alt="KIBERone"
             referrerPolicy="no-referrer"
-            className="h-[42px] w-auto object-contain block select-none"
+            className={`${
+              logoTransform?.width !== undefined ||
+              logoTransform?.height !== undefined
+                ? 'w-full h-full'
+                : 'h-[42px] w-auto'
+            } object-contain block select-none`}
           />
         </div>
       </DraggableDesignWrapper>
@@ -223,6 +235,7 @@ export function CoverSection({
           position: 'absolute',
           left: `${COVER_OBJECT_DEFAULTS.coverTitle.x}px`,
           top: `${COVER_OBJECT_DEFAULTS.coverTitle.y}px`,
+          width: '472px',
           maxWidth: '472px',
         }}
       >
@@ -248,7 +261,7 @@ export function CoverSection({
             activeTextField.field === 'coverTitle'
           }
           as="h1"
-          className="font-journal-display font-black leading-[0.96] tracking-tight block"
+          className="font-journal-display font-black leading-[0.96] tracking-tight block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]"
           style={{
             fontSize: `${resolvedTitleSize}px`,
             color: resolvedTitleColor,
@@ -283,6 +296,7 @@ export function CoverSection({
           position: 'absolute',
           left: `${COVER_OBJECT_DEFAULTS.coverSubtitle.x}px`,
           top: `${COVER_OBJECT_DEFAULTS.coverSubtitle.y}px`,
+          width: '472px',
           maxWidth: '472px',
         }}
       >
@@ -308,7 +322,7 @@ export function CoverSection({
             activeTextField.field === 'coverSubtitle'
           }
           as="div"
-          className="font-journal-display font-extrabold leading-tight block"
+          className="font-journal-display font-extrabold leading-tight block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]"
           style={{
             fontSize: `${resolvedSubtitleSize}px`,
             color: resolvedSubtitleColor,
@@ -345,16 +359,17 @@ export function CoverSection({
         }}
       >
         <div
-          className={`font-journal-body h-full w-full bg-white/95 border-[1.6px] border-[#18181B] rounded-xl px-[12px] py-[7px] shadow-[3px_3px_0_#18181B] text-[12.5px] leading-[1.45] font-medium text-[#111827] flex flex-col justify-center ${
+          data-card-label="Карточка ученика (обложка)"
+          className={`font-journal-body h-full w-full min-w-0 box-border bg-white/95 border-[1.6px] border-[#18181B] rounded-xl px-[12px] py-[7px] shadow-[3px_3px_0_#18181B] text-[12.5px] leading-[1.45] font-medium text-[#111827] flex flex-col justify-center ${
             !designMode && isInfoActive ? 'ring-2 ring-[#0D9488] ring-offset-1' : ''
           }`}
         >
-          <div>
+          <div className="w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]">
             <span className="font-bold">{resident.fullName}</span>
             {config.showAge && resident.age ? ` (${resident.age})` : ''}
             {resident.period ? ` | Период: ${resident.period}` : ''}
           </div>
-          <div>
+          <div className="w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]">
             Наставник: <span className="font-semibold">{resident.mentorName}</span>
           </div>
         </div>
@@ -392,6 +407,7 @@ export function CoverSection({
           }}
         >
           <div
+            data-card-label="Речевое облачко медведя"
             style={{ backgroundColor: resolvedBubbleBgColor }}
             className={`relative h-full w-full min-h-[72px] border-[2.2px] border-[#18181B] rounded-2xl px-[18px] py-[12px] shadow-[3.5px_3.5px_0_#18181B] transition-shadow flex items-center justify-center ${
               !designMode && (isBubbleTextSelected || isBubbleActive)
@@ -419,7 +435,7 @@ export function CoverSection({
               }
               onBeginEdit={onInteractionStart}
               onEndEdit={onInteractionEnd}
-              className="m-0 w-full font-journal-display font-extrabold leading-[1.2] text-center break-words"
+              className="m-0 w-full min-w-0 box-border font-journal-display font-extrabold leading-[1.2] text-center whitespace-pre-wrap [overflow-wrap:anywhere]"
               style={{
                 fontSize: `${resolvedBubbleFontSize}px`,
                 color: resolvedBubbleTextColor,
@@ -480,7 +496,7 @@ export function CoverSection({
           }}
           className="flex items-end justify-center overflow-visible"
         >
-          <div className="w-[246px] h-[296px] flex items-end justify-center overflow-visible">
+          <div className="w-full h-full p-[4px] flex items-end justify-center overflow-visible">
             <BearCharacter
               src={config.bearImageUrl}
               alt="Медведь KIBERone"
@@ -488,7 +504,7 @@ export function CoverSection({
               offsetX={config.bearOffsetX}
               offsetY={config.bearOffsetY}
               cropTop={false}
-              className="w-[238px] h-[284px]"
+              className="w-full h-full"
             />
           </div>
         </DraggableDesignWrapper>

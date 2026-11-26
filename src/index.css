@@ -35,6 +35,12 @@
   flex-shrink: 0;
 }
 
+.a4-canvas *,
+.a4-canvas *::before,
+.a4-canvas *::after {
+  box-sizing: border-box;
+}
+
 /* Spiral notebook lined paper texture for MentorNote (28px grid synced to 18px top padding) */
 .mentor-notebook-paper {
   background-color: #ffffff;

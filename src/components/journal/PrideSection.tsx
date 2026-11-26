@@ -18,6 +18,7 @@ interface PrideSectionProps {
   ageCategory: AgeCategory;
   designMode?: boolean;
   scaleFactor?: number;
+  hasExplicitHeight?: boolean;
   bearTransform?: CanvasObjectTransform;
   activeTarget?: EditorSectionTarget;
   activeTextField?: ActiveTextFieldTarget;
@@ -35,6 +36,7 @@ export function PrideSection({
   ageCategory,
   designMode = false,
   scaleFactor = 1,
+  hasExplicitHeight = false,
   bearTransform,
   activeTarget,
   activeTextField,
@@ -67,8 +69,8 @@ export function PrideSection({
 
   return (
     <section
-      style={{ width: '345px' }}
-      className="shrink-0 flex flex-col h-full"
+      data-card-label="Мой момент гордости"
+      className="shrink-0 w-full min-w-0 box-border flex flex-col min-h-full"
     >
       <h3 className="font-journal-display font-black text-[17.5px] leading-[21px] tracking-tight uppercase text-[#111827] mb-[10px] shrink-0">
         МОЙ МОМЕНТ ГОРДОСТИ
@@ -81,10 +83,9 @@ export function PrideSection({
           onSelectTarget({ page: 2, block: 'pride' });
         }}
         style={{
-          width: '345px',
-          minHeight: '280px',
+          minHeight: hasExplicitHeight ? undefined : '280px',
         }}
-        className={`relative flex-1 min-h-0 overflow-visible flex flex-col ${
+        className={`relative flex-1 w-full min-w-0 box-border overflow-visible flex flex-col ${
           onSelectTarget ? 'editable-block' : ''
         } ${isPrideActive ? 'editable-block-active' : ''}`}
       >
@@ -101,12 +102,12 @@ export function PrideSection({
         {/* Neat Rounded Main Yellow Card */}
         <div
           style={{ backgroundColor: resolvedBgColor }}
-          className="relative z-10 flex-1 rounded-2xl border-[1.8px] border-[#18181B] px-[18px] pt-[14px] pb-[14px] flex flex-col items-stretch justify-between gap-[6px] overflow-hidden shadow-[0_6px_14px_rgba(17,24,39,0.12)]"
+          className="relative z-10 flex-1 w-full min-w-0 box-border rounded-2xl border-[1.8px] border-[#18181B] px-[18px] pt-[14px] pb-[14px] flex flex-col items-stretch justify-between gap-[6px] overflow-visible shadow-[0_6px_14px_rgba(17,24,39,0.12)]"
         >
           {/* Subtle Sunburst Rays + Confetti Clipped Inside Rounded Card */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+            className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-[14px]"
           >
             <svg
               viewBox="0 0 345 376"
@@ -202,7 +203,7 @@ export function PrideSection({
           </div>
 
           {/* 1. Top Expressive Heading (Normal Flex Flow) */}
-          <div className="relative z-10 text-center shrink-0 px-[6px]">
+          <div className="relative z-10 text-center shrink-0 px-[6px] w-full min-w-0 box-border">
             <InlineEditableText
               value={config.prideTitle}
               onSelectText={
@@ -215,12 +216,12 @@ export function PrideSection({
                 activeTextField.field === 'prideTitle'
               }
               as="h4"
-              className="font-journal-display font-black text-[18px] leading-[1.12] tracking-tight uppercase text-[#111827] block"
+              className="font-journal-display font-black text-[18px] leading-[1.12] tracking-tight uppercase text-[#111827] block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]"
             />
           </div>
 
           {/* 2. Enlarged Trophy Bear Strictly Above Text Plaque */}
-          <div className="relative z-10 flex-1 flex items-center justify-center min-h-[140px] py-[2px]">
+          <div className="relative z-10 flex-1 flex items-center justify-center min-h-[110px] py-[2px]">
             <DraggableDesignWrapper
               id="prideBear"
               transform={bearTransform}
@@ -244,10 +245,7 @@ export function PrideSection({
               style={{ width: '232px', height: '214px' }}
               className="mx-auto shrink-0 flex items-center justify-center"
             >
-              <div
-                style={{ width: '232px', height: '214px' }}
-                className="flex items-center justify-center"
-              >
+              <div className="w-full h-full p-[2px] flex items-center justify-center">
                 <BearCharacter
                   src={config.prideBearUrl}
                   alt="Медведь KIBERone с наградой"
@@ -255,7 +253,7 @@ export function PrideSection({
                   offsetX={config.prideBearOffsetX}
                   offsetY={config.prideBearOffsetY}
                   cropTop={false}
-                  className="w-[224px] h-[210px]"
+                  className="w-full h-full"
                 />
               </div>
             </DraggableDesignWrapper>
@@ -267,10 +265,10 @@ export function PrideSection({
               boxShadow:
                 '-3px 4px 0 0 rgba(24, 24, 27, 0.14), 0 6px 14px rgba(17, 24, 39, 0.12)',
             }}
-            className="relative z-20 shrink-0 bg-white border-[1.7px] border-[#18181B] rounded-xl px-[13px] py-[8px]"
+            className="relative z-20 shrink-0 w-full min-w-0 box-border bg-white border-[1.7px] border-[#18181B] rounded-xl px-[13px] py-[8px]"
           >
             <div
-              className="font-journal-body text-[11.5px] leading-[19px] font-semibold text-[#111827]"
+              className="font-journal-body text-[11.5px] leading-[19px] font-semibold text-[#111827] w-full min-w-0 box-border"
               style={{
                 backgroundImage:
                   'linear-gradient(to bottom, transparent 18px, rgba(148, 163, 184, 0.34) 18px, rgba(148, 163, 184, 0.34) 19px)',
@@ -290,7 +288,7 @@ export function PrideSection({
                   activeTextField.field === 'prideText'
                 }
                 as="p"
-                className="m-0 min-h-[54px] block"
+                className="m-0 min-h-[54px] block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]"
               />
             </div>
           </div>

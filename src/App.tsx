@@ -45,6 +45,7 @@ import {
 } from './db/storage';
 import {
   Branch,
+  BulkDesignUndoState,
   DesignScope,
   GroupCommonCurriculum,
   GroupCurriculumTemplate,
@@ -97,6 +98,8 @@ export default function App() {
   }>({ tab: 'common', journalId: null, studentId: null });
   const [createGroupSignal, setCreateGroupSignal] = useState(0);
   const [saveState, setSaveState] = useState<'saved' | 'saving'>('saved');
+  const [bulkDesignUndo, setBulkDesignUndo] =
+    useState<BulkDesignUndoState | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -257,24 +260,64 @@ export default function App() {
         return currentJournals.filter((j) => j.id !== sourceDoc.id);
       }
       const targetGroupId = sourceDoc.groupId || activeGroupId;
+      if (!targetGroupId) return [];
       const groupResIds = new Set(
         residentsRef.current
           .filter((r) => r.groupId === targetGroupId)
           .map((r) => r.id)
       );
-      return currentJournals.filter(
-        (j) =>
-          j.id !== sourceDoc.id &&
-          (j.groupId === targetGroupId ||
-            (Boolean(j.residentId) && groupResIds.has(j.residentId!)))
-      );
+      return currentJournals.filter((j) => {
+        if (j.id === sourceDoc.id) return false;
+        if (j.groupId) {
+          return j.groupId === targetGroupId;
+        }
+        return Boolean(j.residentId) && groupResIds.has(j.residentId!);
+      });
     },
     [activeGroupId]
   );
 
-  // Autosave journal edits to IndexedDB with live progress computation and optional design scope replication
+  const flushPendingSaves = useCallback(async () => {
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const batch = Array.from(pendingSaveMapRef.current.values());
+    if (batch.length === 0) return;
+    pendingSaveMapRef.current.clear();
+    setSaveState('saving');
+    try {
+      await Promise.all(batch.map((doc) => saveJournal(doc)));
+      setSaveState('saved');
+    } catch {
+      showToast('Не удалось сохранить изменения в IndexedDB.');
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      void flushPendingSaves();
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        void flushPendingSaves();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [flushPendingSaves]);
+
+  // Autosave journal edits to IndexedDB immediately on discrete actions (short debounce only during active pointer drag)
   const handleUpdateJournal = useCallback(
-    (updated: JournalDocument, designScope: DesignScope = 'student') => {
+    (
+      updated: JournalDocument,
+      designScope: DesignScope = 'student',
+      options?: { debounce?: boolean }
+    ) => {
       const progress = computeJournalProgress(updated);
       const stamped: JournalDocument = {
         ...updated,
@@ -289,12 +332,12 @@ export default function App() {
         replicatedMap.set(target.id, applyDesignSnapshotToJournal(target, stamped));
       });
 
-      setJournals((prev) =>
-        prev.map((j) => {
-          if (j.id === stamped.id) return stamped;
-          return replicatedMap.get(j.id) ?? j;
-        })
-      );
+      const nextList = journalsRef.current.map((j) => {
+        if (j.id === stamped.id) return stamped;
+        return replicatedMap.get(j.id) ?? j;
+      });
+      journalsRef.current = nextList;
+      setJournals(nextList);
 
       pendingSaveMapRef.current.set(stamped.id, stamped);
       replicatedMap.forEach((doc, id) => {
@@ -304,18 +347,18 @@ export default function App() {
       setSaveState('saving');
       if (saveTimerRef.current) {
         window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
       }
-      saveTimerRef.current = window.setTimeout(() => {
-        const batch = Array.from(pendingSaveMapRef.current.values());
-        pendingSaveMapRef.current.clear();
-        Promise.all(batch.map((doc) => saveJournal(doc)))
-          .then(() => setSaveState('saved'))
-          .catch(() =>
-            showToast('Не удалось сохранить изменения в IndexedDB.')
-          );
-      }, 320);
+
+      if (options?.debounce) {
+        saveTimerRef.current = window.setTimeout(() => {
+          void flushPendingSaves();
+        }, 180);
+      } else {
+        void flushPendingSaves();
+      }
     },
-    [collectScopeTargets, showToast]
+    [collectScopeTargets, flushPendingSaves]
   );
 
   const handleApplyDesignToScope = useCallback(
@@ -324,6 +367,7 @@ export default function App() {
       scope: DesignScope,
       options?: { silent?: boolean }
     ): Promise<number> => {
+      await flushPendingSaves();
       const stamped: JournalDocument = {
         ...sourceDoc,
         completionProgress: computeJournalProgress(sourceDoc),
@@ -332,27 +376,35 @@ export default function App() {
 
       if (scope === 'student') {
         await saveJournal(stamped);
-        setJournals((prev) =>
-          prev.map((j) => (j.id === stamped.id ? stamped : j))
+        const nextList = journalsRef.current.map((j) =>
+          j.id === stamped.id ? stamped : j
         );
+        journalsRef.current = nextList;
+        setJournals(nextList);
+        pendingSaveMapRef.current.delete(stamped.id);
+        setSaveState('saved');
         if (!options?.silent) {
-          showToast('Выберите «Вся группа» или «Все группы» для применения дизайна ко всем.');
+          showToast('Дизайн сохранён для текущего резидента.');
         }
         return 0;
       }
 
       const targets = collectScopeTargets(stamped, scope);
+      const previousSnapshot: JournalDocument[] = targets.map(
+        (t) => JSON.parse(JSON.stringify(t)) as JournalDocument
+      );
+
       const replicatedMap = new Map<string, JournalDocument>();
       targets.forEach((target) => {
         replicatedMap.set(target.id, applyDesignSnapshotToJournal(target, stamped));
       });
 
-      setJournals((prev) =>
-        prev.map((j) => {
-          if (j.id === stamped.id) return stamped;
-          return replicatedMap.get(j.id) ?? j;
-        })
-      );
+      const nextList = journalsRef.current.map((j) => {
+        if (j.id === stamped.id) return stamped;
+        return replicatedMap.get(j.id) ?? j;
+      });
+      journalsRef.current = nextList;
+      setJournals(nextList);
 
       const docsToPersist = [stamped, ...Array.from(replicatedMap.values())];
       setSaveState('saving');
@@ -360,6 +412,16 @@ export default function App() {
         await Promise.all(docsToPersist.map((doc) => saveJournal(doc)));
         docsToPersist.forEach((doc) => pendingSaveMapRef.current.delete(doc.id));
         setSaveState('saved');
+        if (previousSnapshot.length > 0) {
+          setBulkDesignUndo({
+            id: `bulk-${Date.now()}`,
+            scope,
+            affectedCount: previousSnapshot.length,
+            sourceJournalId: stamped.id,
+            previousJournals: previousSnapshot,
+            createdAt: new Date().toISOString(),
+          });
+        }
       } catch {
         showToast('Не удалось сохранить дизайн для всех журналов.');
       }
@@ -377,8 +439,36 @@ export default function App() {
       }
       return targets.length;
     },
-    [collectScopeTargets, showToast]
+    [collectScopeTargets, flushPendingSaves, showToast]
   );
+
+  const handleUndoBulkDesignApply = useCallback(async () => {
+    if (!bulkDesignUndo || bulkDesignUndo.previousJournals.length === 0) {
+      return;
+    }
+    const restoreMap = new Map(
+      bulkDesignUndo.previousJournals.map((j) => [j.id, j])
+    );
+    const nextList = journalsRef.current.map(
+      (j) => restoreMap.get(j.id) ?? j
+    );
+    journalsRef.current = nextList;
+    setJournals(nextList);
+    setSaveState('saving');
+    try {
+      await Promise.all(
+        bulkDesignUndo.previousJournals.map((j) => saveJournal(j))
+      );
+      setSaveState('saved');
+      const count = bulkDesignUndo.previousJournals.length;
+      setBulkDesignUndo(null);
+      showToast(
+        `Массовое применение дизайна отменено (восстановлено журналов: ${count})`
+      );
+    } catch {
+      showToast('Не удалось отменить массовое применение дизайна.');
+    }
+  }, [bulkDesignUndo, showToast]);
 
   const handleUpdateJournalStatus = useCallback(
     async (journalId: string, status: JournalStatus) => {
@@ -692,10 +782,7 @@ export default function App() {
     updatedGroup: StudentGroup,
     commonData: GroupCommonCurriculum
   ) => {
-    if (saveTimerRef.current) {
-      window.clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = null;
-    }
+    await flushPendingSaves();
 
     const stampedGroup: StudentGroup = {
       ...updatedGroup,
@@ -1178,15 +1265,27 @@ export default function App() {
             initialTab={editorEntryTarget.tab}
             initialJournalId={editorEntryTarget.journalId}
             initialStudentId={editorEntryTarget.studentId ?? null}
-            onSelectActiveJournal={(journalId) => setActiveId(journalId)}
+            bulkDesignUndo={bulkDesignUndo}
+            onUndoBulkDesignApply={handleUndoBulkDesignApply}
+            onSaveTemplate={handleSaveTemplate}
+            onFlushSaves={flushPendingSaves}
+            onNotifyToast={showToast}
+            onSelectActiveJournal={(journalId) => {
+              void flushPendingSaves();
+              setActiveId(journalId);
+            }}
             onChangeJournal={handleUpdateJournal}
             onApplyDesignToScope={handleApplyDesignToScope}
             onSaveGroupAndApplyCommon={handleSaveGroupAndApplyCommon}
             onQuickAddStudent={handleQuickAddStudent}
             onUpdateStudent={handleUpdateStudent}
             onDeleteStudent={handleDeleteStudent}
-            onBackHome={() => setRoute('home')}
+            onBackHome={() => {
+              void flushPendingSaves();
+              setRoute('home');
+            }}
             onOpenPreview={(journalId) => {
+              void flushPendingSaves();
               setActiveId(journalId);
               setEditorEntryTarget({ tab: 'individual', journalId });
               setRoute('preview');

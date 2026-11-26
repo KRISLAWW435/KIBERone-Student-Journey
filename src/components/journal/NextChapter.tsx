@@ -101,8 +101,8 @@ export function NextChapter({
 
   return (
     <section
-      style={{ width: '794px', height: '266px' }}
-      className="relative shrink-0 overflow-visible"
+      data-card-label="Что интересного впереди?"
+      className="relative w-full h-full min-h-[266px] shrink-0 overflow-visible"
     >
       <div
         onClick={(e) => {
@@ -110,8 +110,7 @@ export function NextChapter({
           e.stopPropagation();
           onSelectTarget({ page: 2, block: 'nextChapter' });
         }}
-        style={{ width: '794px', height: '266px' }}
-        className={`relative overflow-visible ${
+        className={`relative w-full h-full min-h-[266px] overflow-visible ${
           onSelectTarget ? 'editable-block' : ''
         } ${isActive ? 'editable-block-active' : ''}`}
       >
@@ -119,9 +118,8 @@ export function NextChapter({
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <svg
             aria-hidden="true"
-            width="794"
-            height="266"
             viewBox="0 0 794 266"
+            preserveAspectRatio="none"
             fill="none"
             className="w-full h-full"
           >
@@ -366,10 +364,10 @@ export function NextChapter({
           </svg>
         </div>
 
-        {/* Expressive Heading Directly Over Open Background */}
+        {/* Expressive Heading & Intro Directly Over Open Background */}
         <div
-          style={{ left: '40px', top: '2px', maxWidth: '340px' }}
-          className="absolute z-10"
+          style={{ left: '40px', top: '2px', width: '340px', maxWidth: '340px' }}
+          className="absolute z-10 min-w-0 box-border"
         >
           <InlineEditableText
             value={nextChapter.title || 'ЧТО ИНТЕРЕСНОГО ВПЕРЕДИ?'}
@@ -387,8 +385,13 @@ export function NextChapter({
               activeTextField.field === 'nextChapterTitle'
             }
             as="h3"
-            className="font-journal-display font-black text-[19px] leading-[1.08] tracking-tight uppercase text-[#111827] block"
+            className="font-journal-display font-black text-[19px] leading-[1.08] tracking-tight uppercase text-[#111827] block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]"
           />
+          {nextChapter.description?.trim() && (
+            <p className="font-journal-body m-0 mt-[3px] text-[10.5px] leading-[1.28] font-semibold text-[#27272A] w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]">
+              {nextChapter.description}
+            </p>
+          )}
         </div>
 
         {/* Vertically Aligned Road Stations: [Module Icon] -> [High-Contrast Label] -> [Large Pin] */}
@@ -416,7 +419,7 @@ export function NextChapter({
               </div>
 
               {/* 2. High-Contrast Readable Label Pill Strictly Between Icon and Pin */}
-              <div className="bg-white/95 border-[1.6px] border-[#18181B] rounded-lg px-[8px] py-[3px] shadow-[2px_2px_0_#18181B] max-w-[136px]">
+              <div className="bg-white/95 border-[1.6px] border-[#18181B] rounded-lg px-[8px] py-[3px] shadow-[2px_2px_0_#18181B] w-full max-w-[136px] min-w-0 box-border">
                 <InlineEditableText
                   value={topic.title}
                   onSelectText={
@@ -435,7 +438,7 @@ export function NextChapter({
                     activeTextField.itemId === topic.id
                   }
                   as="span"
-                  className="font-journal-display text-[12px] font-extrabold leading-[1.15] text-[#111827] block"
+                  className="font-journal-display text-[12px] font-extrabold leading-[1.15] text-[#111827] block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]"
                 />
               </div>
 
@@ -477,10 +480,7 @@ export function NextChapter({
           }}
           className="flex items-end justify-center"
         >
-          <div
-            style={{ width: '218px', height: '266px' }}
-            className="flex items-end justify-center"
-          >
+          <div className="w-full h-full p-[2px] flex items-end justify-center">
             <BearCharacter
               src={
                 !nextChapter.bearUrl ||
@@ -496,7 +496,7 @@ export function NextChapter({
               offsetX={nextChapter.bearOffsetX}
               offsetY={nextChapter.bearOffsetY}
               cropTop={false}
-              className="w-[214px] h-[262px]"
+              className="w-full h-full"
             />
           </div>
         </DraggableDesignWrapper>

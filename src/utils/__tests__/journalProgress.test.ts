@@ -21,6 +21,7 @@ import {
   formatGroupPeriod,
   formatRuDate,
   getPrideTemplatesForModules,
+  hasJournalDesignChanged,
   STRENGTH_EXAMPLE_MAX_CHARS,
   UNIVERSAL_PRIDE_TEMPLATES,
 } from '../journalProgress';
@@ -429,5 +430,157 @@ describe('applyDesignSnapshotToJournal (Глобальное применени�
     expect(updated.page2.mentorNote.greeting).toBe('Маша, ты молодец!');
     expect(updated.page2.mentorNote.body).toBe('Личное письмо специально для Маши.');
   });
+
+  it('переносит визуальные настройки совпадающих модулей и их transform, не затрагивая личные проекты и тексты', () => {
+    const group = createBaseGroup({
+      commonData: {
+        paletteId: DESIGN_PALETTES[0].id,
+        modules: [
+          {
+            id: 'mod-common-1',
+            libraryModuleId: 'm_python_ai',
+            title: 'Python + AI',
+            subtitle: 'База Python',
+            description: 'Исходное описание модуля',
+            cardBgColor: '#FFF8B8',
+            size: 'normal',
+            order: 1,
+            visualMode: 'image',
+            customImageUrl: '/assets/modules/m_python_ai.png',
+            imageScale: 1,
+            imagePosX: 0,
+            imagePosY: 0,
+          },
+        ],
+        skills: [],
+        nextChapterTitle: 'Дальше',
+        nextChapterDescription: 'Описание',
+        nextChapterTopics: [],
+      },
+    });
+
+    const source = createStudentJournal(
+      createBaseResident({ id: 'r1', fullName: 'Иван', journalId: 'j-src' }),
+      group,
+      TEST_BRANCH
+    );
+    const target = createStudentJournal(
+      createBaseResident({ id: 'r2', fullName: 'Анна', journalId: 'j-tgt' }),
+      group,
+      TEST_BRANCH
+    );
+
+    const srcModId = source.page1.modules[0].id;
+    const tgtModId = target.page1.modules[0].id;
+    source.page1.modules[0] = {
+      ...source.page1.modules[0],
+      customImageUrl: '/assets/modules/m_figma.png',
+      imageScale: 1.4,
+      imagePosX: 8,
+      imagePosY: -6,
+      cardBgColor: '#DBEAFE',
+      layoutVariant: 'badge-top',
+      size: 'compact',
+      description: 'Текст, отредактированный только у источника',
+    };
+    source.page1.objectLayouts = {
+      ...source.page1.objectLayouts,
+      [`module-${srcModId}`]: { x: 12, y: -8, scale: 1.05, rotation: 2, zIndex: 20 },
+      [`project-${source.page1.projects[0].id}`]: { x: 99, y: 99, scale: 1.5, rotation: 15, zIndex: 20 },
+    };
+
+    target.page1.modules[0] = {
+      ...target.page1.modules[0],
+      description: 'Персональное описание Анны',
+    };
+    target.page1.objectLayouts = {
+      ...target.page1.objectLayouts,
+      [`project-${target.page1.projects[0].id}`]: { x: -10, y: 5, scale: 0.95, rotation: -2, zIndex: 18 },
+    };
+
+    const updated = applyDesignSnapshotToJournal(target, source);
+
+    expect(updated.page1.modules[0].customImageUrl).toBe('/assets/modules/m_figma.png');
+    expect(updated.page1.modules[0].imageScale).toBe(1.4);
+    expect(updated.page1.modules[0].imagePosX).toBe(8);
+    expect(updated.page1.modules[0].imagePosY).toBe(-6);
+    expect(updated.page1.modules[0].cardBgColor).toBe('#DBEAFE');
+    expect(updated.page1.modules[0].layoutVariant).toBe('badge-top');
+    expect(updated.page1.modules[0].size).toBe('compact');
+    expect(updated.page1.modules[0].description).toBe('Персональное описание Анны');
+
+    expect(updated.page1.objectLayouts?.[`module-${tgtModId}`]).toEqual({
+      x: 12,
+      y: -8,
+      scale: 1.05,
+      rotation: 2,
+      zIndex: 20,
+    });
+    expect(
+      updated.page1.objectLayouts?.[`project-${target.page1.projects[0].id}`]
+    ).toEqual({ x: -10, y: 5, scale: 0.95, rotation: -2, zIndex: 18 });
+  });
 });
+
+describe('hasJournalDesignChanged', () => {
+  it('отличает визуальные изменения дизайна от редактирования личных текстов ученика', () => {
+    const group = createBaseGroup();
+    const res = createBaseResident({ id: 'r-sig', fullName: 'Олег', journalId: 'j-sig' });
+    const base = createStudentJournal(res, group, TEST_BRANCH);
+
+    const textEdited: JournalDocument = {
+      ...base,
+      resident: { ...base.resident, fullName: 'Олег Сидоров' },
+      page1: {
+        ...base.page1,
+        projects: base.page1.projects.map((p, i) =>
+          i === 0 ? { ...p, title: 'Новое название проекта' } : p
+        ),
+      },
+      page2: {
+        ...base.page2,
+        prideText: 'Обновлённый момент гордости',
+        mentorNote: { ...base.page2.mentorNote, body: 'Новый текст письма' },
+      },
+    };
+    expect(hasJournalDesignChanged(base, textEdited)).toBe(false);
+
+    const stickerEdited: JournalDocument = {
+      ...base,
+      page1: {
+        ...base.page1,
+        decorElements: [
+          ...(base.page1.decorElements ?? []),
+          {
+            id: 'dec-sig-1',
+            kind: 'sticker',
+            stickerText: 'WOW',
+            x: 100,
+            y: 100,
+            width: 80,
+            height: 80,
+            rotation: 0,
+            color: '#F59E0B',
+            opacity: 1,
+            zIndex: 20,
+          },
+        ],
+      },
+    };
+    expect(hasJournalDesignChanged(base, stickerEdited)).toBe(true);
+
+    const layoutEdited: JournalDocument = {
+      ...base,
+      page2: {
+        ...base.page2,
+        objectLayouts: {
+          ...(base.page2.objectLayouts ?? {}),
+          nextBear: { x: 10, y: 15, scale: 1.2, rotation: 0, zIndex: 25 },
+        },
+      },
+    };
+    expect(hasJournalDesignChanged(base, layoutEdited)).toBe(true);
+  });
+});
+
 

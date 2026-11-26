@@ -41,12 +41,19 @@ export function runPreflightChecks(doc: JournalDocument): PreflightResult {
     });
   }
 
-  if (doc.page1.showProjects && visibleProjects.length > 4) {
+  if (doc.page1.showProjects && visibleProjects.length > 6) {
     issues.push({
       id: 'overflow-projects',
       severity: 'error',
       category: 'overflow',
-      message: `Проектов больше 4 (${visibleProjects.length}). В макет стр. 1 войдут первые 4 карточки.`,
+      message: `Слишком много активных проектов (${visibleProjects.length}). На стр. 1 помещается до 6 карточек.`,
+    });
+  } else if (doc.page1.showProjects && visibleProjects.length > 4) {
+    issues.push({
+      id: 'dense-projects',
+      severity: 'warning',
+      category: 'overflow',
+      message: `На стр. 1 размещено ${visibleProjects.length} проектов — включена компактная сетка.`,
     });
   }
 
@@ -98,7 +105,19 @@ export function runPreflightChecks(doc: JournalDocument): PreflightResult {
       id: 'text-module-desc',
       severity: 'warning',
       category: 'text',
-      message: `У ${longModules.length} модулей длинное описание (>130 симв.) — в карточке отображаются первые 3 строки.`,
+      message: `У ${longModules.length} модулей длинное описание (>130 симв.) — текст перенесён полностью, проверьте высоту блоков на стр. 1.`,
+    });
+  }
+
+  const longProjects = visibleProjects.filter(
+    (p) => ((p.caption?.length || 0) + (p.description?.length || 0)) > 180
+  );
+  if (longProjects.length > 0) {
+    issues.push({
+      id: 'text-project-desc',
+      severity: 'warning',
+      category: 'text',
+      message: `У ${longProjects.length} проектов длинное описание — проверьте, чтобы карточки помещались на стр. 1.`,
     });
   }
 

@@ -69,6 +69,7 @@ import {
   ActiveTextFieldTarget,
   AgeCategory,
   Branch,
+  BulkDesignUndoState,
   CanvasObjectTransform,
   DecorElement,
   DesignScope,
@@ -76,6 +77,7 @@ import {
   GroupCommonCurriculum,
   GroupCurriculumTemplate,
   JournalDocument,
+  JournalTemplate,
   LibraryModule,
   MediaAsset,
   MediaCategory,
@@ -101,6 +103,7 @@ import {
   getPrideTemplatesForModules,
   getStudentStatusLabel,
   getStudentStatusMeta,
+  hasJournalDesignChanged,
   normalizeStudentStatus,
   STRENGTH_EXAMPLE_MAX_CHARS,
 } from '../../utils/journalProgress';
@@ -192,8 +195,17 @@ interface GroupEditorViewProps {
   initialTab?: EditorTab;
   initialJournalId?: string | null;
   initialStudentId?: string | null;
+  bulkDesignUndo?: BulkDesignUndoState | null;
+  onUndoBulkDesignApply?: () => Promise<void>;
+  onSaveTemplate?: (tpl: JournalTemplate) => Promise<void>;
+  onFlushSaves?: () => Promise<void>;
+  onNotifyToast?: (msg: string) => void;
   onSelectActiveJournal: (journalId: string) => void;
-  onChangeJournal: (updated: JournalDocument, designScope?: DesignScope) => void;
+  onChangeJournal: (
+    updated: JournalDocument,
+    designScope?: DesignScope,
+    options?: { debounce?: boolean }
+  ) => void;
   onApplyDesignToScope?: (
     sourceDoc: JournalDocument,
     scope: DesignScope,
@@ -252,6 +264,11 @@ export function GroupEditorView({
   initialTab = 'common',
   initialJournalId = null,
   initialStudentId = null,
+  bulkDesignUndo = null,
+  onUndoBulkDesignApply,
+  onSaveTemplate,
+  onFlushSaves,
+  onNotifyToast,
   onSelectActiveJournal,
   onChangeJournal: onCommitJournalToStore,
   onApplyDesignToScope,
@@ -290,6 +307,21 @@ export function GroupEditorView({
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>('content');
   const [designScope, setDesignScope] = useState<DesignScope>('student');
   const [applyingDesignScope, setApplyingDesignScope] = useState(false);
+  const [designNotification, setDesignNotification] = useState<{
+    docId: string;
+    studentName: string;
+  } | null>(null);
+  const [pendingBulkConfirm, setPendingBulkConfirm] = useState<{
+    sourceDoc: JournalDocument;
+    scope: Exclude<DesignScope, 'student'>;
+    count: number;
+  } | null>(null);
+  const [saveTemplateModal, setSaveTemplateModal] = useState<{
+    sourceDoc: JournalDocument;
+    name: string;
+  } | null>(null);
+  const [undoingBulk, setUndoingBulk] = useState(false);
+  const [a4OverflowPages, setA4OverflowPages] = useState<Array<1 | 2>>([]);
   const [activeTarget, setActiveTarget] = useState<EditorSectionTarget>(null);
   const [activeTextField, setActiveTextField] =
     useState<ActiveTextFieldTarget>(null);
@@ -566,12 +598,10 @@ export function GroupEditorView({
   const onChangeJournal = useCallback(
     (updated: JournalDocument) => {
       const current = activeDocRef.current;
-      const effectiveScope: DesignScope =
-        inspectorMode === 'design' ? designScope : 'student';
 
       if (gestureActiveRef.current) {
         activeDocRef.current = updated;
-        onCommitJournalToStore(updated, 'student');
+        onCommitJournalToStore(updated, 'student', { debounce: true });
         return;
       }
 
@@ -591,12 +621,19 @@ export function GroupEditorView({
         bucket.future = [];
         lastHistoryPushRef.current = { docId: current.id, ts: now };
         setHistoryVersion((v) => v + 1);
+
+        if (hasJournalDesignChanged(current, updated)) {
+          setDesignNotification({
+            docId: updated.id,
+            studentName: updated.resident.fullName,
+          });
+        }
       }
 
       activeDocRef.current = updated;
-      onCommitJournalToStore(updated, effectiveScope);
+      onCommitJournalToStore(updated, 'student');
     },
-    [onCommitJournalToStore, inspectorMode, designScope]
+    [onCommitJournalToStore]
   );
 
   const handleBeginCanvasGesture = useCallback(() => {
@@ -618,11 +655,17 @@ export function GroupEditorView({
       lastHistoryPushRef.current = { docId: '', ts: 0 };
       setHistoryVersion((v) => v + 1);
 
-      if (inspectorMode === 'design' && designScope !== 'student' && onApplyDesignToScope) {
-        void onApplyDesignToScope(current, designScope, { silent: true });
+      onCommitJournalToStore(current, 'student');
+      if (hasJournalDesignChanged(startSnap, current)) {
+        setDesignNotification({
+          docId: current.id,
+          studentName: current.resident.fullName,
+        });
       }
+    } else if (onFlushSaves) {
+      void onFlushSaves();
     }
-  }, [inspectorMode, designScope, onApplyDesignToScope]);
+  }, [onCommitJournalToStore, onFlushSaves]);
 
   const currentHistory = activeDoc
     ? historyRef.current[activeDoc.id]
@@ -641,8 +684,8 @@ export function GroupEditorView({
     lastHistoryPushRef.current = { docId: '', ts: 0 };
     setHistoryVersion((v) => v + 1);
     activeDocRef.current = previous;
-    onCommitJournalToStore(previous, inspectorMode === 'design' ? designScope : 'student');
-  }, [onCommitJournalToStore, inspectorMode, designScope]);
+    onCommitJournalToStore(previous, 'student');
+  }, [onCommitJournalToStore]);
 
   const handleRedo = useCallback(() => {
     const current = activeDocRef.current;
@@ -655,8 +698,8 @@ export function GroupEditorView({
     lastHistoryPushRef.current = { docId: '', ts: 0 };
     setHistoryVersion((v) => v + 1);
     activeDocRef.current = next;
-    onCommitJournalToStore(next, inspectorMode === 'design' ? designScope : 'student');
-  }, [onCommitJournalToStore, inspectorMode, designScope]);
+    onCommitJournalToStore(next, 'student');
+  }, [onCommitJournalToStore]);
 
   // Keyboard shortcuts Ctrl+Z / Cmd+Z (Undo) and Ctrl+Y / Cmd+Shift+Z (Redo)
   useEffect(() => {
@@ -1128,6 +1171,108 @@ export function GroupEditorView({
   };
 
   const branch = branches.find((b) => b.id === group.branchId);
+
+  const getScopeTargetCount = useCallback(
+    (sourceDoc: JournalDocument, scope: DesignScope): number => {
+      if (scope === 'student') return 0;
+      if (scope === 'all') {
+        return journals.filter((j) => j.id !== sourceDoc.id).length;
+      }
+      const targetGroupId = sourceDoc.groupId || group.id;
+      const groupResIds = new Set(
+        residents.filter((r) => r.groupId === targetGroupId).map((r) => r.id)
+      );
+      return journals.filter((j) => {
+        if (j.id === sourceDoc.id) return false;
+        if (j.groupId) return j.groupId === targetGroupId;
+        return Boolean(j.residentId) && groupResIds.has(j.residentId!);
+      }).length;
+    },
+    [journals, residents, group.id]
+  );
+
+  const requestBulkDesignApply = useCallback(
+    (sourceDoc: JournalDocument, scope: Exclude<DesignScope, 'student'>) => {
+      const count = getScopeTargetCount(sourceDoc, scope);
+      if (count === 0) {
+        onNotifyToast?.('В выбранной области нет других журналов для обновления.');
+        return;
+      }
+      setPendingBulkConfirm({ sourceDoc, scope, count });
+    },
+    [getScopeTargetCount, onNotifyToast]
+  );
+
+  const bannerSourceDoc = useMemo(() => {
+    if (!designNotification) return activeDoc;
+    return journals.find((j) => j.id === designNotification.docId) ?? activeDoc;
+  }, [designNotification, journals, activeDoc]);
+
+  useEffect(() => {
+    if (editorTab !== 'individual' || !activeDoc) {
+      setA4OverflowPages([]);
+      return;
+    }
+    const raf = window.requestAnimationFrame(() => {
+      const stage = canvasStageRef.current;
+      if (!stage) return;
+      const scale = Math.max(0.2, effectiveScaleRef.current || 1);
+      const articles = Array.from(
+        stage.querySelectorAll<HTMLElement>('article.a4-canvas')
+      );
+      const overflowing: Array<1 | 2> = [];
+      articles.forEach((article) => {
+        const label = article.getAttribute('aria-label') || '';
+        const pageNum: 1 | 2 = label.includes('Страница 2') ? 2 : 1;
+        const bodyEl = article.querySelector<HTMLElement>(
+          `[data-a4-body="${pageNum}"]`
+        );
+        const articleRect = article.getBoundingClientRect();
+        let hasOverflow = false;
+
+        if (bodyEl) {
+          if (
+            bodyEl.scrollHeight > bodyEl.clientHeight + 4 ||
+            bodyEl.scrollWidth > bodyEl.clientWidth + 4
+          ) {
+            hasOverflow = true;
+          }
+          if (!hasOverflow) {
+            const sections = Array.from(bodyEl.children) as HTMLElement[];
+            for (const sec of sections) {
+              const r = sec.getBoundingClientRect();
+              const bottomLogical = (r.bottom - articleRect.top) / scale;
+              if (bottomLogical > A4_PAGE_HEIGHT + 4) {
+                hasOverflow = true;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!hasOverflow) {
+          const textBlocks = article.querySelectorAll<HTMLElement>(
+            '[data-a4-text="true"], h1, h2, h3, h4, p'
+          );
+          for (const el of textBlocks) {
+            if (el.closest('svg') || el.getAttribute('aria-hidden') === 'true') {
+              continue;
+            }
+            if (el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 3) {
+              hasOverflow = true;
+              break;
+            }
+          }
+        }
+
+        if (hasOverflow) {
+          overflowing.push(pageNum);
+        }
+      });
+      setA4OverflowPages(overflowing);
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [editorTab, activeDoc, pageFocus, effectiveScale]);
 
   const activeDocProgress = useMemo(
     () => (activeDoc ? computeJournalProgress(activeDoc) : null),
@@ -2448,6 +2593,128 @@ export function GroupEditorView({
           </button>
         </div>
       </header>
+
+      {/* PERSISTENT DESIGN CHANGE NOTIFICATION BAR & BULK UNDO BAR */}
+      {editorTab === 'individual' &&
+        (designNotification || bulkDesignUndo) && (
+          <div className="shrink-0 bg-[#F0FDFA] border-b border-[#99F6E4] px-4 py-2 flex flex-col gap-2 z-20">
+            {designNotification && bannerSourceDoc && (
+              <div
+                role="status"
+                aria-label="Уведомление об изменении дизайна"
+                className="flex flex-wrap items-center justify-between gap-2.5 text-xs"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-6 h-6 rounded-md bg-[#0D9488] text-white flex items-center justify-center shrink-0">
+                    <Paintbrush className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="font-bold text-zinc-900">
+                      Дизайн изменён
+                    </span>
+                    <span className="mx-1.5 text-zinc-400">·</span>
+                    <span className="text-zinc-700 font-medium">
+                      Применить этот дизайн к другим журналам?
+                    </span>
+                    <span className="hidden xl:inline text-[11px] text-zinc-500 ml-2">
+                      (Автосохранено для: {bannerSourceDoc.resident.fullName})
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await onFlushSaves?.();
+                      setDesignNotification(null);
+                      onNotifyToast?.(
+                        'Дизайн сохранён только для текущего резидента'
+                      );
+                    }}
+                    className="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-50 text-[11px] font-semibold text-zinc-700 whitespace-nowrap"
+                  >
+                    Только текущий резидент
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      requestBulkDesignApply(bannerSourceDoc, 'group')
+                    }
+                    className="px-2.5 py-1 rounded-md bg-[#0D9488] hover:bg-[#0F766E] text-white text-[11px] font-semibold whitespace-nowrap"
+                  >
+                    Применить ко всей группе
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      requestBulkDesignApply(bannerSourceDoc, 'all')
+                    }
+                    className="px-2.5 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white text-[11px] font-semibold whitespace-nowrap"
+                  >
+                    Применить ко всем группам во всех локациях
+                  </button>
+
+                  {onSaveTemplate && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSaveTemplateModal({
+                          sourceDoc: bannerSourceDoc,
+                          name: `Дизайн · ${group.name}`,
+                        })
+                      }
+                      className="px-2.5 py-1 rounded-md border border-[#0D9488]/40 bg-white hover:bg-[#CCFBF1]/40 text-[11px] font-semibold text-[#0F766E] whitespace-nowrap"
+                    >
+                      Сохранить как шаблон
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setDesignNotification(null)}
+                    aria-label="Закрыть уведомление"
+                    title="Закрыть уведомление"
+                    className="p-1 rounded-md text-zinc-500 hover:text-zinc-900 hover:bg-white/80"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {bulkDesignUndo && onUndoBulkDesignApply && (
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-[#99F6E4]/70 text-[11px]">
+                <span className="text-[#0F766E] font-medium">
+                  Массовое применение дизайна выполнено (затронуто журналов:{' '}
+                  {bulkDesignUndo.affectedCount},{' '}
+                  {bulkDesignUndo.scope === 'group'
+                    ? 'вся группа'
+                    : 'все группы'}
+                  ).
+                </span>
+                <button
+                  type="button"
+                  disabled={undoingBulk}
+                  onClick={async () => {
+                    setUndoingBulk(true);
+                    try {
+                      await onUndoBulkDesignApply();
+                    } finally {
+                      setUndoingBulk(false);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-semibold whitespace-nowrap disabled:opacity-50"
+                >
+                  <Undo2 className="w-3 h-3" />
+                  <span>Отменить последнее массовое применение</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
       {/* THREE-COLUMN FIGMA WORKSPACE BODY */}
       <div
@@ -4238,6 +4505,20 @@ export function GroupEditorView({
                 </div>
               </div>
 
+              {/* Unobtrusive A4 Overflow Warning Banner (Never clips content) */}
+              {a4OverflowPages.length > 0 && (
+                <div
+                  role="alert"
+                  className="shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-1.5 flex items-center gap-2 text-[11px] font-medium text-amber-900"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>
+                    Текст или блоки выходят за пределы листа А4 (стр.{' '}
+                    {a4OverflowPages.join(', ')}). Содержимое не обрезается и не скрывается — при необходимости сократите текст перед печатью.
+                  </span>
+                </div>
+              )}
+
               {/* Infinite Figma-like Stage (Zero Scrollbars, Wheel Zoom to Cursor, Space/MMB Pan, Subtle Grid) */}
               <div
                 ref={canvasStageRef}
@@ -5193,7 +5474,7 @@ export function GroupEditorView({
                                 </span>
                                 {designScope !== 'student' && (
                                   <span className="text-[10px] font-semibold text-[#0F766E]">
-                                    Авто-синхронизация
+                                    Выбрано для переноса
                                   </span>
                                 )}
                               </div>
@@ -5236,16 +5517,11 @@ export function GroupEditorView({
                                   applyingDesignScope ||
                                   !onApplyDesignToScope
                                 }
-                                onClick={async () => {
+                                onClick={() => {
                                   if (!onApplyDesignToScope || designScope === 'student') {
                                     return;
                                   }
-                                  setApplyingDesignScope(true);
-                                  try {
-                                    await onApplyDesignToScope(activeDoc, designScope);
-                                  } finally {
-                                    setApplyingDesignScope(false);
-                                  }
+                                  requestBulkDesignApply(activeDoc, designScope);
                                 }}
                                 title={
                                   designScope === 'student'
@@ -5269,10 +5545,10 @@ export function GroupEditorView({
 
                               <p className="text-[10px] text-zinc-500 leading-relaxed">
                                 {designScope === 'student'
-                                  ? 'Изменения дизайна сохраняются только для текущего ученика.'
+                                  ? 'По умолчанию изменения дизайна сохраняются только для текущего резидента.'
                                   : designScope === 'group'
-                                  ? 'Любое изменение дизайна (стикеры, фон, позиции) сразу применяется ко всем ученикам этой группы, сохраняя их личные данные.'
-                                  : 'Любое изменение дизайна сразу применяется ко всем журналам во всех группах, сохраняя личные данные учеников.'}
+                                  ? 'Нажмите кнопку выше, чтобы применить оформление ко всем резидентам этой группы с сохранением их личных данных.'
+                                  : 'Нажмите кнопку выше, чтобы применить оформление ко всем группам во всех локациях с сохранением личных данных учеников.'}
                               </p>
                             </div>
                           </div>
@@ -10857,6 +11133,154 @@ export function GroupEditorView({
                 className="px-4 py-2 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white font-semibold disabled:opacity-50"
               >
                 {applyingCommon ? 'Применяем...' : 'Применить ко всем'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* MASS DESIGN APPLY CONFIRMATION MODAL */}
+      {pendingBulkConfirm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Подтверждение применения дизайна"
+          className="fixed inset-0 z-50 bg-zinc-900/45 backdrop-blur-[1px] flex items-center justify-center p-4"
+          onClick={() => !applyingDesignScope && setPendingBulkConfirm(null)}
+        >
+          <div
+            className="w-full max-w-md bg-white rounded-2xl border border-zinc-200 shadow-xl p-5 space-y-4 text-xs"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#F0FDFA] border border-[#99F6E4] text-[#0D9488] flex items-center justify-center shrink-0">
+                <Users className="w-4 h-4" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-sm font-bold text-zinc-900">
+                  Вы собираетесь применить изменения к {pendingBulkConfirm.count}{' '}
+                  резидентам. Продолжить?
+                </h3>
+                <p className="text-xs text-zinc-600 leading-relaxed">
+                  Область:{' '}
+                  <span className="font-semibold text-zinc-900">
+                    {pendingBulkConfirm.scope === 'group'
+                      ? 'Вся группа'
+                      : 'Все группы во всех локациях'}
+                  </span>
+                  . Переносятся только оформление, фоны, позиции блоков, стикеры и визуал общих модулей. Личные тексты, проекты и навыки каждого ученика останутся без изменений.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100">
+              <button
+                type="button"
+                disabled={applyingDesignScope}
+                onClick={() => setPendingBulkConfirm(null)}
+                className="px-3.5 py-2 rounded-lg border border-zinc-200 text-zinc-700 hover:bg-zinc-50 font-semibold"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={applyingDesignScope}
+                onClick={async () => {
+                  if (!onApplyDesignToScope) return;
+                  setApplyingDesignScope(true);
+                  try {
+                    await onApplyDesignToScope(
+                      pendingBulkConfirm.sourceDoc,
+                      pendingBulkConfirm.scope
+                    );
+                    setDesignNotification(null);
+                    setPendingBulkConfirm(null);
+                  } finally {
+                    setApplyingDesignScope(false);
+                  }
+                }}
+                className="px-4 py-2 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white font-semibold disabled:opacity-50"
+              >
+                {applyingDesignScope ? 'Применяем...' : 'Применить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SAVE DESIGN AS TEMPLATE MODAL */}
+      {saveTemplateModal && onSaveTemplate && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Сохранить дизайн как шаблон"
+          className="fixed inset-0 z-50 bg-zinc-900/45 backdrop-blur-[1px] flex items-center justify-center p-4"
+          onClick={() => setSaveTemplateModal(null)}
+        >
+          <div
+            className="w-full max-w-md bg-white rounded-2xl border border-zinc-200 shadow-xl p-5 space-y-4 text-xs"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-zinc-900">
+                Сохранить дизайн как шаблон
+              </h3>
+              <p className="text-xs text-zinc-500">
+                Шаблон появится в разделе «Шаблоны» и сможет использоваться для новых групп.
+              </p>
+            </div>
+            <label className="block space-y-1">
+              <span className="text-[11px] font-semibold text-zinc-700">
+                Название шаблона
+              </span>
+              <input
+                type="text"
+                value={saveTemplateModal.name}
+                onChange={(e) =>
+                  setSaveTemplateModal((prev) =>
+                    prev ? { ...prev, name: e.target.value } : null
+                  )
+                }
+                placeholder="Например: Дизайн весенней смены"
+                className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-xs text-zinc-900 focus:outline-none focus:border-[#0D9488]"
+              />
+            </label>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100">
+              <button
+                type="button"
+                onClick={() => setSaveTemplateModal(null)}
+                className="px-3.5 py-2 rounded-lg border border-zinc-200 text-zinc-700 hover:bg-zinc-50 font-semibold"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const src = saveTemplateModal.sourceDoc;
+                  const tplName =
+                    saveTemplateModal.name.trim() || `Шаблон · ${group.name}`;
+                  const cloned = JSON.parse(
+                    JSON.stringify(src)
+                  ) as JournalDocument;
+                  const template: JournalTemplate = {
+                    id: `tpl-${Date.now()}`,
+                    name: tplName,
+                    description: `Сохранён из редактора группы «${group.name}»`,
+                    ageCategory: src.resident.ageCategory,
+                    isBuiltIn: false,
+                    createdAt: new Date().toISOString(),
+                    snapshot: {
+                      resident: cloned.resident,
+                      page1: cloned.page1,
+                      page2: cloned.page2,
+                    },
+                  };
+                  await onSaveTemplate(template);
+                  setSaveTemplateModal(null);
+                  setDesignNotification(null);
+                }}
+                className="px-4 py-2 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white font-semibold"
+              >
+                Сохранить шаблон
               </button>
             </div>
           </div>

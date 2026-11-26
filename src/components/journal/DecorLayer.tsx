@@ -383,6 +383,7 @@ export function InlineEditableText({
 
   return (
     <Tag
+      data-a4-text="true"
       onClick={
         onSelectText && !designMode
           ? (e: React.MouseEvent) => {
@@ -410,7 +411,7 @@ export function InlineEditableText({
           : undefined
       }
       style={style}
-      className={`${className} ${
+      className={`min-w-0 max-w-full box-border whitespace-pre-wrap [overflow-wrap:anywhere] ${className} ${
         interactive && !designMode
           ? isSelected
             ? 'cursor-pointer outline outline-2 outline-[#0D9488] bg-[#F0FDFA]/45 rounded-[3px] transition-[outline,background-color]'
@@ -440,6 +441,13 @@ interface DraggableDesignWrapperProps {
   className?: string;
   children: React.ReactNode;
 }
+
+const IMAGE_ONLY_BLOCK_IDS = new Set([
+  'coverBear',
+  'prideBear',
+  'nextBear',
+  'logo',
+]);
 
 export function DraggableDesignWrapper({
   id,
@@ -471,6 +479,8 @@ export function DraggableDesignWrapper({
   const rotation = transform?.rotation ?? 0;
   const explicitWidth = transform?.width;
   const explicitHeight = transform?.height;
+  const preserveAspectRatio = transform?.preserveAspectRatio;
+  const keepAspect = preserveAspectRatio !== false;
   const resolvedZIndex =
     transform?.zIndex !== undefined ? transform.zIndex : defaultZIndex;
   const locked = Boolean(transform?.locked);
@@ -578,6 +588,7 @@ export function DraggableDesignWrapper({
         zIndex: baseZ,
         ...(explicitWidth !== undefined ? { width: explicitWidth } : {}),
         ...(explicitHeight !== undefined ? { height: explicitHeight } : {}),
+        ...(preserveAspectRatio !== undefined ? { preserveAspectRatio } : {}),
         hidden: transform?.hidden,
         locked,
       });
@@ -597,9 +608,9 @@ export function DraggableDesignWrapper({
     window.addEventListener('pointerup', handleUp);
   };
 
-  const handleScaleHandleDown = (
+  const handleResizeHandleDown = (
     e: React.PointerEvent<HTMLDivElement>,
-    corner: 'nw' | 'ne' | 'sw' | 'se'
+    dir: ResizeHandleDir
   ) => {
     if (!designMode || locked || !onUpdateTransform) return;
     e.stopPropagation();
@@ -607,31 +618,116 @@ export function DraggableDesignWrapper({
     onInteractionStart?.();
 
     const safeScale = Math.max(0.2, scaleFactor);
-    const innerRect = innerRef.current?.getBoundingClientRect();
-    const boxW = Math.max(40, (innerRect?.width || 160) / safeScale);
+    const innerEl = innerRef.current;
+    const slotEl = slotRef.current;
+    const startW = Math.max(
+      48,
+      Math.round(
+        explicitWidth ??
+          innerEl?.offsetWidth ??
+          slotEl?.offsetWidth ??
+          160
+      )
+    );
+    const startH = Math.max(
+      28,
+      Math.round(
+        explicitHeight ??
+          innerEl?.offsetHeight ??
+          slotEl?.offsetHeight ??
+          80
+      )
+    );
     const startClientX = e.clientX;
     const startClientY = e.clientY;
+    const startX = x;
+    const startY = y;
     const startScale = scale;
     const baseZ = resolvedZIndex ?? 10;
-    const dirX = corner === 'nw' || corner === 'sw' ? -1 : 1;
-    const dirY = corner === 'nw' || corner === 'ne' ? -1 : 1;
+    const rad = (rotation * Math.PI) / 180;
+    const cosR = Math.cos(rad);
+    const sinR = Math.sin(rad);
+    const isCorner =
+      dir === 'nw' || dir === 'ne' || dir === 'sw' || dir === 'se';
 
     const onMove = (me: PointerEvent) => {
-      const dx = ((me.clientX - startClientX) / safeScale) * dirX;
-      const dy = ((me.clientY - startClientY) / safeScale) * dirY;
-      const delta = (dx + dy) * 0.5;
-      const nextScale = Number(
-        Math.max(0.4, Math.min(2.2, startScale + delta / boxW)).toFixed(2)
-      );
-      setLiveBadge(`${Math.round(nextScale * 100)}%`);
+      const rawDx =
+        (me.clientX - startClientX) / (safeScale * Math.max(0.25, startScale));
+      const rawDy =
+        (me.clientY - startClientY) / (safeScale * Math.max(0.25, startScale));
+      const dx = rawDx * cosR + rawDy * sinR;
+      const dy = -rawDx * sinR + rawDy * cosR;
+
+      let nextX = startX;
+      let nextY = startY;
+      let nextW: number | undefined = explicitWidth;
+      let nextH: number | undefined = explicitHeight;
+
+      if (isCorner) {
+        const signX = dir === 'nw' || dir === 'sw' ? -1 : 1;
+        const signY = dir === 'nw' || dir === 'ne' ? -1 : 1;
+
+        if (keepAspect) {
+          const scaleFromX = (startW + dx * signX) / startW;
+          const scaleFromY = (startH + dy * signY) / startH;
+          const rawRatio =
+            Math.abs(dx * signX) >= Math.abs(dy * signY)
+              ? scaleFromX
+              : scaleFromY;
+          const minRatio = Math.max(48 / startW, 28 / startH);
+          const maxRatio = Math.min(760 / startW, 920 / startH);
+          const ratio = Math.max(minRatio, Math.min(maxRatio, rawRatio));
+          nextW = Math.round(startW * ratio);
+          nextH = Math.round(startH * ratio);
+        } else {
+          nextW = Math.max(48, Math.min(760, Math.round(startW + dx * signX)));
+          nextH = Math.max(28, Math.min(920, Math.round(startH + dy * signY)));
+        }
+
+        if (dir === 'nw' || dir === 'sw') {
+          nextX = Math.max(
+            -720,
+            Math.min(720, Math.round(startX + (startW - nextW) * startScale))
+          );
+        }
+        if (dir === 'nw' || dir === 'ne') {
+          nextY = Math.max(
+            -960,
+            Math.min(960, Math.round(startY + (startH - nextH) * startScale))
+          );
+        }
+        setLiveBadge(`${nextW}×${nextH}`);
+      } else if (dir === 'e') {
+        nextW = Math.max(48, Math.min(760, Math.round(startW + dx)));
+        setLiveBadge(`${nextW}×${nextH ?? startH}`);
+      } else if (dir === 'w') {
+        nextW = Math.max(48, Math.min(760, Math.round(startW - dx)));
+        nextX = Math.max(
+          -720,
+          Math.min(720, Math.round(startX + (startW - nextW) * startScale))
+        );
+        setLiveBadge(`${nextW}×${nextH ?? startH}`);
+      } else if (dir === 's') {
+        nextH = Math.max(28, Math.min(920, Math.round(startH + dy)));
+        setLiveBadge(`${nextW ?? startW}×${nextH}`);
+      } else if (dir === 'n') {
+        nextH = Math.max(28, Math.min(920, Math.round(startH - dy)));
+        nextY = Math.max(
+          -960,
+          Math.min(960, Math.round(startY + (startH - nextH) * startScale))
+        );
+        setLiveBadge(`${nextW ?? startW}×${nextH}`);
+      }
+
       onUpdateTransform({
-        x,
-        y,
-        scale: nextScale,
+        x: nextX,
+        y: nextY,
+        scale: startScale,
         rotation,
         zIndex: baseZ,
-        ...(explicitWidth !== undefined ? { width: explicitWidth } : {}),
-        ...(explicitHeight !== undefined ? { height: explicitHeight } : {}),
+        ...(nextW !== undefined ? { width: nextW } : {}),
+        ...(nextH !== undefined ? { height: nextH } : {}),
+        ...(preserveAspectRatio !== undefined ? { preserveAspectRatio } : {}),
         hidden: transform?.hidden,
         locked,
       });
@@ -683,6 +779,7 @@ export function DraggableDesignWrapper({
         zIndex: baseZ,
         ...(explicitWidth !== undefined ? { width: explicitWidth } : {}),
         ...(explicitHeight !== undefined ? { height: explicitHeight } : {}),
+        ...(preserveAspectRatio !== undefined ? { preserveAspectRatio } : {}),
         hidden: transform?.hidden,
         locked,
       });
@@ -701,6 +798,7 @@ export function DraggableDesignWrapper({
 
   const hasCustomTransform = scale !== 1 || rotation !== 0;
   const isAbsoluteSlot = externalStyle?.position === 'absolute';
+  const isImageBox = IMAGE_ONLY_BLOCK_IDS.has(id);
   const resolvedInnerWidth =
     explicitWidth !== undefined
       ? `${explicitWidth}px`
@@ -715,13 +813,21 @@ export function DraggableDesignWrapper({
       : '100%';
   const resolvedInnerHeight =
     explicitHeight !== undefined
-      ? `${explicitHeight}px`
+      ? isImageBox
+        ? `${explicitHeight}px`
+        : 'auto'
       : externalStyle?.height
       ? externalStyle.height
       : isAbsoluteSlot
       ? undefined
       : isMoved && slotSize
-      ? `${slotSize.h}px`
+      ? isImageBox
+        ? `${slotSize.h}px`
+        : 'auto'
+      : undefined;
+  const resolvedInnerMinHeight =
+    explicitHeight !== undefined && !isImageBox
+      ? `${explicitHeight}px`
       : undefined;
 
   return (
@@ -737,14 +843,19 @@ export function DraggableDesignWrapper({
                 ? `${slotSize.w}px`
                 : undefined),
         maxWidth:
-          explicitWidth !== undefined ? undefined : externalStyle?.maxWidth,
+          explicitWidth !== undefined ? 'none' : externalStyle?.maxWidth,
         height:
           explicitHeight !== undefined
-            ? `${explicitHeight}px`
+            ? isImageBox
+              ? `${explicitHeight}px`
+              : 'auto'
             : externalStyle?.height ??
               (isMoved && slotSize && !isAbsoluteSlot
-                ? `${slotSize.h}px`
+                ? isImageBox
+                  ? `${slotSize.h}px`
+                  : 'auto'
                 : undefined),
+        minHeight: resolvedInnerMinHeight,
         position: externalStyle?.position ?? 'relative',
         zIndex: isActive ? Math.max(resolvedZIndex ?? 10, 40) : resolvedZIndex,
       }}
@@ -772,8 +883,9 @@ export function DraggableDesignWrapper({
           top: isMoved ? `${y}px` : undefined,
           width: resolvedInnerWidth,
           maxWidth:
-            explicitWidth !== undefined ? undefined : externalStyle?.maxWidth,
+            explicitWidth !== undefined ? 'none' : externalStyle?.maxWidth,
           height: resolvedInnerHeight,
+          minHeight: resolvedInnerMinHeight,
           transform: hasCustomTransform
             ? `scale(${scale}) rotate(${rotation}deg)`
             : undefined,
@@ -791,14 +903,18 @@ export function DraggableDesignWrapper({
       >
         {children}
 
-        {/* Figma-style Blue Bounding Box, Rotation Handle & Corner Handles */}
+        {/* Figma-style Blue Bounding Box, Rotation Handle, 4 Corner Handles & 4 Side Handles */}
         {designMode && isActive && (
-          <div className="no-print pointer-events-none absolute -inset-[2px] border-[1.5px] border-[#2563EB] rounded-[4px] z-50">
+          <div
+            data-resize-frame={id}
+            className="no-print pointer-events-none absolute -inset-[2px] border-[1.5px] border-[#2563EB] rounded-[4px] z-50"
+          >
             {!locked && (
               <>
                 {/* Top Rotation Handle */}
                 <div className="absolute -top-[24px] left-1/2 -translate-x-1/2 flex flex-col items-center">
                   <div
+                    data-handle="rotate"
                     onPointerDown={handleRotateHandleDown}
                     title="Потяните, чтобы повернуть (Shift — шаг 15°)"
                     className="pointer-events-auto w-[16px] h-[16px] rounded-full bg-white border-[1.5px] border-[#2563EB] shadow-xs flex items-center justify-center cursor-grab active:cursor-grabbing hover:bg-[#2563EB] hover:text-white text-[#2563EB] transition-colors"
@@ -808,6 +924,7 @@ export function DraggableDesignWrapper({
                   <div className="w-[1.5px] h-[8px] bg-[#2563EB]" />
                 </div>
 
+                {/* 4 Corner Handles */}
                 {(
                   [
                     { corner: 'nw', pos: '-top-[5px] -left-[5px]', cur: 'nwse-resize' },
@@ -818,11 +935,47 @@ export function DraggableDesignWrapper({
                 ).map((h) => (
                   <div
                     key={h.corner}
-                    onPointerDown={(e) => handleScaleHandleDown(e, h.corner)}
+                    data-handle={h.corner}
+                    onPointerDown={(e) => handleResizeHandleDown(e, h.corner)}
                     style={{ cursor: h.cur }}
+                    title={
+                      keepAspect
+                        ? 'Потяните для пропорционального изменения размера'
+                        : 'Потяните для свободного изменения ширины и высоты'
+                    }
                     className={`pointer-events-auto absolute ${h.pos} w-[9px] h-[9px] bg-white border-[1.5px] border-[#2563EB] rounded-[1.5px] shadow-xs hover:bg-[#2563EB]`}
                   />
                 ))}
+
+                {/* 4 Side-Center Handles (Independent Width / Height) */}
+                <div
+                  data-handle="w"
+                  onPointerDown={(e) => handleResizeHandleDown(e, 'w')}
+                  style={{ cursor: 'ew-resize' }}
+                  title="Изменить ширину слева"
+                  className="pointer-events-auto absolute top-1/2 -left-[4px] -translate-y-1/2 w-[7px] h-[16px] bg-white border-[1.5px] border-[#2563EB] rounded-[2px] shadow-xs hover:bg-[#2563EB]"
+                />
+                <div
+                  data-handle="e"
+                  onPointerDown={(e) => handleResizeHandleDown(e, 'e')}
+                  style={{ cursor: 'ew-resize' }}
+                  title="Изменить ширину справа"
+                  className="pointer-events-auto absolute top-1/2 -right-[4px] -translate-y-1/2 w-[7px] h-[16px] bg-white border-[1.5px] border-[#2563EB] rounded-[2px] shadow-xs hover:bg-[#2563EB]"
+                />
+                <div
+                  data-handle="n"
+                  onPointerDown={(e) => handleResizeHandleDown(e, 'n')}
+                  style={{ cursor: 'ns-resize' }}
+                  title="Изменить высоту сверху"
+                  className="pointer-events-auto absolute left-1/2 -top-[4px] -translate-x-1/2 w-[16px] h-[7px] bg-white border-[1.5px] border-[#2563EB] rounded-[2px] shadow-xs hover:bg-[#2563EB]"
+                />
+                <div
+                  data-handle="s"
+                  onPointerDown={(e) => handleResizeHandleDown(e, 's')}
+                  style={{ cursor: 'ns-resize' }}
+                  title="Изменить высоту снизу"
+                  className="pointer-events-auto absolute left-1/2 -bottom-[4px] -translate-x-1/2 w-[16px] h-[7px] bg-white border-[1.5px] border-[#2563EB] rounded-[2px] shadow-xs hover:bg-[#2563EB]"
+                />
               </>
             )}
 
@@ -830,9 +983,13 @@ export function DraggableDesignWrapper({
               {locked
                 ? 'Закреплено'
                 : liveBadge ||
-                  `${Math.round(scale * 100)}%${
-                    rotation ? ` · ${rotation}°` : ''
-                  }`}
+                  (explicitWidth !== undefined || explicitHeight !== undefined
+                    ? `${explicitWidth ?? 'auto'}×${explicitHeight ?? 'auto'}${
+                        rotation ? ` · ${rotation}°` : ''
+                      }`
+                    : `${Math.round(scale * 100)}%${
+                        rotation ? ` · ${rotation}°` : ''
+                      }`)}
             </span>
           </div>
         )}
@@ -1038,28 +1195,41 @@ export function DecorLayer({
               const dy = -rawDx * sinR + rawDy * cosR;
 
               if (isCorner) {
-                // Proportional corner scaling for Images, Text, and Icons
+                const keepElAspect = el.preserveAspectRatio !== false;
                 const signX = dir === 'nw' || dir === 'sw' ? -1 : 1;
                 const signY = dir === 'nw' || dir === 'ne' ? -1 : 1;
-                const projX = startW + dx * signX;
-                const projY = startH + dy * signY;
-                const scaleFromX = projX / startW;
-                const scaleFromY = projY / startH;
-                const uniformScale = Math.max(
-                  0.25,
-                  Math.abs(dx * signX) >= Math.abs(dy * signY)
-                    ? scaleFromX
-                    : scaleFromY
-                );
 
-                const nextW = Math.max(
-                  40,
-                  Math.min(740, Math.round(startW * uniformScale))
-                );
-                const nextH =
-                  el.kind === 'text'
-                    ? Math.max(28, Math.round(startH * (nextW / startW)))
-                    : Math.max(32, Math.round(nextW / aspect));
+                let nextW: number;
+                let nextH: number;
+                if (keepElAspect) {
+                  const projX = startW + dx * signX;
+                  const projY = startH + dy * signY;
+                  const scaleFromX = projX / startW;
+                  const scaleFromY = projY / startH;
+                  const uniformScale = Math.max(
+                    0.25,
+                    Math.abs(dx * signX) >= Math.abs(dy * signY)
+                      ? scaleFromX
+                      : scaleFromY
+                  );
+                  nextW = Math.max(
+                    32,
+                    Math.min(740, Math.round(startW * uniformScale))
+                  );
+                  nextH =
+                    el.kind === 'text'
+                      ? Math.max(28, Math.round(startH * (nextW / startW)))
+                      : Math.max(20, Math.round(nextW / aspect));
+                } else {
+                  nextW = Math.max(
+                    32,
+                    Math.min(740, Math.round(startW + dx * signX))
+                  );
+                  nextH = Math.max(
+                    20,
+                    Math.min(900, Math.round(startH + dy * signY))
+                  );
+                }
 
                 const nextX =
                   dir === 'nw' || dir === 'sw'
@@ -1077,7 +1247,7 @@ export function DecorLayer({
                   height: nextH,
                 };
 
-                if (el.kind === 'text') {
+                if (el.kind === 'text' && keepElAspect) {
                   patch.fontSize = Math.max(
                     10,
                     Math.min(96, Math.round(startFont * (nextW / startW)))
@@ -1088,26 +1258,26 @@ export function DecorLayer({
                 return;
               }
 
-              // Edge handles (w, e, n, s)
+              // Edge handles (w, e, n, s) — single-axis non-proportional resize
               let nextX = startX;
               let nextY = startY;
               let nextW = startW;
               let nextH = startH;
 
               if (dir === 'e') {
-                nextW = Math.max(48, Math.min(760, Math.round(startW + dx)));
+                nextW = Math.max(32, Math.min(760, Math.round(startW + dx)));
               } else if (dir === 'w') {
                 const candidateW = Math.max(
-                  48,
+                  32,
                   Math.min(760, Math.round(startW - dx))
                 );
                 nextX = Math.max(0, Math.round(startX + (startW - candidateW)));
                 nextW = candidateW;
               } else if (dir === 's') {
-                nextH = Math.max(32, Math.min(900, Math.round(startH + dy)));
+                nextH = Math.max(20, Math.min(900, Math.round(startH + dy)));
               } else if (dir === 'n') {
                 const candidateH = Math.max(
-                  32,
+                  20,
                   Math.min(900, Math.round(startH - dy))
                 );
                 nextY = Math.max(0, Math.round(startY + (startH - candidateH)));
@@ -1133,13 +1303,7 @@ export function DecorLayer({
             window.addEventListener('pointerup', onUp);
           };
 
-          const showSideHandles =
-            el.kind === 'text' ||
-            (el.kind === 'image' && Boolean(el.cropEnabled)) ||
-            el.kind === 'sticker' ||
-            el.kind === 'line' ||
-            el.kind === 'blob' ||
-            el.kind === 'tape';
+          const keepElAspect = el.preserveAspectRatio !== false;
 
           return (
             <div
@@ -1179,14 +1343,18 @@ export function DecorLayer({
             >
               <DecorGraphic element={el} />
 
-              {/* Figma-style Blue Bounding Box with Rotation, Corner & Side Resize Handles */}
+              {/* Figma-style Blue Bounding Box with Rotation, 4 Corner & 4 Side Resize Handles */}
               {designMode && isActive && (
-                <div className="no-print pointer-events-none absolute -inset-[1.5px] border-[1.5px] border-[#2563EB] rounded-[2px] z-50">
+                <div
+                  data-resize-frame={el.id}
+                  className="no-print pointer-events-none absolute -inset-[1.5px] border-[1.5px] border-[#2563EB] rounded-[2px] z-50"
+                >
                   {!el.locked && (
                     <>
                       {/* Top Rotation Handle */}
                       <div className="absolute -top-[24px] left-1/2 -translate-x-1/2 flex flex-col items-center">
                         <div
+                          data-handle="rotate"
                           onPointerDown={handleRotatePointerDown}
                           title="Потяните, чтобы повернуть (Shift — шаг 15°)"
                           className="pointer-events-auto w-[16px] h-[16px] rounded-full bg-white border-[1.5px] border-[#2563EB] shadow-xs flex items-center justify-center cursor-grab active:cursor-grabbing hover:bg-[#2563EB] hover:text-white text-[#2563EB] transition-colors"
@@ -1196,7 +1364,7 @@ export function DecorLayer({
                         <div className="w-[1.5px] h-[8px] bg-[#2563EB]" />
                       </div>
 
-                      {/* 4 Corner Proportional Handles */}
+                      {/* 4 Corner Handles */}
                       {(
                         [
                           {
@@ -1223,45 +1391,47 @@ export function DecorLayer({
                       ).map((h) => (
                         <div
                           key={h.dir}
+                          data-handle={h.dir}
                           onPointerDown={(e) => handleResizePointerDown(e, h.dir)}
                           style={{ cursor: h.cur }}
+                          title={
+                            keepElAspect
+                              ? 'Потяните для пропорционального изменения размера'
+                              : 'Потяните для свободного изменения ширины и высоты'
+                          }
                           className={`pointer-events-auto absolute ${h.pos} w-[9px] h-[9px] bg-white border-[1.5px] border-[#2563EB] rounded-[1.5px] shadow-xs hover:bg-[#2563EB]`}
                         />
                       ))}
 
-                      {/* Side Handles for Text Reflow or Cropped Image Framing */}
-                      {showSideHandles && (
-                        <>
-                          <div
-                            onPointerDown={(e) => handleResizePointerDown(e, 'w')}
-                            style={{ cursor: 'ew-resize' }}
-                            className="pointer-events-auto absolute top-1/2 -left-[4px] -translate-y-1/2 w-[7px] h-[16px] bg-white border-[1.5px] border-[#2563EB] rounded-[2px] shadow-xs hover:bg-[#2563EB]"
-                          />
-                          <div
-                            onPointerDown={(e) => handleResizePointerDown(e, 'e')}
-                            style={{ cursor: 'ew-resize' }}
-                            className="pointer-events-auto absolute top-1/2 -right-[4px] -translate-y-1/2 w-[7px] h-[16px] bg-white border-[1.5px] border-[#2563EB] rounded-[2px] shadow-xs hover:bg-[#2563EB]"
-                          />
-                          {el.kind !== 'text' && (
-                            <>
-                              <div
-                                onPointerDown={(e) =>
-                                  handleResizePointerDown(e, 'n')
-                                }
-                                style={{ cursor: 'ns-resize' }}
-                                className="pointer-events-auto absolute left-1/2 -top-[4px] -translate-x-1/2 w-[16px] h-[7px] bg-white border-[1.5px] border-[#2563EB] rounded-[2px] shadow-xs hover:bg-[#2563EB]"
-                              />
-                              <div
-                                onPointerDown={(e) =>
-                                  handleResizePointerDown(e, 's')
-                                }
-                                style={{ cursor: 'ns-resize' }}
-                                className="pointer-events-auto absolute left-1/2 -bottom-[4px] -translate-x-1/2 w-[16px] h-[7px] bg-white border-[1.5px] border-[#2563EB] rounded-[2px] shadow-xs hover:bg-[#2563EB]"
-                              />
-                            </>
-                          )}
-                        </>
-                      )}
+                      {/* 4 Side-Center Handles (Independent Width & Height) */}
+                      <div
+                        data-handle="w"
+                        onPointerDown={(e) => handleResizePointerDown(e, 'w')}
+                        style={{ cursor: 'ew-resize' }}
+                        title="Изменить ширину слева"
+                        className="pointer-events-auto absolute top-1/2 -left-[4px] -translate-y-1/2 w-[7px] h-[16px] bg-white border-[1.5px] border-[#2563EB] rounded-[2px] shadow-xs hover:bg-[#2563EB]"
+                      />
+                      <div
+                        data-handle="e"
+                        onPointerDown={(e) => handleResizePointerDown(e, 'e')}
+                        style={{ cursor: 'ew-resize' }}
+                        title="Изменить ширину справа"
+                        className="pointer-events-auto absolute top-1/2 -right-[4px] -translate-y-1/2 w-[7px] h-[16px] bg-white border-[1.5px] border-[#2563EB] rounded-[2px] shadow-xs hover:bg-[#2563EB]"
+                      />
+                      <div
+                        data-handle="n"
+                        onPointerDown={(e) => handleResizePointerDown(e, 'n')}
+                        style={{ cursor: 'ns-resize' }}
+                        title="Изменить высоту сверху"
+                        className="pointer-events-auto absolute left-1/2 -top-[4px] -translate-x-1/2 w-[16px] h-[7px] bg-white border-[1.5px] border-[#2563EB] rounded-[2px] shadow-xs hover:bg-[#2563EB]"
+                      />
+                      <div
+                        data-handle="s"
+                        onPointerDown={(e) => handleResizePointerDown(e, 's')}
+                        style={{ cursor: 'ns-resize' }}
+                        title="Изменить высоту снизу"
+                        className="pointer-events-auto absolute left-1/2 -bottom-[4px] -translate-x-1/2 w-[16px] h-[7px] bg-white border-[1.5px] border-[#2563EB] rounded-[2px] shadow-xs hover:bg-[#2563EB]"
+                      />
                     </>
                   )}
 
@@ -1296,6 +1466,7 @@ function DecorGraphic({ element }: { element: DecorElement }) {
       const hasBg = element.bgColor && element.bgColor !== 'transparent';
       return (
         <div
+          data-a4-text="true"
           style={{
             color: element.color || '#111827',
             fontSize: `${element.fontSize ?? 18}px`,
@@ -1313,7 +1484,7 @@ function DecorGraphic({ element }: { element: DecorElement }) {
             backgroundColor: hasBg ? element.bgColor : 'transparent',
             minHeight: `${element.height}px`,
           }}
-          className={`w-full leading-snug whitespace-pre-wrap break-words ${
+          className={`w-full min-w-0 max-w-full box-border leading-snug whitespace-pre-wrap [overflow-wrap:anywhere] ${
             hasBg
               ? 'px-3 py-2 rounded-xl border-[1.5px] border-[#18181B]/20 shadow-xs'
               : 'px-1 py-0.5'
@@ -1375,7 +1546,12 @@ function DecorGraphic({ element }: { element: DecorElement }) {
 
     case 'blob':
       return (
-        <svg viewBox="0 0 100 100" className="w-full h-full" fill="none">
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="w-full h-full"
+          fill="none"
+        >
           <path
             d="M46 8C67 5 91 21 94 44C97 67 80 92 54 94C28 96 6 77 7 50C8 23 25 11 46 8Z"
             fill={element.color}
@@ -1384,7 +1560,12 @@ function DecorGraphic({ element }: { element: DecorElement }) {
       );
     case 'line':
       return (
-        <svg viewBox="0 0 140 24" className="w-full h-full" fill="none">
+        <svg
+          viewBox="0 0 140 24"
+          preserveAspectRatio="none"
+          className="w-full h-full"
+          fill="none"
+        >
           <path
             d="M4 12C28 4 46 20 70 12C94 4 112 20 136 12"
             stroke={element.color}
@@ -1395,7 +1576,12 @@ function DecorGraphic({ element }: { element: DecorElement }) {
       );
     case 'dots':
       return (
-        <svg viewBox="0 0 80 56" className="w-full h-full" fill="none">
+        <svg
+          viewBox="0 0 80 56"
+          preserveAspectRatio="none"
+          className="w-full h-full"
+          fill="none"
+        >
           {[12, 30, 48, 66].map((cx) =>
             [12, 28, 44].map((cy) => (
               <circle
@@ -1413,6 +1599,7 @@ function DecorGraphic({ element }: { element: DecorElement }) {
       return (
         <svg
           viewBox="0 0 60 60"
+          preserveAspectRatio="none"
           style={{ filter: 'drop-shadow(0 2px 4px rgba(17,24,39,0.2))' }}
           className="w-full h-full"
           fill="none"
@@ -1430,7 +1617,7 @@ function DecorGraphic({ element }: { element: DecorElement }) {
       return (
         <div
           style={{ backgroundColor: element.color }}
-          className="w-full h-full rounded-xl border-2 border-[#18181B] shadow-[0_3px_0_#18181B] flex items-center justify-center px-2 text-center font-extrabold text-[11px] leading-tight text-[#18181B]"
+          className="w-full h-full min-w-0 box-border rounded-xl border-2 border-[#18181B] shadow-[0_3px_0_#18181B] flex items-center justify-center px-2 text-center font-extrabold text-[11px] leading-tight text-[#18181B] whitespace-pre-wrap [overflow-wrap:anywhere]"
         >
           {element.stickerText || 'SUPER!'}
         </div>

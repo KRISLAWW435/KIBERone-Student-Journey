@@ -6,8 +6,10 @@ import {
   EditorSectionTarget,
   JournalDocument,
   Page2Config,
+  Page2SectionKey,
   StrengthItem,
 } from '../../types/journal';
+import { normalizePage2SectionOrder } from '../../utils/journalProgress';
 import {
   DecorLayer,
   DraggableDesignWrapper,
@@ -70,6 +72,300 @@ export function JournalPageTwo({
   const strengthsToRender = visibleStrengths.slice(0, 6);
   const isCompactStrengths = strengthsToRender.length > 3;
   const layouts = page2.objectLayouts ?? {};
+  const sectionOrder: Page2SectionKey[] = normalizePage2SectionOrder(
+    page2.sectionOrder
+  );
+
+  const renderStrengthsSlot = () => {
+    if (!page2.showStrengths || strengthsToRender.length === 0) return null;
+    return (
+      <div key="sec-strengths" data-page2-section="strengths" className="shrink-0 relative z-30">
+        <DraggableDesignWrapper
+          id="strengths"
+          transform={layouts.strengths}
+          defaultZIndex={30}
+          designMode={designMode}
+          scaleFactor={scaleFactor}
+          isActive={
+            activeTarget?.page === 2 && activeTarget.block === 'strengths'
+          }
+          onSelect={
+            onSelectTarget
+              ? () => onSelectTarget({ page: 2, block: 'strengths' })
+              : undefined
+          }
+          onUpdateTransform={
+            onUpdateTransform
+              ? (next) => onUpdateTransform('strengths', next)
+              : undefined
+          }
+          onSnapLinesChange={setSnapLines}
+          onInteractionStart={onInteractionStart}
+          onInteractionEnd={onInteractionEnd}
+          className="shrink-0 relative z-30"
+        >
+          <section
+            data-card-label="Блок «Мои сильные стороны»"
+            style={{ width: '714px' }}
+            className="rounded-xl w-full min-w-0"
+          >
+            <h3 className="font-journal-display font-black text-[17.5px] leading-[21px] tracking-tight uppercase text-[#111827] mb-[10px]">
+              МОИ СИЛЬНЫЕ СТОРОНЫ
+            </h3>
+            <div className="grid grid-cols-3 items-stretch auto-rows-fr gap-[14px] w-full min-w-0">
+              {strengthsToRender.map((item) => (
+                <DraggableDesignWrapper
+                  key={item.id}
+                  id={`strength-${item.id}`}
+                  transform={layouts[`strength-${item.id}`]}
+                  designMode={designMode}
+                  scaleFactor={scaleFactor}
+                  isActive={false}
+                  onSelect={
+                    onSelectTarget
+                      ? () => onSelectTarget({ page: 2, block: 'strengths' })
+                      : undefined
+                  }
+                  onUpdateTransform={
+                    onUpdateTransform
+                      ? (next) => onUpdateTransform(`strength-${item.id}`, next)
+                      : undefined
+                  }
+                  onSnapLinesChange={setSnapLines}
+                  onInteractionStart={onInteractionStart}
+                  onInteractionEnd={onInteractionEnd}
+                  className="h-full min-w-0"
+                >
+                  <StrengthCard
+                    strength={item}
+                    ageCategory={resident.ageCategory}
+                    compact={isCompactStrengths}
+                    activeTextField={activeTextField}
+                    onSelectTextField={onSelectTextField}
+                    onUpdateField={
+                      onUpdateStrength
+                        ? (patch) => onUpdateStrength(item.id, patch)
+                        : undefined
+                    }
+                    onBeginEdit={onInteractionStart}
+                    onEndEdit={onInteractionEnd}
+                  />
+                </DraggableDesignWrapper>
+              ))}
+            </div>
+          </section>
+        </DraggableDesignWrapper>
+      </div>
+    );
+  };
+
+  const renderPrideSlot = (standalone: boolean) => {
+    const defaultW = standalone ? '714px' : '345px';
+    if (!page2.showPride) {
+      return standalone ? null : (
+        <div key="sec-pride-empty" style={{ width: '345px', minHeight: '376px' }} />
+      );
+    }
+    return (
+      <div
+        key="sec-pride"
+        data-page2-section="pride"
+        className="shrink-0 h-full flex flex-col"
+      >
+        <DraggableDesignWrapper
+          id="pride"
+          transform={layouts.pride}
+          designMode={designMode}
+          scaleFactor={scaleFactor}
+          isActive={
+            activeTarget?.page === 2 && activeTarget.block === 'pride'
+          }
+          onSelect={
+            onSelectTarget
+              ? () => onSelectTarget({ page: 2, block: 'pride' })
+              : undefined
+          }
+          onUpdateTransform={
+            onUpdateTransform
+              ? (next) => onUpdateTransform('pride', next)
+              : undefined
+          }
+          onSnapLinesChange={setSnapLines}
+          onInteractionStart={onInteractionStart}
+          onInteractionEnd={onInteractionEnd}
+          style={{ width: defaultW }}
+          className="shrink-0 h-full"
+        >
+          <PrideSection
+            config={page2}
+            ageCategory={resident.ageCategory}
+            designMode={designMode}
+            scaleFactor={scaleFactor}
+            hasExplicitHeight={layouts.pride?.height !== undefined}
+            bearTransform={layouts.prideBear}
+            activeTarget={activeTarget}
+            activeTextField={activeTextField}
+            onSelectTarget={onSelectTarget}
+            onSelectTextField={onSelectTextField}
+            onUpdateTransform={onUpdateTransform}
+            onUpdateFields={onUpdatePage2}
+            onSnapLinesChange={setSnapLines}
+            onInteractionStart={onInteractionStart}
+            onInteractionEnd={onInteractionEnd}
+          />
+        </DraggableDesignWrapper>
+      </div>
+    );
+  };
+
+  const renderMentorNoteSlot = (standalone: boolean) => {
+    const defaultW = standalone ? '714px' : '345px';
+    if (!page2.showMentorNote) {
+      return standalone ? null : (
+        <div key="sec-mentor-empty" style={{ width: '345px', minHeight: '376px' }} />
+      );
+    }
+    return (
+      <div
+        key="sec-mentor"
+        data-page2-section="mentorNote"
+        className="shrink-0 h-full flex flex-col"
+      >
+        <DraggableDesignWrapper
+          id="mentorNote"
+          transform={layouts.mentorNote}
+          designMode={designMode}
+          scaleFactor={scaleFactor}
+          isActive={
+            activeTarget?.page === 2 && activeTarget.block === 'mentorNote'
+          }
+          onSelect={
+            onSelectTarget
+              ? () => onSelectTarget({ page: 2, block: 'mentorNote' })
+              : undefined
+          }
+          onUpdateTransform={
+            onUpdateTransform
+              ? (next) => onUpdateTransform('mentorNote', next)
+              : undefined
+          }
+          onSnapLinesChange={setSnapLines}
+          onInteractionStart={onInteractionStart}
+          onInteractionEnd={onInteractionEnd}
+          style={{ width: defaultW }}
+          className="shrink-0 h-full"
+        >
+          <MentorNote
+            config={page2}
+            hasExplicitHeight={layouts.mentorNote?.height !== undefined}
+            activeTarget={activeTarget}
+            activeTextField={activeTextField}
+            onSelectTarget={onSelectTarget}
+            onSelectTextField={onSelectTextField}
+            onUpdateMentorNote={onUpdateMentorNote}
+            onBeginEdit={onInteractionStart}
+            onEndEdit={onInteractionEnd}
+          />
+        </DraggableDesignWrapper>
+      </div>
+    );
+  };
+
+  const renderNextChapterSlot = () => {
+    if (!page2.showNextChapter) return null;
+    return (
+      <div
+        key="sec-next"
+        data-page2-section="nextChapter"
+        className="shrink-0 -mx-[40px]"
+      >
+        <DraggableDesignWrapper
+          id="nextChapter"
+          transform={layouts.nextChapter}
+          designMode={designMode}
+          scaleFactor={scaleFactor}
+          isActive={
+            activeTarget?.page === 2 && activeTarget.block === 'nextChapter'
+          }
+          onSelect={
+            onSelectTarget
+              ? () => onSelectTarget({ page: 2, block: 'nextChapter' })
+              : undefined
+          }
+          onUpdateTransform={
+            onUpdateTransform
+              ? (next) => onUpdateTransform('nextChapter', next)
+              : undefined
+          }
+          onSnapLinesChange={setSnapLines}
+          onInteractionStart={onInteractionStart}
+          onInteractionEnd={onInteractionEnd}
+          style={{ width: '794px', height: '266px' }}
+          className="shrink-0"
+        >
+          <NextChapter
+            config={page2}
+            ageCategory={resident.ageCategory}
+            designMode={designMode}
+            scaleFactor={scaleFactor}
+            bearTransform={layouts.nextBear}
+            activeTarget={activeTarget}
+            activeTextField={activeTextField}
+            onSelectTarget={onSelectTarget}
+            onSelectTextField={onSelectTextField}
+            onUpdateTransform={onUpdateTransform}
+            onUpdateTitle={onUpdateNextChapterTitle}
+            onUpdateTopicTitle={onUpdateNextTopicTitle}
+            onSnapLinesChange={setSnapLines}
+            onInteractionStart={onInteractionStart}
+            onInteractionEnd={onInteractionEnd}
+          />
+        </DraggableDesignWrapper>
+      </div>
+    );
+  };
+
+  const orderedBodyRows: React.ReactNode[] = [];
+  for (let i = 0; i < sectionOrder.length; i += 1) {
+    const key = sectionOrder[i];
+    const nextKey = sectionOrder[i + 1];
+    if (
+      (key === 'pride' && nextKey === 'mentorNote') ||
+      (key === 'mentorNote' && nextKey === 'pride')
+    ) {
+      orderedBodyRows.push(
+        <div
+          key={`spread-${key}-${nextKey}`}
+          style={{
+            width: '714px',
+            display: 'grid',
+            gridTemplateColumns: '345px 345px',
+            gap: '24px',
+            flex: '1 0 auto',
+            minHeight: '340px',
+          }}
+          className="items-stretch min-w-0"
+        >
+          {key === 'pride' ? renderPrideSlot(false) : renderMentorNoteSlot(false)}
+          {nextKey === 'pride'
+            ? renderPrideSlot(false)
+            : renderMentorNoteSlot(false)}
+        </div>
+      );
+      i += 1;
+      continue;
+    }
+
+    if (key === 'strengths') {
+      orderedBodyRows.push(renderStrengthsSlot());
+    } else if (key === 'pride') {
+      orderedBodyRows.push(renderPrideSlot(true));
+    } else if (key === 'mentorNote') {
+      orderedBodyRows.push(renderMentorNoteSlot(true));
+    } else if (key === 'nextChapter') {
+      orderedBodyRows.push(renderNextChapterSlot());
+    }
+  }
 
   return (
     <article
@@ -208,236 +504,13 @@ export function JournalPageTwo({
           </header>
         </DraggableDesignWrapper>
 
-        {/* BODY: 3-column Strengths -> Fixed 50/50 Pride & MentorNote -> Open Winding-Road NextChapter */}
+        {/* BODY: Ordered Page 2 Sections (Default: Strengths -> Pride + MentorNote -> NextChapter) */}
         <div
+          data-a4-body="2"
           style={{ width: '794px', height: '995px' }}
-          className="pointer-events-none relative z-[12] px-[40px] pt-[12px] pb-0 flex flex-col justify-between gap-[10px] shrink-0"
+          className="pointer-events-none relative z-[12] px-[40px] pt-[12px] pb-0 flex flex-col justify-between gap-[10px] shrink-0 box-border"
         >
-          {/* 1. МОИ СИЛЬНЫЕ СТОРОНЫ */}
-          {page2.showStrengths && strengthsToRender.length > 0 && (
-            <DraggableDesignWrapper
-              id="strengths"
-              transform={layouts.strengths}
-              defaultZIndex={30}
-              designMode={designMode}
-              scaleFactor={scaleFactor}
-              isActive={
-                activeTarget?.page === 2 && activeTarget.block === 'strengths'
-              }
-              onSelect={
-                onSelectTarget
-                  ? () => onSelectTarget({ page: 2, block: 'strengths' })
-                  : undefined
-              }
-              onUpdateTransform={
-                onUpdateTransform
-                  ? (next) => onUpdateTransform('strengths', next)
-                  : undefined
-              }
-              onSnapLinesChange={setSnapLines}
-              onInteractionStart={onInteractionStart}
-              onInteractionEnd={onInteractionEnd}
-              className="shrink-0 relative z-30"
-            >
-              <section style={{ width: '714px' }} className="rounded-xl">
-                <h3 className="font-journal-display font-black text-[17.5px] leading-[21px] tracking-tight uppercase text-[#111827] mb-[10px]">
-                  МОИ СИЛЬНЫЕ СТОРОНЫ
-                </h3>
-                <div
-                  style={{ width: '714px' }}
-                  className="grid grid-cols-3 items-stretch auto-rows-fr gap-[14px]"
-                >
-                  {strengthsToRender.map((item) => (
-                    <DraggableDesignWrapper
-                      key={item.id}
-                      id={`strength-${item.id}`}
-                      transform={layouts[`strength-${item.id}`]}
-                      designMode={designMode}
-                      scaleFactor={scaleFactor}
-                      isActive={false}
-                      onSelect={
-                        onSelectTarget
-                          ? () =>
-                              onSelectTarget({ page: 2, block: 'strengths' })
-                          : undefined
-                      }
-                      onUpdateTransform={
-                        onUpdateTransform
-                          ? (next) =>
-                              onUpdateTransform(`strength-${item.id}`, next)
-                          : undefined
-                      }
-                      onSnapLinesChange={setSnapLines}
-                      onInteractionStart={onInteractionStart}
-                      onInteractionEnd={onInteractionEnd}
-                      className="h-full min-w-0"
-                    >
-                      <StrengthCard
-                        strength={item}
-                        ageCategory={resident.ageCategory}
-                        compact={isCompactStrengths}
-                        activeTextField={activeTextField}
-                        onSelectTextField={onSelectTextField}
-                        onUpdateField={
-                          onUpdateStrength
-                            ? (patch) => onUpdateStrength(item.id, patch)
-                            : undefined
-                        }
-                        onBeginEdit={onInteractionStart}
-                        onEndEdit={onInteractionEnd}
-                      />
-                    </DraggableDesignWrapper>
-                  ))}
-                </div>
-              </section>
-            </DraggableDesignWrapper>
-          )}
-
-          {/* 2. MIDDLE 50/50 TWO-COLUMN SPREAD: Rigid 345px Columns with Natural Vertical Flow */}
-          <div
-            style={{
-              width: '714px',
-              display: 'grid',
-              gridTemplateColumns: '345px 345px',
-              gap: '24px',
-              flex: '0 1 407px',
-              minHeight: '310px',
-            }}
-            className="items-stretch min-h-0"
-          >
-            {page2.showPride ? (
-              <DraggableDesignWrapper
-                id="pride"
-                transform={layouts.pride}
-                designMode={designMode}
-                scaleFactor={scaleFactor}
-                isActive={
-                  activeTarget?.page === 2 && activeTarget.block === 'pride'
-                }
-                onSelect={
-                  onSelectTarget
-                    ? () => onSelectTarget({ page: 2, block: 'pride' })
-                    : undefined
-                }
-                onUpdateTransform={
-                  onUpdateTransform
-                    ? (next) => onUpdateTransform('pride', next)
-                    : undefined
-                }
-                onSnapLinesChange={setSnapLines}
-                onInteractionStart={onInteractionStart}
-                onInteractionEnd={onInteractionEnd}
-                style={{ width: '345px' }}
-                className="shrink-0 h-full"
-              >
-                <PrideSection
-                  config={page2}
-                  ageCategory={resident.ageCategory}
-                  designMode={designMode}
-                  scaleFactor={scaleFactor}
-                  bearTransform={layouts.prideBear}
-                  activeTarget={activeTarget}
-                  activeTextField={activeTextField}
-                  onSelectTarget={onSelectTarget}
-                  onSelectTextField={onSelectTextField}
-                  onUpdateTransform={onUpdateTransform}
-                  onUpdateFields={onUpdatePage2}
-                  onSnapLinesChange={setSnapLines}
-                  onInteractionStart={onInteractionStart}
-                  onInteractionEnd={onInteractionEnd}
-                />
-              </DraggableDesignWrapper>
-            ) : (
-              <div style={{ width: '345px', minHeight: '376px' }} />
-            )}
-
-            {page2.showMentorNote ? (
-              <DraggableDesignWrapper
-                id="mentorNote"
-                transform={layouts.mentorNote}
-                designMode={designMode}
-                scaleFactor={scaleFactor}
-                isActive={
-                  activeTarget?.page === 2 && activeTarget.block === 'mentorNote'
-                }
-                onSelect={
-                  onSelectTarget
-                    ? () => onSelectTarget({ page: 2, block: 'mentorNote' })
-                    : undefined
-                }
-                onUpdateTransform={
-                  onUpdateTransform
-                    ? (next) => onUpdateTransform('mentorNote', next)
-                    : undefined
-                }
-                onSnapLinesChange={setSnapLines}
-                onInteractionStart={onInteractionStart}
-                onInteractionEnd={onInteractionEnd}
-                style={{ width: '345px' }}
-                className="shrink-0 h-full"
-              >
-                <MentorNote
-                  config={page2}
-                  activeTarget={activeTarget}
-                  activeTextField={activeTextField}
-                  onSelectTarget={onSelectTarget}
-                  onSelectTextField={onSelectTextField}
-                  onUpdateMentorNote={onUpdateMentorNote}
-                  onBeginEdit={onInteractionStart}
-                  onEndEdit={onInteractionEnd}
-                />
-              </DraggableDesignWrapper>
-            ) : (
-              <div style={{ width: '345px', minHeight: '376px' }} />
-            )}
-          </div>
-
-          {/* 3. BOTTOM WINDING ROAD MAP: ЧТО ИНТЕРЕСНОГО ВПЕРЕДИ? */}
-          {page2.showNextChapter && (
-            <DraggableDesignWrapper
-              id="nextChapter"
-              transform={layouts.nextChapter}
-              designMode={designMode}
-              scaleFactor={scaleFactor}
-              isActive={
-                activeTarget?.page === 2 &&
-                activeTarget.block === 'nextChapter'
-              }
-              onSelect={
-                onSelectTarget
-                  ? () => onSelectTarget({ page: 2, block: 'nextChapter' })
-                  : undefined
-              }
-              onUpdateTransform={
-                onUpdateTransform
-                  ? (next) => onUpdateTransform('nextChapter', next)
-                  : undefined
-              }
-              onSnapLinesChange={setSnapLines}
-              onInteractionStart={onInteractionStart}
-              onInteractionEnd={onInteractionEnd}
-              style={{ width: '794px', height: '266px' }}
-              className="shrink-0 -mx-[40px]"
-            >
-              <NextChapter
-                config={page2}
-                ageCategory={resident.ageCategory}
-                designMode={designMode}
-                scaleFactor={scaleFactor}
-                bearTransform={layouts.nextBear}
-                activeTarget={activeTarget}
-                activeTextField={activeTextField}
-                onSelectTarget={onSelectTarget}
-                onSelectTextField={onSelectTextField}
-                onUpdateTransform={onUpdateTransform}
-                onUpdateTitle={onUpdateNextChapterTitle}
-                onUpdateTopicTitle={onUpdateNextTopicTitle}
-                onSnapLinesChange={setSnapLines}
-                onInteractionStart={onInteractionStart}
-                onInteractionEnd={onInteractionEnd}
-              />
-            </DraggableDesignWrapper>
-          )}
+          {orderedBodyRows}
         </div>
       </div>
     </article>
