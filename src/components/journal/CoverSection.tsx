@@ -239,36 +239,38 @@ export function CoverSection({
           maxWidth: '472px',
         }}
       >
-        <InlineEditableText
-          value={config.coverTitle}
-          onChange={
-            onUpdateFields
-              ? (next) => onUpdateFields({ coverTitle: next })
-              : undefined
-          }
-          inlineEditOnDoubleClick
-          designMode={designMode}
-          onSelectText={
-            onSelectTextField
-              ? () => onSelectTextField({ page: 1, field: 'coverTitle' })
-              : undefined
-          }
-          onBeginEdit={onInteractionStart}
-          onEndEdit={onInteractionEnd}
-          isSelected={
-            !designMode &&
-            activeTextField?.page === 1 &&
-            activeTextField.field === 'coverTitle'
-          }
-          as="h1"
-          className="font-journal-display font-black leading-[0.96] tracking-tight block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]"
-          style={{
-            fontSize: `${resolvedTitleSize}px`,
-            color: resolvedTitleColor,
-            textShadow:
-              '2px 0 0 #18181B, -2px 0 0 #18181B, 0 2px 0 #18181B, 0 -2px 0 #18181B, 2px 2px 0 #18181B, -2px 2px 0 #18181B, 2px -2px 0 #18181B, -2px -2px 0 #18181B, 4px 5px 0 rgba(24,24,27,0.85)',
-          }}
-        />
+        <div data-card-label="Заголовок «МОЙ ПУТЬ»" className="w-full min-w-0">
+          <InlineEditableText
+            value={config.coverTitle}
+            onChange={
+              onUpdateFields
+                ? (next) => onUpdateFields({ coverTitle: next })
+                : undefined
+            }
+            inlineEditOnDoubleClick
+            designMode={designMode}
+            onSelectText={
+              onSelectTextField
+                ? () => onSelectTextField({ page: 1, field: 'coverTitle' })
+                : undefined
+            }
+            onBeginEdit={onInteractionStart}
+            onEndEdit={onInteractionEnd}
+            isSelected={
+              !designMode &&
+              activeTextField?.page === 1 &&
+              activeTextField.field === 'coverTitle'
+            }
+            as="h1"
+            className="font-journal-display font-black leading-[0.96] tracking-tight block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]"
+            style={{
+              fontSize: `${resolvedTitleSize}px`,
+              color: resolvedTitleColor,
+              textShadow:
+                '2px 0 0 #18181B, -2px 0 0 #18181B, 0 2px 0 #18181B, 0 -2px 0 #18181B, 2px 2px 0 #18181B, -2px 2px 0 #18181B, 2px -2px 0 #18181B, -2px -2px 0 #18181B, 4px 5px 0 rgba(24,24,27,0.85)',
+            }}
+          />
+        </div>
       </DraggableDesignWrapper>
 
       {/* 3. Independent Editable Subtitle: «в мире технологий» */}
@@ -300,34 +302,36 @@ export function CoverSection({
           maxWidth: '472px',
         }}
       >
-        <InlineEditableText
-          value={config.coverSubtitle}
-          onChange={
-            onUpdateFields
-              ? (next) => onUpdateFields({ coverSubtitle: next })
-              : undefined
-          }
-          inlineEditOnDoubleClick
-          designMode={designMode}
-          onSelectText={
-            onSelectTextField
-              ? () => onSelectTextField({ page: 1, field: 'coverSubtitle' })
-              : undefined
-          }
-          onBeginEdit={onInteractionStart}
-          onEndEdit={onInteractionEnd}
-          isSelected={
-            !designMode &&
-            activeTextField?.page === 1 &&
-            activeTextField.field === 'coverSubtitle'
-          }
-          as="div"
-          className="font-journal-display font-extrabold leading-tight block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]"
-          style={{
-            fontSize: `${resolvedSubtitleSize}px`,
-            color: resolvedSubtitleColor,
-          }}
-        />
+        <div data-card-label="Подзаголовок обложки" className="w-full min-w-0">
+          <InlineEditableText
+            value={config.coverSubtitle}
+            onChange={
+              onUpdateFields
+                ? (next) => onUpdateFields({ coverSubtitle: next })
+                : undefined
+            }
+            inlineEditOnDoubleClick
+            designMode={designMode}
+            onSelectText={
+              onSelectTextField
+                ? () => onSelectTextField({ page: 1, field: 'coverSubtitle' })
+                : undefined
+            }
+            onBeginEdit={onInteractionStart}
+            onEndEdit={onInteractionEnd}
+            isSelected={
+              !designMode &&
+              activeTextField?.page === 1 &&
+              activeTextField.field === 'coverSubtitle'
+            }
+            as="div"
+            className="font-journal-display font-extrabold leading-tight block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]"
+            style={{
+              fontSize: `${resolvedSubtitleSize}px`,
+              color: resolvedSubtitleColor,
+            }}
+          />
+        </div>
       </DraggableDesignWrapper>
 
       {/* 4. Independent Transformable Student Metadata Plaque (Имя, Период, Наставник) */}

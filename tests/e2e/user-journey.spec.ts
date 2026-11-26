@@ -123,7 +123,7 @@ test.describe('Полный пользовательский путь KIBERone S
     });
     await inspectorNav.getByRole('button', { name: /2\. Модули/ }).click();
     await expect(page.getByText('Модули (Мои открытия)')).toBeVisible();
-    await expect(page.getByText('Активно 3 из 3')).toBeVisible();
+    await expect(page.getByText(/Активно 3 из 3/)).toBeVisible();
 
     const firstModuleTitle = (await pageOneCanvas.locator('h3').first().innerText()).trim();
     const firstModuleA4Img = pageOneCanvas.locator(`img[alt="${firstModuleTitle}"]`).first();

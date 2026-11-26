@@ -104,7 +104,10 @@ import {
   getStudentStatusLabel,
   getStudentStatusMeta,
   hasJournalDesignChanged,
+  MAX_PAGE1_MODULES,
+  MAX_PAGE1_PROJECTS,
   normalizeStudentStatus,
+  PAGE1_CARD_LIMIT_MESSAGE,
   STRENGTH_EXAMPLE_MAX_CHARS,
 } from '../../utils/journalProgress';
 import { AutoResizeTextarea } from '../ui/AutoResizeTextarea';
@@ -321,7 +324,20 @@ export function GroupEditorView({
     name: string;
   } | null>(null);
   const [undoingBulk, setUndoingBulk] = useState(false);
-  const [a4OverflowPages, setA4OverflowPages] = useState<Array<1 | 2>>([]);
+  const [a4OverflowInfo, setA4OverflowInfo] = useState<
+    Array<{ page: 1 | 2; items: string[] }>
+  >([]);
+  const a4OverflowPages = useMemo(
+    () => a4OverflowInfo.map((o) => o.page),
+    [a4OverflowInfo]
+  );
+  const [page1LimitWarning, setPage1LimitWarning] = useState<string | null>(
+    null
+  );
+  const triggerPage1LimitWarning = () => {
+    setPage1LimitWarning(PAGE1_CARD_LIMIT_MESSAGE);
+    onNotifyToast?.(PAGE1_CARD_LIMIT_MESSAGE);
+  };
   const [activeTarget, setActiveTarget] = useState<EditorSectionTarget>(null);
   const [activeTextField, setActiveTextField] =
     useState<ActiveTextFieldTarget>(null);
@@ -1210,7 +1226,7 @@ export function GroupEditorView({
 
   useEffect(() => {
     if (editorTab !== 'individual' || !activeDoc) {
-      setA4OverflowPages([]);
+      setA4OverflowInfo([]);
       return;
     }
     const raf = window.requestAnimationFrame(() => {
@@ -1220,7 +1236,15 @@ export function GroupEditorView({
       const articles = Array.from(
         stage.querySelectorAll<HTMLElement>('article.a4-canvas')
       );
-      const overflowing: Array<1 | 2> = [];
+      const overflowing: Array<{ page: 1 | 2; items: string[] }> = [];
+
+      const findMostSpecificLabel = (el: HTMLElement): string | null => {
+        const direct = el.getAttribute('data-card-label');
+        if (direct) return direct;
+        const ancestor = el.closest<HTMLElement>('[data-card-label]');
+        return ancestor?.getAttribute('data-card-label') ?? null;
+      };
+
       articles.forEach((article) => {
         const label = article.getAttribute('aria-label') || '';
         const pageNum: 1 | 2 = label.includes('Страница 2') ? 2 : 1;
@@ -1229,47 +1253,94 @@ export function GroupEditorView({
         );
         const articleRect = article.getBoundingClientRect();
         let hasOverflow = false;
+        const itemsSet = new Set<string>();
 
         if (bodyEl) {
-          if (
-            bodyEl.scrollHeight > bodyEl.clientHeight + 4 ||
-            bodyEl.scrollWidth > bodyEl.clientWidth + 4
-          ) {
+          const bodyScrollOverY = bodyEl.scrollHeight > bodyEl.clientHeight + 4;
+          const bodyScrollOverX = bodyEl.scrollWidth > bodyEl.clientWidth + 4;
+          if (bodyScrollOverY || bodyScrollOverX) {
             hasOverflow = true;
           }
-          if (!hasOverflow) {
+
+          // Inspect bottom/right bounds of labeled elements inside the page body & article
+          const labeledEls = Array.from(
+            article.querySelectorAll<HTMLElement>('[data-card-label]')
+          );
+          const overflowedLabeled = new Set<HTMLElement>();
+          for (const el of labeledEls) {
+            if (el.getAttribute('aria-hidden') === 'true') continue;
+            const r = el.getBoundingClientRect();
+            const bottomLogical = (r.bottom - articleRect.top) / scale;
+            const rightLogical = (r.right - articleRect.left) / scale;
+            if (
+              bottomLogical > A4_PAGE_HEIGHT + 4 ||
+              rightLogical > A4_PAGE_WIDTH + 4
+            ) {
+              overflowedLabeled.add(el);
+            }
+          }
+
+          overflowedLabeled.forEach((el) => {
+            const hasOverflowingChild = Array.from(overflowedLabeled).some(
+              (other) => other !== el && el.contains(other)
+            );
+            if (!hasOverflowingChild) {
+              const cardLabel = el.getAttribute('data-card-label');
+              if (cardLabel) itemsSet.add(cardLabel);
+              hasOverflow = true;
+            }
+          });
+
+          if (bodyScrollOverY && itemsSet.size === 0) {
             const sections = Array.from(bodyEl.children) as HTMLElement[];
+            let bottomMostLabel: string | null = null;
+            let maxBottom = -Infinity;
             for (const sec of sections) {
               const r = sec.getBoundingClientRect();
               const bottomLogical = (r.bottom - articleRect.top) / scale;
               if (bottomLogical > A4_PAGE_HEIGHT + 4) {
                 hasOverflow = true;
-                break;
+                const lbl = findMostSpecificLabel(sec);
+                if (lbl) itemsSet.add(lbl);
               }
+              if (bottomLogical > maxBottom) {
+                maxBottom = bottomLogical;
+                bottomMostLabel =
+                  sec.querySelector<HTMLElement>('[data-card-label]')?.getAttribute(
+                    'data-card-label'
+                  ) ?? findMostSpecificLabel(sec);
+              }
+            }
+            if (itemsSet.size === 0 && bottomMostLabel) {
+              itemsSet.add(bottomMostLabel);
             }
           }
         }
 
-        if (!hasOverflow) {
-          const textBlocks = article.querySelectorAll<HTMLElement>(
-            '[data-a4-text="true"], h1, h2, h3, h4, p'
-          );
-          for (const el of textBlocks) {
-            if (el.closest('svg') || el.getAttribute('aria-hidden') === 'true') {
-              continue;
-            }
-            if (el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 3) {
-              hasOverflow = true;
-              break;
+        const textBlocks = article.querySelectorAll<HTMLElement>(
+          '[data-a4-text="true"], h1, h2, h3, h4, p'
+        );
+        for (const el of textBlocks) {
+          if (el.closest('svg') || el.getAttribute('aria-hidden') === 'true') {
+            continue;
+          }
+          if (el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 3) {
+            hasOverflow = true;
+            const specificLabel = findMostSpecificLabel(el);
+            if (specificLabel) {
+              itemsSet.add(specificLabel);
             }
           }
         }
 
         if (hasOverflow) {
-          overflowing.push(pageNum);
+          overflowing.push({
+            page: pageNum,
+            items: Array.from(itemsSet).slice(0, 4),
+          });
         }
       });
-      setA4OverflowPages(overflowing);
+      setA4OverflowInfo(overflowing);
     });
     return () => window.cancelAnimationFrame(raf);
   }, [editorTab, activeDoc, pageFocus, effectiveScale]);
@@ -1739,7 +1810,9 @@ export function GroupEditorView({
       target.field === 'mentorSignature'
     ) {
       setActiveTarget({ page: 2, block: 'mentorNote' });
-      focusSection('mentorNote', 2);
+      if (inspectorMode !== 'design') {
+        focusSection('mentorNote', 2);
+      }
       return;
     }
     if (
@@ -1938,7 +2011,13 @@ export function GroupEditorView({
   const applyCommonGroupTemplate = (tplId: string) => {
     const tpl = groupTemplates.find((t) => t.id === tplId);
     if (!tpl) return;
+    if (tpl.moduleIds.length > MAX_PAGE1_MODULES) {
+      triggerPage1LimitWarning();
+    } else {
+      setPage1LimitWarning(null);
+    }
     const mapped = tpl.moduleIds
+      .slice(0, MAX_PAGE1_MODULES)
       .map((id) => libraryModules.find((m) => m.id === id))
       .filter((m): m is LibraryModule => Boolean(m))
       .map((lib, idx) => ({
@@ -2094,7 +2173,13 @@ export function GroupEditorView({
       });
     });
 
-    const combined = [...selectedFromLib, ...customOnly].map((m, idx) => ({
+    const combinedRaw = [...selectedFromLib, ...customOnly];
+    if (combinedRaw.length > MAX_PAGE1_MODULES) {
+      triggerPage1LimitWarning();
+    } else {
+      setPage1LimitWarning(null);
+    }
+    const combined = combinedRaw.slice(0, MAX_PAGE1_MODULES).map((m, idx) => ({
       ...m,
       order: idx + 1,
     }));
@@ -2210,6 +2295,13 @@ export function GroupEditorView({
 
   const handleToggleStudentModule = (modId: string) => {
     if (!activeDoc) return;
+    const targetMod = activeDoc.page1.modules.find((m) => m.id === modId);
+    const activeCount = activeDoc.page1.modules.filter((m) => !m.hidden).length;
+    if (targetMod?.hidden && activeCount >= MAX_PAGE1_MODULES) {
+      triggerPage1LimitWarning();
+      return;
+    }
+    setPage1LimitWarning(null);
     const nextModules = activeDoc.page1.modules.map((m) =>
       m.id === modId ? { ...m, hidden: !m.hidden } : m
     );
@@ -2232,6 +2324,12 @@ export function GroupEditorView({
 
   const handleAddIndividualModuleFromLib = (lib: LibraryModule) => {
     if (!activeDoc) return;
+    const activeCount = activeDoc.page1.modules.filter((m) => !m.hidden).length;
+    if (activeCount >= MAX_PAGE1_MODULES) {
+      triggerPage1LimitWarning();
+      return;
+    }
+    setPage1LimitWarning(null);
     const nextMod: ModuleItem = {
       id: `ind-mod-${lib.id}-${Date.now()}`,
       libraryModuleId: lib.id,
@@ -2274,6 +2372,12 @@ export function GroupEditorView({
 
   const handleAddCustomIndividualModule = () => {
     if (!activeDoc || !customIndividualModTitle.trim()) return;
+    const activeCount = activeDoc.page1.modules.filter((m) => !m.hidden).length;
+    if (activeCount >= MAX_PAGE1_MODULES) {
+      triggerPage1LimitWarning();
+      return;
+    }
+    setPage1LimitWarning(null);
     const nextMod: ModuleItem = {
       id: `ind-mod-custom-${Date.now()}`,
       title: customIndividualModTitle.trim(),
@@ -3486,15 +3590,30 @@ export function GroupEditorView({
                       <div>
                         <h3 className="text-sm font-bold text-zinc-900">
                           Шаг 2. Модули программы («Мои открытия», выбрано{' '}
-                          {commonDraft.modules.length})
+                          {commonDraft.modules.length} из {MAX_PAGE1_MODULES} макс.)
                         </h3>
                         <p className="text-zinc-500 mt-1">
                           Возраст группы:{' '}
                           <span className="font-semibold text-zinc-700">
                             {groupDraft.ageCategory} лет
                           </span>
-                          . Нажмите на миниатюру модуля, чтобы выбрать картинку и настроить кадрирование.
+                          . Нажмите на миниатюру модуля, чтобы выбрать картинку и настроить кадрирование (до {MAX_PAGE1_MODULES} модулей на странице 1).
                         </p>
+                        {page1LimitWarning && (
+                          <div
+                            role="status"
+                            className="mt-2 px-2.5 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-[11px] font-medium text-amber-900 flex items-center justify-between gap-2"
+                          >
+                            <span>{page1LimitWarning}</span>
+                            <button
+                              type="button"
+                              onClick={() => setPage1LimitWarning(null)}
+                              className="text-amber-700 hover:text-amber-950 font-bold"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2.5 shrink-0">
@@ -4506,7 +4625,7 @@ export function GroupEditorView({
               </div>
 
               {/* Unobtrusive A4 Overflow Warning Banner (Never clips content) */}
-              {a4OverflowPages.length > 0 && (
+              {a4OverflowInfo.length > 0 && (
                 <div
                   role="alert"
                   className="shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-1.5 flex items-center gap-2 text-[11px] font-medium text-amber-900"
@@ -4514,7 +4633,25 @@ export function GroupEditorView({
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                   <span>
                     Текст или блоки выходят за пределы листа А4 (стр.{' '}
-                    {a4OverflowPages.join(', ')}). Содержимое не обрезается и не скрывается — при необходимости сократите текст перед печатью.
+                    {a4OverflowPages.join(', ')}).{' '}
+                    {a4OverflowInfo.some((o) => o.items.length > 0) && (
+                      <>
+                        Проблемные элементы:{' '}
+                        <strong className="font-semibold">
+                          {a4OverflowInfo
+                            .flatMap((o) =>
+                              o.items.map((item) =>
+                                a4OverflowInfo.length > 1
+                                  ? `${item} (стр. ${o.page})`
+                                  : item
+                              )
+                            )
+                            .join(', ')}
+                        </strong>
+                        .{' '}
+                      </>
+                    )}
+                    Содержимое не обрезается и не скрывается — при необходимости сократите текст перед печатью.
                   </span>
                 </div>
               )}
@@ -5838,7 +5975,10 @@ export function GroupEditorView({
                                         {
                                           width: Math.max(
                                             32,
-                                            Number(e.target.value) || 80
+                                            Math.min(
+                                              760,
+                                              Number(e.target.value) || 80
+                                            )
                                           ),
                                         }
                                       )
@@ -5847,6 +5987,33 @@ export function GroupEditorView({
                                   />
                                 </label>
                                 <label className="block">
+                                  <span className="text-[10px] text-zinc-500">
+                                    Высота (px)
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min={20}
+                                    max={900}
+                                    value={selectedDecor.height}
+                                    onChange={(e) =>
+                                      handleUpdateDecor(
+                                        activeTarget.page,
+                                        selectedDecor.id,
+                                        {
+                                          height: Math.max(
+                                            20,
+                                            Math.min(
+                                              900,
+                                              Number(e.target.value) || 40
+                                            )
+                                          ),
+                                        }
+                                      )
+                                    }
+                                    className={flatInputClass}
+                                  />
+                                </label>
+                                <label className="block col-span-2">
                                   <span className="text-[10px] text-zinc-500">
                                     Поворот (°)
                                   </span>
@@ -5865,6 +6032,59 @@ export function GroupEditorView({
                                     className={flatInputClass}
                                   />
                                 </label>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2 pt-1">
+                                <label className="inline-flex items-center gap-1.5 text-[11px] text-zinc-700 cursor-pointer select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={
+                                      selectedDecor.preserveAspectRatio !==
+                                      false
+                                    }
+                                    onChange={(e) =>
+                                      handleUpdateDecor(
+                                        activeTarget.page,
+                                        selectedDecor.id,
+                                        {
+                                          preserveAspectRatio:
+                                            e.target.checked,
+                                        }
+                                      )
+                                    }
+                                    className="rounded border-zinc-300 text-[#0D9488]"
+                                  />
+                                  <span>Сохранять пропорции</span>
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const defSize =
+                                      selectedDecor.kind === 'sticker'
+                                        ? { width: 110, height: 44 }
+                                        : selectedDecor.kind === 'text'
+                                        ? { width: 220, height: 56 }
+                                        : selectedDecor.kind === 'tape'
+                                        ? { width: 112, height: 24 }
+                                        : selectedDecor.kind === 'line'
+                                        ? { width: 140, height: 24 }
+                                        : selectedDecor.kind === 'dots'
+                                        ? { width: 80, height: 56 }
+                                        : { width: 96, height: 96 };
+                                    handleUpdateDecor(
+                                      activeTarget.page,
+                                      selectedDecor.id,
+                                      {
+                                        ...defSize,
+                                        preserveAspectRatio: true,
+                                      }
+                                    );
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded border border-zinc-200 bg-zinc-50 hover:border-[#0D9488] hover:text-[#0F766E] text-[10px] font-semibold text-zinc-700 transition-colors"
+                                >
+                                  <RotateCcw className="w-3 h-3" />
+                                  <span>Сбросить размер</span>
+                                </button>
                               </div>
 
                               {/* Text-specific Controls */}
@@ -6450,14 +6670,14 @@ export function GroupEditorView({
                                       )
                                     }
                                     className="p-1.5 rounded-md border border-zinc-200 text-zinc-500 hover:text-zinc-900"
-                                    title="Сбросить позицию и слой"
+                                    title="Сбросить позицию, размер и слой"
                                   >
                                     <RotateCcw className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
                               </div>
 
-                              {/* X / Y / Width / Height / Scale / Rotation */}
+                              {/* X / Y / Width / Height / Aspect / Reset / Scale / Rotation */}
                               {(() => {
                                 const coverDefaults =
                                   selectedBlockId === 'coverTitle' ||
@@ -6466,6 +6686,55 @@ export function GroupEditorView({
                                   selectedBlockId === 'coverBubble'
                                     ? COVER_OBJECT_DEFAULTS[selectedBlockId]
                                     : null;
+                                const BLOCK_DEFAULT_SIZES: Record<
+                                  string,
+                                  { width: number; height: number }
+                                > = {
+                                  cover: { width: 794, height: 316 },
+                                  coverBear: { width: 240, height: 240 },
+                                  logo: { width: 150, height: 48 },
+                                  modulesBlock: { width: 714, height: 260 },
+                                  skills: { width: 714, height: 90 },
+                                  projectsBlock: { width: 714, height: 260 },
+                                  header: { width: 794, height: 128 },
+                                  strengths: { width: 714, height: 180 },
+                                  pride: { width: 345, height: 340 },
+                                  prideBear: { width: 232, height: 214 },
+                                  mentorNote: { width: 345, height: 340 },
+                                  nextChapter: { width: 794, height: 266 },
+                                  nextBear: { width: 218, height: 266 },
+                                };
+                                const domBlockEl =
+                                  canvasStageRef.current?.querySelector<HTMLElement>(
+                                    `[data-snap-id="${selectedBlockId}"]`
+                                  );
+                                const measuredW = domBlockEl?.offsetWidth;
+                                const measuredH = domBlockEl?.offsetHeight;
+                                const fallbackDims = coverDefaults
+                                  ? {
+                                      width: coverDefaults.width,
+                                      height: coverDefaults.height,
+                                    }
+                                  : BLOCK_DEFAULT_SIZES[selectedBlockId] ?? {
+                                      width:
+                                        measuredW && measuredW > 0
+                                          ? Math.round(measuredW)
+                                          : 240,
+                                      height:
+                                        measuredH && measuredH > 0
+                                          ? Math.round(measuredH)
+                                          : 160,
+                                    };
+                                const defaultW =
+                                  coverDefaults?.width ??
+                                  (measuredW && measuredW > 0
+                                    ? Math.round(measuredW)
+                                    : fallbackDims.width);
+                                const defaultH =
+                                  coverDefaults?.height ??
+                                  (measuredH && measuredH > 0
+                                    ? Math.round(measuredH)
+                                    : fallbackDims.height);
                                 const displayX = coverDefaults
                                   ? coverDefaults.x + selectedBlockTransform.x
                                   : selectedBlockTransform.x;
@@ -6474,168 +6743,224 @@ export function GroupEditorView({
                                   : selectedBlockTransform.y;
 
                                 return (
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <label className="block">
-                                      <span className="text-[10px] text-zinc-500">
-                                        {coverDefaults ? 'X (px)' : 'Смещение X (px)'}
-                                      </span>
-                                      <input
-                                        type="number"
-                                        value={displayX}
-                                        onChange={(e) => {
-                                          const rawVal = Number(e.target.value) || 0;
-                                          handleUpdatePageTransform(
-                                            activeTarget.page,
-                                            selectedBlockId,
-                                            {
-                                              ...selectedBlockTransform,
-                                              x: coverDefaults
-                                                ? rawVal - coverDefaults.x
-                                                : rawVal,
-                                            }
-                                          );
-                                        }}
-                                        className={flatInputClass}
-                                      />
-                                    </label>
-                                    <label className="block">
-                                      <span className="text-[10px] text-zinc-500">
-                                        {coverDefaults ? 'Y (px)' : 'Смещение Y (px)'}
-                                      </span>
-                                      <input
-                                        type="number"
-                                        value={displayY}
-                                        onChange={(e) => {
-                                          const rawVal = Number(e.target.value) || 0;
-                                          handleUpdatePageTransform(
-                                            activeTarget.page,
-                                            selectedBlockId,
-                                            {
-                                              ...selectedBlockTransform,
-                                              y: coverDefaults
-                                                ? rawVal - coverDefaults.y
-                                                : rawVal,
-                                            }
-                                          );
-                                        }}
-                                        className={flatInputClass}
-                                      />
-                                    </label>
+                                  <div className="space-y-2.5">
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <label className="block">
+                                        <span className="text-[10px] text-zinc-500">
+                                          {coverDefaults
+                                            ? 'X (px)'
+                                            : 'Смещение X (px)'}
+                                        </span>
+                                        <input
+                                          type="number"
+                                          value={displayX}
+                                          onChange={(e) => {
+                                            const rawVal =
+                                              Number(e.target.value) || 0;
+                                            handleUpdatePageTransform(
+                                              activeTarget.page,
+                                              selectedBlockId,
+                                              {
+                                                ...selectedBlockTransform,
+                                                x: coverDefaults
+                                                  ? rawVal - coverDefaults.x
+                                                  : rawVal,
+                                              }
+                                            );
+                                          }}
+                                          className={flatInputClass}
+                                        />
+                                      </label>
+                                      <label className="block">
+                                        <span className="text-[10px] text-zinc-500">
+                                          {coverDefaults
+                                            ? 'Y (px)'
+                                            : 'Смещение Y (px)'}
+                                        </span>
+                                        <input
+                                          type="number"
+                                          value={displayY}
+                                          onChange={(e) => {
+                                            const rawVal =
+                                              Number(e.target.value) || 0;
+                                            handleUpdatePageTransform(
+                                              activeTarget.page,
+                                              selectedBlockId,
+                                              {
+                                                ...selectedBlockTransform,
+                                                y: coverDefaults
+                                                  ? rawVal - coverDefaults.y
+                                                  : rawVal,
+                                              }
+                                            );
+                                          }}
+                                          className={flatInputClass}
+                                        />
+                                      </label>
 
-                                    {coverDefaults && (
-                                      <>
-                                        <label className="block">
-                                          <span className="text-[10px] text-zinc-500">
-                                            Ширина (px)
-                                          </span>
-                                          <input
-                                            type="number"
-                                            min={60}
-                                            max={760}
-                                            value={
-                                              selectedBlockTransform.width ??
-                                              coverDefaults.width
-                                            }
-                                            onChange={(e) =>
-                                              handleUpdatePageTransform(
-                                                activeTarget.page,
-                                                selectedBlockId,
-                                                {
-                                                  ...selectedBlockTransform,
-                                                  width: Math.max(
-                                                    60,
-                                                    Math.min(
-                                                      760,
-                                                      Number(e.target.value) ||
-                                                        coverDefaults.width
-                                                    )
-                                                  ),
-                                                }
-                                              )
-                                            }
-                                            className={flatInputClass}
-                                          />
-                                        </label>
-                                        <label className="block">
-                                          <span className="text-[10px] text-zinc-500">
-                                            Высота (px)
-                                          </span>
-                                          <input
-                                            type="number"
-                                            min={24}
-                                            max={400}
-                                            value={
-                                              selectedBlockTransform.height ??
-                                              coverDefaults.height
-                                            }
-                                            onChange={(e) =>
-                                              handleUpdatePageTransform(
-                                                activeTarget.page,
-                                                selectedBlockId,
-                                                {
-                                                  ...selectedBlockTransform,
-                                                  height: Math.max(
-                                                    24,
-                                                    Math.min(
-                                                      400,
-                                                      Number(e.target.value) ||
-                                                        coverDefaults.height
-                                                    )
-                                                  ),
-                                                }
-                                              )
-                                            }
-                                            className={flatInputClass}
-                                          />
-                                        </label>
-                                      </>
-                                    )}
+                                      <label className="block">
+                                        <span className="text-[10px] text-zinc-500">
+                                          Ширина (px)
+                                        </span>
+                                        <input
+                                          type="number"
+                                          min={48}
+                                          max={760}
+                                          value={
+                                            selectedBlockTransform.width ??
+                                            defaultW
+                                          }
+                                          onChange={(e) =>
+                                            handleUpdatePageTransform(
+                                              activeTarget.page,
+                                              selectedBlockId,
+                                              {
+                                                ...selectedBlockTransform,
+                                                width: Math.max(
+                                                  48,
+                                                  Math.min(
+                                                    760,
+                                                    Number(e.target.value) ||
+                                                      defaultW
+                                                  )
+                                                ),
+                                              }
+                                            )
+                                          }
+                                          className={flatInputClass}
+                                        />
+                                      </label>
+                                      <label className="block">
+                                        <span className="text-[10px] text-zinc-500">
+                                          Высота (px)
+                                        </span>
+                                        <input
+                                          type="number"
+                                          min={28}
+                                          max={920}
+                                          value={
+                                            selectedBlockTransform.height ??
+                                            defaultH
+                                          }
+                                          onChange={(e) =>
+                                            handleUpdatePageTransform(
+                                              activeTarget.page,
+                                              selectedBlockId,
+                                              {
+                                                ...selectedBlockTransform,
+                                                height: Math.max(
+                                                  28,
+                                                  Math.min(
+                                                    920,
+                                                    Number(e.target.value) ||
+                                                      defaultH
+                                                  )
+                                                ),
+                                              }
+                                            )
+                                          }
+                                          className={flatInputClass}
+                                        />
+                                      </label>
 
-                                    <label className="block">
-                                      <span className="text-[10px] text-zinc-500">
-                                        Масштаб ({selectedBlockTransform.scale.toFixed(2)}x)
-                                      </span>
-                                      <input
-                                        type="range"
-                                        min={0.5}
-                                        max={1.8}
-                                        step={0.05}
-                                        value={selectedBlockTransform.scale}
-                                        onChange={(e) =>
+                                      <label className="block">
+                                        <span className="text-[10px] text-zinc-500">
+                                          Масштаб (
+                                          {selectedBlockTransform.scale.toFixed(
+                                            2
+                                          )}
+                                          x)
+                                        </span>
+                                        <input
+                                          type="range"
+                                          min={0.5}
+                                          max={1.8}
+                                          step={0.05}
+                                          value={selectedBlockTransform.scale}
+                                          onChange={(e) =>
+                                            handleUpdatePageTransform(
+                                              activeTarget.page,
+                                              selectedBlockId,
+                                              {
+                                                ...selectedBlockTransform,
+                                                scale: Number(e.target.value),
+                                              }
+                                            )
+                                          }
+                                          className="w-full accent-[#0D9488] mt-1.5"
+                                        />
+                                      </label>
+                                      <label className="block">
+                                        <span className="text-[10px] text-zinc-500">
+                                          Поворот (°)
+                                        </span>
+                                        <input
+                                          type="number"
+                                          min={-180}
+                                          max={180}
+                                          value={
+                                            selectedBlockTransform.rotation
+                                          }
+                                          onChange={(e) =>
+                                            handleUpdatePageTransform(
+                                              activeTarget.page,
+                                              selectedBlockId,
+                                              {
+                                                ...selectedBlockTransform,
+                                                rotation:
+                                                  Number(e.target.value) || 0,
+                                              }
+                                            )
+                                          }
+                                          className={flatInputClass}
+                                        />
+                                      </label>
+                                    </div>
+
+                                    <div className="flex items-center justify-between gap-2 pt-0.5">
+                                      <label className="inline-flex items-center gap-1.5 text-[11px] text-zinc-700 cursor-pointer select-none">
+                                        <input
+                                          type="checkbox"
+                                          checked={
+                                            selectedBlockTransform.preserveAspectRatio !==
+                                            false
+                                          }
+                                          onChange={(e) =>
+                                            handleUpdatePageTransform(
+                                              activeTarget.page,
+                                              selectedBlockId,
+                                              {
+                                                ...selectedBlockTransform,
+                                                preserveAspectRatio:
+                                                  e.target.checked,
+                                              }
+                                            )
+                                          }
+                                          className="rounded border-zinc-300 text-[#0D9488]"
+                                        />
+                                        <span>Сохранять пропорции</span>
+                                      </label>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
                                           handleUpdatePageTransform(
                                             activeTarget.page,
                                             selectedBlockId,
                                             {
                                               ...selectedBlockTransform,
-                                              scale: Number(e.target.value),
+                                              scale: 1,
+                                              width: undefined,
+                                              height: undefined,
+                                              preserveAspectRatio: undefined,
                                             }
                                           )
                                         }
-                                        className="w-full accent-[#0D9488] mt-1.5"
-                                      />
-                                    </label>
-                                    <label className="block">
-                                      <span className="text-[10px] text-zinc-500">
-                                        Поворот (°)
-                                      </span>
-                                      <input
-                                        type="number"
-                                        min={-180}
-                                        max={180}
-                                        value={selectedBlockTransform.rotation}
-                                        onChange={(e) =>
-                                          handleUpdatePageTransform(
-                                            activeTarget.page,
-                                            selectedBlockId,
-                                            {
-                                              ...selectedBlockTransform,
-                                              rotation: Number(e.target.value) || 0,
-                                            }
-                                          )
-                                        }
-                                        className={flatInputClass}
-                                      />
-                                    </label>
+                                        className="inline-flex items-center gap-1 px-2 py-1 rounded border border-zinc-200 bg-zinc-50 hover:border-[#0D9488] hover:text-[#0F766E] text-[10px] font-semibold text-zinc-700 transition-colors"
+                                      >
+                                        <RotateCcw className="w-3 h-3" />
+                                        <span>Сбросить размер</span>
+                                      </button>
+                                    </div>
                                   </div>
                                 );
                               })()}
@@ -7492,6 +7817,14 @@ export function GroupEditorView({
                                 <button
                                   type="button"
                                   onClick={() => {
+                                    if (
+                                      activeDoc.page1.projects.length >=
+                                      MAX_PAGE1_PROJECTS
+                                    ) {
+                                      triggerPage1LimitWarning();
+                                      return;
+                                    }
+                                    setPage1LimitWarning(null);
                                     const nextProj: ProjectItem = {
                                       id: `proj-${Date.now()}`,
                                       title: 'Новый проект',
@@ -7515,7 +7848,7 @@ export function GroupEditorView({
                                     focusSection('projects', 1);
                                   }}
                                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#0D9488] hover:bg-[#0F766E] text-white text-[10px] font-semibold mr-1"
-                                  title="Добавить проект"
+                                  title={`Добавить проект (макс. ${MAX_PAGE1_PROJECTS})`}
                                 >
                                   <Plus className="w-3 h-3" />
                                   <span>Проект</span>
@@ -8064,7 +8397,8 @@ export function GroupEditorView({
                                             (m) => !m.hidden
                                           ).length
                                         }{' '}
-                                        из {activeDoc.page1.modules.length}
+                                        из {activeDoc.page1.modules.length}{' '}
+                                        (макс. {MAX_PAGE1_MODULES})
                                       </span>
                                     </div>
                                     <button
@@ -8078,6 +8412,23 @@ export function GroupEditorView({
                                       К группе →
                                     </button>
                                   </div>
+                                  {page1LimitWarning && (
+                                    <div
+                                      role="status"
+                                      className="px-2.5 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-[10.5px] font-medium text-amber-900 flex items-center justify-between gap-2"
+                                    >
+                                      <span>{page1LimitWarning}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setPage1LimitWarning(null)
+                                        }
+                                        className="text-amber-700 hover:text-amber-950 font-bold"
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                  )}
 
                                   {activeDoc.page1.modules.length === 0 ? (
                                     <div className="py-3 text-[11px] text-zinc-500">
@@ -8846,6 +9197,32 @@ export function GroupEditorView({
                             {/* STEP 3: ПРОЕКТЫ */}
                             {activeInspectorStep === 'projects' && (
                               <div className="space-y-3">
+                                <div className="flex items-center justify-between text-[10px] text-zinc-500 px-0.5 tabular-nums">
+                                  <span className="font-semibold text-zinc-700">
+                                    Карточки проектов («Мои результаты»)
+                                  </span>
+                                  <span>
+                                    {activeDoc.page1.projects.length} /{' '}
+                                    {MAX_PAGE1_PROJECTS} макс.
+                                  </span>
+                                </div>
+                                {page1LimitWarning && (
+                                  <div
+                                    role="status"
+                                    className="px-2.5 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-[10.5px] font-medium text-amber-900 flex items-center justify-between gap-2"
+                                  >
+                                    <span>{page1LimitWarning}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setPage1LimitWarning(null)
+                                      }
+                                      className="text-amber-700 hover:text-amber-950 font-bold"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                )}
                                 {activeDoc.page1.projects.length === 0 ? (
                                   <div className="bg-white border border-dashed border-zinc-300 rounded-lg py-6 px-4 text-center space-y-2.5">
                                     <p className="text-[11px] text-zinc-500">
@@ -8854,6 +9231,7 @@ export function GroupEditorView({
                                     <button
                                       type="button"
                                       onClick={() => {
+                                        setPage1LimitWarning(null);
                                         const nextProj: ProjectItem = {
                                           id: `proj-${Date.now()}`,
                                           title: 'Новый проект',
@@ -9451,122 +9829,66 @@ export function GroupEditorView({
                                       )
                                     )}
 
-                                    {activeDoc.page1.projects.length < 4 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const nextProj: ProjectItem = {
-                                            id: `proj-${Date.now()}`,
-                                            title: 'Новый проект',
-                                            caption: 'Подпись проекта',
-                                            description:
-                                              'Что было реализовано на занятии.',
-                                            fallbackTheme: 'python',
-                                            isRealScreenshot: false,
-                                          };
-                                          onChangeJournal({
-                                            ...activeDoc,
-                                            page1: {
-                                              ...activeDoc.page1,
-                                              showProjects: true,
-                                              projects: [
-                                                ...activeDoc.page1.projects,
-                                                nextProj,
-                                              ],
-                                            },
-                                          });
-                                        }}
-                                        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-zinc-300 bg-[#F4F4F5] hover:border-[#0D9488] hover:bg-[#F0FDFA] text-[#0F766E] text-[11px] font-semibold transition-colors"
-                                      >
-                                        <Plus className="w-3.5 h-3.5" />
-                                        <span>Добавить проект</span>
-                                      </button>
-                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (
+                                          activeDoc.page1.projects.length >=
+                                          MAX_PAGE1_PROJECTS
+                                        ) {
+                                          triggerPage1LimitWarning();
+                                          return;
+                                        }
+                                        setPage1LimitWarning(null);
+                                        const nextProj: ProjectItem = {
+                                          id: `proj-${Date.now()}`,
+                                          title: 'Новый проект',
+                                          caption: 'Подпись проекта',
+                                          description:
+                                            'Что было реализовано на занятии.',
+                                          fallbackTheme: 'python',
+                                          isRealScreenshot: false,
+                                        };
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page1: {
+                                            ...activeDoc.page1,
+                                            showProjects: true,
+                                            projects: [
+                                              ...activeDoc.page1.projects,
+                                              nextProj,
+                                            ],
+                                          },
+                                        });
+                                      }}
+                                      className={`w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed text-[11px] font-semibold transition-colors ${
+                                        activeDoc.page1.projects.length >=
+                                        MAX_PAGE1_PROJECTS
+                                          ? 'border-amber-300 bg-amber-50/70 text-amber-800 hover:bg-amber-50'
+                                          : 'border-zinc-300 bg-[#F4F4F5] hover:border-[#0D9488] hover:bg-[#F0FDFA] text-[#0F766E]'
+                                      }`}
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      <span>
+                                        {activeDoc.page1.projects.length >=
+                                        MAX_PAGE1_PROJECTS
+                                          ? `Лимит проектов (${MAX_PAGE1_PROJECTS}/${MAX_PAGE1_PROJECTS})`
+                                          : 'Добавить проект'}
+                                      </span>
+                                    </button>
                                   </div>
                                 )}
                               </div>
                             )}
 
-                            {/* STEP 4: ДОСТИЖЕНИЯ */}
+                            {/* STEP 4: ДОСТИЖЕНИЯ (СТР. 2: 1. Сильные стороны -> 2. Мой момент гордости) */}
                             {activeInspectorStep === 'pride' && (
                               <div className="space-y-4">
-                                {/* Pride Moment Card */}
-                                {!(
-                                  activeTextField?.page === 2 &&
-                                  activeTextField.field === 'prideText'
-                                ) && (
-                                  <div className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-2.5">
-                                    <div className="pb-1.5 border-b border-zinc-100">
-                                      <span className="text-[11px] font-bold text-zinc-800 block">
-                                        Момент гордости ученика
-                                      </span>
-                                    </div>
-
-                                    {(() => {
-                                      const prideTemplates =
-                                        getPrideTemplatesForModules(
-                                          activeDoc.page1.modules
-                                        );
-                                      return (
-                                        <div className="space-y-1.5">
-                                          <span className="text-[10px] font-medium text-zinc-400 block">
-                                            Быстрые шаблоны (по модулям):
-                                          </span>
-                                          <div className="flex flex-wrap gap-1.5">
-                                            {prideTemplates.map((tplText) => {
-                                              const isSelected =
-                                                activeDoc.page2.prideText.trim() ===
-                                                tplText;
-                                              return (
-                                                <button
-                                                  key={tplText}
-                                                  type="button"
-                                                  onClick={() =>
-                                                    onChangeJournal({
-                                                      ...activeDoc,
-                                                      page2: {
-                                                        ...activeDoc.page2,
-                                                        showPride: true,
-                                                        prideText: tplText,
-                                                      },
-                                                    })
-                                                  }
-                                                  className={`px-2 py-1 rounded border text-[10px] font-medium text-left transition-colors ${
-                                                    isSelected
-                                                      ? 'border-[#0D9488] bg-[#F0FDFA] text-[#0F766E]'
-                                                      : 'border-zinc-200 bg-white hover:border-[#0D9488] hover:text-[#0F766E] text-zinc-700'
-                                                  }`}
-                                                >
-                                                  {tplText}
-                                                </button>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
-                                      );
-                                    })()}
-
-                                    <textarea
-                                      rows={3}
-                                      value={activeDoc.page2.prideText}
-                                      onChange={(e) =>
-                                        onChangeJournal({
-                                          ...activeDoc,
-                                          page2: {
-                                            ...activeDoc.page2,
-                                            showPride: true,
-                                            prideText: e.target.value,
-                                          },
-                                        })
-                                      }
-                                      placeholder="Чем ученик может гордиться по итогам периода?"
-                                      className="w-full p-3 rounded-lg border border-zinc-200 bg-zinc-50/60 text-xs text-zinc-800 leading-relaxed placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/15 resize-none transition-colors"
-                                    />
-                                  </div>
-                                )}
-
-                                {/* Strengths Card */}
-                                <div className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3">
+                                {/* 1. Strengths Card */}
+                                <div
+                                  data-editor-page2-block="strengths"
+                                  className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3"
+                                >
                                   <div className="flex items-center justify-between pb-1.5 border-b border-zinc-100">
                                     <span className="text-[11px] font-bold text-zinc-800">
                                       Сильные стороны
@@ -9743,14 +10065,17 @@ export function GroupEditorView({
                                   {activeDoc.page2.strengths.length > 0 && (
                                     <div className="pt-2 border-t border-zinc-100 space-y-2.5">
                                       <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 block">
-                                        Описания выбранных сторон (до {STRENGTH_EXAMPLE_MAX_CHARS} симв.)
+                                        Описания выбранных сторон (до{' '}
+                                        {STRENGTH_EXAMPLE_MAX_CHARS} симв.)
                                       </span>
                                       {activeDoc.page2.strengths.map((st) => {
                                         const isEditingInFloating =
                                           activeTextField?.page === 2 &&
-                                          activeTextField.field === 'strengthExample' &&
+                                          activeTextField.field ===
+                                            'strengthExample' &&
                                           activeTextField.itemId === st.id;
-                                        const charCount = (st.example || '').length;
+                                        const charCount = (st.example || '')
+                                          .length;
                                         const isOverLimit =
                                           charCount > STRENGTH_EXAMPLE_MAX_CHARS;
 
@@ -9770,7 +10095,8 @@ export function GroupEditorView({
                                                     : 'text-zinc-400'
                                                 }`}
                                               >
-                                                {charCount}/{STRENGTH_EXAMPLE_MAX_CHARS}
+                                                {charCount}/
+                                                {STRENGTH_EXAMPLE_MAX_CHARS}
                                               </span>
                                             </div>
 
@@ -9791,7 +10117,8 @@ export function GroupEditorView({
                                                                 ? {
                                                                     ...s,
                                                                     example:
-                                                                      e.target.value,
+                                                                      e.target
+                                                                        .value,
                                                                   }
                                                                 : s
                                                           ),
@@ -9808,7 +10135,10 @@ export function GroupEditorView({
                                                 />
                                                 {isOverLimit && (
                                                   <p className="text-[10px] font-medium text-red-600">
-                                                    Превышен лимит в {STRENGTH_EXAMPLE_MAX_CHARS} символов — текст может перекрывать блок ниже.
+                                                    Превышен лимит в{' '}
+                                                    {STRENGTH_EXAMPLE_MAX_CHARS}{' '}
+                                                    символов — текст может
+                                                    перекрывать блок ниже.
                                                   </p>
                                                 )}
                                               </>
@@ -9823,360 +10153,95 @@ export function GroupEditorView({
                                     </div>
                                   )}
                                 </div>
-                              </div>
-                            )}
 
-                            {/* STEP 5: СЛОВО НАСТАВНИКА (+ КАРТА БУДУЩЕГО при клике на блок) */}
-                            {activeInspectorStep === 'mentorNote' && (
-                              <div className="space-y-4">
-                                {activeTarget?.page === 2 &&
-                                  (activeTarget.block === 'nextChapter' ||
-                                    activeTarget.block === 'nextBear') && (
-                                    <div className="bg-white border border-[#0D9488]/40 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3">
-                                      <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-zinc-100">
-                                        <span className="text-[11px] font-bold text-[#0F766E]">
-                                          Что интересного впереди? (Стр. 2)
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() => setActiveTarget(null)}
-                                          className="p-0.5 rounded text-zinc-400 hover:text-zinc-800"
-                                          title="Свернуть настройки блока"
-                                        >
-                                          <X className="w-3.5 h-3.5" />
-                                        </button>
-                                      </div>
+                                {/* 2. Pride Moment Card */}
+                                {!(
+                                  activeTextField?.page === 2 &&
+                                  activeTextField.field === 'prideText'
+                                ) && (
+                                  <div
+                                    data-editor-page2-block="pride"
+                                    className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-2.5"
+                                  >
+                                    <div className="pb-1.5 border-b border-zinc-100">
+                                      <span className="text-[11px] font-bold text-zinc-800 block">
+                                        Момент гордости ученика
+                                      </span>
+                                    </div>
 
-                                      <label className="flex items-center justify-between gap-2 cursor-pointer">
-                                        <span className="text-[11px] font-medium text-zinc-700">
-                                          Показывать блок на стр. 2
-                                        </span>
-                                        <input
-                                          type="checkbox"
-                                          checked={activeDoc.page2.showNextChapter}
-                                          onChange={(e) =>
-                                            onChangeJournal({
-                                              ...activeDoc,
-                                              page2: {
-                                                ...activeDoc.page2,
-                                                showNextChapter:
-                                                  e.target.checked,
-                                              },
-                                            })
-                                          }
-                                          className="rounded border-zinc-300 text-[#0D9488]"
-                                        />
-                                      </label>
-
-                                      {!(
-                                        activeTextField?.page === 2 &&
-                                        activeTextField.field ===
-                                          'nextChapterTitle'
-                                      ) && (
-                                        <label className="block">
-                                          <span className="text-[10px] font-medium text-zinc-500 mb-1 block">
-                                            Заголовок карты будущего
+                                    {(() => {
+                                      const prideTemplates =
+                                        getPrideTemplatesForModules(
+                                          activeDoc.page1.modules
+                                        );
+                                      return (
+                                        <div className="space-y-1.5">
+                                          <span className="text-[10px] font-medium text-zinc-400 block">
+                                            Быстрые шаблоны (по модулям):
                                           </span>
-                                          <input
-                                            type="text"
-                                            value={
-                                              activeDoc.page2.nextChapter.title
-                                            }
-                                            onChange={(e) =>
-                                              onChangeJournal({
-                                                ...activeDoc,
-                                                page2: {
-                                                  ...activeDoc.page2,
-                                                  nextChapter: {
-                                                    ...activeDoc.page2
-                                                      .nextChapter,
-                                                    title: e.target.value,
-                                                  },
-                                                },
-                                              })
-                                            }
-                                            className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs font-semibold text-zinc-900 focus:outline-none focus:bg-white focus:border-[#0D9488]"
-                                          />
-                                        </label>
-                                      )}
-
-                                      <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-[10px] font-medium text-zinc-500">
-                                            Станции на маршруте (до 3)
-                                          </span>
-                                          {activeDoc.page2.nextChapter.topics
-                                            .length < 3 && (
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                onChangeJournal({
-                                                  ...activeDoc,
-                                                  page2: {
-                                                    ...activeDoc.page2,
-                                                    nextChapter: {
-                                                      ...activeDoc.page2
-                                                        .nextChapter,
-                                                      topics: [
-                                                        ...activeDoc.page2
-                                                          .nextChapter.topics,
-                                                        {
-                                                          id: `nt-${Date.now()}`,
-                                                          title: 'Новый модуль',
-                                                          iconKey: 'ai',
-                                                        },
-                                                      ],
-                                                    },
-                                                  },
-                                                })
-                                              }
-                                              className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#0D9488] hover:underline"
-                                            >
-                                              <Plus className="w-3 h-3" />
-                                              <span>Добавить</span>
-                                            </button>
-                                          )}
-                                        </div>
-
-                                        {activeDoc.page2.nextChapter.topics.map(
-                                          (topic) => {
-                                            const editingThisTopicText =
-                                              activeTextField?.page === 2 &&
-                                              activeTextField.field ===
-                                                'nextTopicTitle' &&
-                                              activeTextField.itemId ===
-                                                topic.id;
-                                            return (
-                                              <div
-                                                key={topic.id}
-                                                className="flex items-center gap-1.5 p-1.5 rounded-md border border-zinc-200 bg-zinc-50/60"
-                                              >
-                                                <NextTopicLineIcon
-                                                  type={topic.iconKey}
-                                                  className="w-4 h-4 shrink-0 text-[#0F766E]"
-                                                />
-                                                {editingThisTopicText ? (
-                                                  <span className="flex-1 text-[11px] font-medium text-zinc-600 truncate">
-                                                    {topic.title}
-                                                  </span>
-                                                ) : (
-                                                  <input
-                                                    type="text"
-                                                    value={topic.title}
-                                                    onChange={(e) =>
-                                                      onChangeJournal({
-                                                        ...activeDoc,
-                                                        page2: {
-                                                          ...activeDoc.page2,
-                                                          nextChapter: {
-                                                            ...activeDoc.page2
-                                                              .nextChapter,
-                                                            topics:
-                                                              activeDoc.page2.nextChapter.topics.map(
-                                                                (t) =>
-                                                                  t.id ===
-                                                                  topic.id
-                                                                    ? {
-                                                                        ...t,
-                                                                        title:
-                                                                          e
-                                                                            .target
-                                                                            .value,
-                                                                      }
-                                                                    : t
-                                                              ),
-                                                          },
-                                                        },
-                                                      })
-                                                    }
-                                                    className="flex-1 min-w-0 bg-white border border-zinc-200 rounded px-2 py-1 text-[11px] font-medium text-zinc-900 focus:outline-none focus:border-[#0D9488]"
-                                                  />
-                                                )}
-                                                <select
-                                                  value={topic.iconKey}
-                                                  onChange={(e) =>
-                                                    onChangeJournal({
-                                                      ...activeDoc,
-                                                      page2: {
-                                                        ...activeDoc.page2,
-                                                        nextChapter: {
-                                                          ...activeDoc.page2
-                                                            .nextChapter,
-                                                          topics:
-                                                            activeDoc.page2.nextChapter.topics.map(
-                                                              (t) =>
-                                                                t.id ===
-                                                                topic.id
-                                                                  ? {
-                                                                      ...t,
-                                                                      iconKey:
-                                                                        e.target
-                                                                          .value as NextTopicIconKey,
-                                                                    }
-                                                                  : t
-                                                            ),
-                                                        },
-                                                      },
-                                                    })
-                                                  }
-                                                  aria-label="Иконка станции"
-                                                  className="bg-white border border-zinc-200 rounded px-1 py-1 text-[10px] text-zinc-700"
-                                                >
-                                                  {NEXT_TOPIC_LIBRARY.map(
-                                                    (opt) => (
-                                                      <option
-                                                        key={opt.iconKey}
-                                                        value={opt.iconKey}
-                                                      >
-                                                        {opt.title}
-                                                      </option>
-                                                    )
-                                                  )}
-                                                </select>
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {prideTemplates.map((tplText) => {
+                                              const isSelected =
+                                                activeDoc.page2.prideText.trim() ===
+                                                tplText;
+                                              return (
                                                 <button
+                                                  key={tplText}
                                                   type="button"
                                                   onClick={() =>
                                                     onChangeJournal({
                                                       ...activeDoc,
                                                       page2: {
                                                         ...activeDoc.page2,
-                                                        nextChapter: {
-                                                          ...activeDoc.page2
-                                                            .nextChapter,
-                                                          topics:
-                                                            activeDoc.page2.nextChapter.topics.filter(
-                                                              (t) =>
-                                                                t.id !==
-                                                                topic.id
-                                                            ),
-                                                        },
+                                                        showPride: true,
+                                                        prideText: tplText,
                                                       },
                                                     })
                                                   }
-                                                  className="p-1 text-zinc-400 hover:text-red-600"
-                                                  title="Убрать станцию"
+                                                  className={`px-2 py-1 rounded border text-[10px] font-medium text-left transition-colors ${
+                                                    isSelected
+                                                      ? 'border-[#0D9488] bg-[#F0FDFA] text-[#0F766E]'
+                                                      : 'border-zinc-200 bg-white hover:border-[#0D9488] hover:text-[#0F766E] text-zinc-700'
+                                                  }`}
                                                 >
-                                                  <Trash2 className="w-3 h-3" />
+                                                  {tplText}
                                                 </button>
-                                              </div>
-                                            );
-                                          }
-                                        )}
-                                      </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
 
-                                      <div className="pt-1 border-t border-zinc-100 grid grid-cols-3 gap-2">
-                                        <label className="block">
-                                          <span className="text-[10px] text-zinc-500">
-                                            Мишка VR
-                                          </span>
-                                          <input
-                                            type="number"
-                                            min={0.5}
-                                            max={1.8}
-                                            step={0.05}
-                                            value={
-                                              activeDoc.page2.nextChapter
-                                                .bearScale
-                                            }
-                                            onChange={(e) =>
-                                              onChangeJournal({
-                                                ...activeDoc,
-                                                page2: {
-                                                  ...activeDoc.page2,
-                                                  nextChapter: {
-                                                    ...activeDoc.page2
-                                                      .nextChapter,
-                                                    bearScale: Math.max(
-                                                      0.5,
-                                                      Math.min(
-                                                        1.8,
-                                                        Number(
-                                                          e.target.value
-                                                        ) || 1
-                                                      )
-                                                    ),
-                                                  },
-                                                },
-                                              })
-                                            }
-                                            className={flatInputClass}
-                                          />
-                                        </label>
-                                        <label className="block">
-                                          <span className="text-[10px] text-zinc-500">
-                                            Сдвиг X
-                                          </span>
-                                          <input
-                                            type="number"
-                                            value={
-                                              activeDoc.page2.nextChapter
-                                                .bearOffsetX
-                                            }
-                                            onChange={(e) =>
-                                              onChangeJournal({
-                                                ...activeDoc,
-                                                page2: {
-                                                  ...activeDoc.page2,
-                                                  nextChapter: {
-                                                    ...activeDoc.page2
-                                                      .nextChapter,
-                                                    bearOffsetX:
-                                                      Number(e.target.value) ||
-                                                      0,
-                                                  },
-                                                },
-                                              })
-                                            }
-                                            className={flatInputClass}
-                                          />
-                                        </label>
-                                        <label className="block">
-                                          <span className="text-[10px] text-zinc-500">
-                                            Сдвиг Y
-                                          </span>
-                                          <input
-                                            type="number"
-                                            value={
-                                              activeDoc.page2.nextChapter
-                                                .bearOffsetY
-                                            }
-                                            onChange={(e) =>
-                                              onChangeJournal({
-                                                ...activeDoc,
-                                                page2: {
-                                                  ...activeDoc.page2,
-                                                  nextChapter: {
-                                                    ...activeDoc.page2
-                                                      .nextChapter,
-                                                    bearOffsetY:
-                                                      Number(e.target.value) ||
-                                                      0,
-                                                  },
-                                                },
-                                              })
-                                            }
-                                            className={flatInputClass}
-                                          />
-                                        </label>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                {/* ВРЕМЕННО ОТКЛЮЧЕНО: AI-генерация письма (будет возвращена позже)
-                                <div className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3">
-                                  <div className="flex items-center gap-1.5 pb-1.5 border-b border-zinc-100">
-                                    <Sparkles className="w-3.5 h-3.5 text-[#0D9488]" />
-                                    <span className="text-[11px] font-bold text-zinc-800">
-                                      AI-генерация письма
-                                    </span>
+                                    <textarea
+                                      rows={3}
+                                      value={activeDoc.page2.prideText}
+                                      onChange={(e) =>
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page2: {
+                                            ...activeDoc.page2,
+                                            showPride: true,
+                                            prideText: e.target.value,
+                                          },
+                                        })
+                                      }
+                                      placeholder="Чем ученик может гордиться по итогам периода?"
+                                      className="w-full p-3 rounded-lg border border-zinc-200 bg-zinc-50/60 text-xs text-zinc-800 leading-relaxed placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/15 resize-none transition-colors"
+                                    />
                                   </div>
-                                  <textarea ... observationsDraft />
-                                  <button onClick={handleGenerateAiMentorNote}>...</button>
-                                </div>
-                                */}
+                                )}
+                              </div>
+                            )}
 
-                                {/* Unified Single Card: Письмо наставника */}
-                                <div className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3">
+                            {/* STEP 5: СТР. 2: 3. СЛОВО НАСТАВНИКА -> 4. ЧТО ИНТЕРЕСНОГО ВПЕРЕДИ? */}
+                            {activeInspectorStep === 'mentorNote' && (
+                              <div className="space-y-4">
+                                {/* 3. Unified Single Card: Письмо наставника */}
+                                <div
+                                  data-editor-page2-block="mentorNote"
+                                  className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3"
+                                >
                                   <div className="pb-1.5 border-b border-zinc-100">
                                     <span className="text-[11px] font-bold text-zinc-800">
                                       Письмо наставника
@@ -10312,6 +10377,340 @@ export function GroupEditorView({
                                       />
                                     </label>
                                   )}
+                                </div>
+
+                                {/* 4. Что интересного впереди? */}
+                                <div
+                                  data-editor-page2-block="nextChapter"
+                                  className={`bg-white border rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3 ${
+                                    activeTarget?.page === 2 &&
+                                    (activeTarget.block === 'nextChapter' ||
+                                      activeTarget.block === 'nextBear')
+                                      ? 'border-[#0D9488]/40'
+                                      : 'border-zinc-200'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-zinc-100">
+                                    <span
+                                      className={`text-[11px] font-bold ${
+                                        activeTarget?.page === 2 &&
+                                        (activeTarget.block === 'nextChapter' ||
+                                          activeTarget.block === 'nextBear')
+                                          ? 'text-[#0F766E]'
+                                          : 'text-zinc-800'
+                                      }`}
+                                    >
+                                      Что интересного впереди? (Стр. 2)
+                                    </span>
+                                    {activeTarget?.page === 2 &&
+                                      (activeTarget.block === 'nextChapter' ||
+                                        activeTarget.block === 'nextBear') && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setActiveTarget(null)}
+                                          className="p-0.5 rounded text-zinc-400 hover:text-zinc-800"
+                                          title="Снять выделение блока"
+                                        >
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                  </div>
+
+                                  <label className="flex items-center justify-between gap-2 cursor-pointer">
+                                    <span className="text-[11px] font-medium text-zinc-700">
+                                      Показывать блок на стр. 2
+                                    </span>
+                                    <input
+                                      type="checkbox"
+                                      checked={activeDoc.page2.showNextChapter}
+                                      onChange={(e) =>
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page2: {
+                                            ...activeDoc.page2,
+                                            showNextChapter: e.target.checked,
+                                          },
+                                        })
+                                      }
+                                      className="rounded border-zinc-300 text-[#0D9488]"
+                                    />
+                                  </label>
+
+                                  {!(
+                                    activeTextField?.page === 2 &&
+                                    activeTextField.field ===
+                                      'nextChapterTitle'
+                                  ) && (
+                                    <label className="block">
+                                      <span className="text-[10px] font-medium text-zinc-500 mb-1 block">
+                                        Заголовок карты будущего
+                                      </span>
+                                      <input
+                                        type="text"
+                                        value={
+                                          activeDoc.page2.nextChapter.title
+                                        }
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page2: {
+                                              ...activeDoc.page2,
+                                              nextChapter: {
+                                                ...activeDoc.page2.nextChapter,
+                                                title: e.target.value,
+                                              },
+                                            },
+                                          })
+                                        }
+                                        className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs font-semibold text-zinc-900 focus:outline-none focus:bg-white focus:border-[#0D9488]"
+                                      />
+                                    </label>
+                                  )}
+
+                                  <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[10px] font-medium text-zinc-500">
+                                        Станции на маршруте (до 3)
+                                      </span>
+                                      {activeDoc.page2.nextChapter.topics
+                                        .length < 3 && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page2: {
+                                                ...activeDoc.page2,
+                                                nextChapter: {
+                                                  ...activeDoc.page2
+                                                    .nextChapter,
+                                                  topics: [
+                                                    ...activeDoc.page2
+                                                      .nextChapter.topics,
+                                                    {
+                                                      id: `nt-${Date.now()}`,
+                                                      title: 'Новый модуль',
+                                                      iconKey: 'ai',
+                                                    },
+                                                  ],
+                                                },
+                                              },
+                                            })
+                                          }
+                                          className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#0D9488] hover:underline"
+                                        >
+                                          <Plus className="w-3 h-3" />
+                                          <span>Добавить</span>
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    {activeDoc.page2.nextChapter.topics.map(
+                                      (topic) => {
+                                        const editingThisTopicText =
+                                          activeTextField?.page === 2 &&
+                                          activeTextField.field ===
+                                            'nextTopicTitle' &&
+                                          activeTextField.itemId === topic.id;
+                                        return (
+                                          <div
+                                            key={topic.id}
+                                            className="flex items-center gap-1.5 p-1.5 rounded-md border border-zinc-200 bg-zinc-50/60"
+                                          >
+                                            <NextTopicLineIcon
+                                              type={topic.iconKey}
+                                              className="w-4 h-4 shrink-0 text-[#0F766E]"
+                                            />
+                                            {editingThisTopicText ? (
+                                              <span className="flex-1 text-[11px] font-medium text-zinc-600 truncate">
+                                                {topic.title}
+                                              </span>
+                                            ) : (
+                                              <input
+                                                type="text"
+                                                value={topic.title}
+                                                onChange={(e) =>
+                                                  onChangeJournal({
+                                                    ...activeDoc,
+                                                    page2: {
+                                                      ...activeDoc.page2,
+                                                      nextChapter: {
+                                                        ...activeDoc.page2
+                                                          .nextChapter,
+                                                        topics:
+                                                          activeDoc.page2.nextChapter.topics.map(
+                                                            (t) =>
+                                                              t.id === topic.id
+                                                                ? {
+                                                                    ...t,
+                                                                    title:
+                                                                      e.target
+                                                                        .value,
+                                                                  }
+                                                                : t
+                                                          ),
+                                                      },
+                                                    },
+                                                  })
+                                                }
+                                                className="flex-1 min-w-0 bg-white border border-zinc-200 rounded px-2 py-1 text-[11px] font-medium text-zinc-900 focus:outline-none focus:border-[#0D9488]"
+                                              />
+                                            )}
+                                            <select
+                                              value={topic.iconKey}
+                                              onChange={(e) =>
+                                                onChangeJournal({
+                                                  ...activeDoc,
+                                                  page2: {
+                                                    ...activeDoc.page2,
+                                                    nextChapter: {
+                                                      ...activeDoc.page2
+                                                        .nextChapter,
+                                                      topics:
+                                                        activeDoc.page2.nextChapter.topics.map(
+                                                          (t) =>
+                                                            t.id === topic.id
+                                                              ? {
+                                                                  ...t,
+                                                                  iconKey:
+                                                                    e.target
+                                                                      .value as NextTopicIconKey,
+                                                                }
+                                                              : t
+                                                        ),
+                                                    },
+                                                  },
+                                                })
+                                              }
+                                              aria-label="Иконка станции"
+                                              className="bg-white border border-zinc-200 rounded px-1 py-1 text-[10px] text-zinc-700"
+                                            >
+                                              {NEXT_TOPIC_LIBRARY.map((opt) => (
+                                                <option
+                                                  key={opt.iconKey}
+                                                  value={opt.iconKey}
+                                                >
+                                                  {opt.title}
+                                                </option>
+                                              ))}
+                                            </select>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                onChangeJournal({
+                                                  ...activeDoc,
+                                                  page2: {
+                                                    ...activeDoc.page2,
+                                                    nextChapter: {
+                                                      ...activeDoc.page2
+                                                        .nextChapter,
+                                                      topics:
+                                                        activeDoc.page2.nextChapter.topics.filter(
+                                                          (t) =>
+                                                            t.id !== topic.id
+                                                        ),
+                                                    },
+                                                  },
+                                                })
+                                              }
+                                              className="p-1 text-zinc-400 hover:text-red-600"
+                                              title="Убрать станцию"
+                                            >
+                                              <Trash2 className="w-3 h-3" />
+                                            </button>
+                                          </div>
+                                        );
+                                      }
+                                    )}
+                                  </div>
+
+                                  <div className="pt-1 border-t border-zinc-100 grid grid-cols-3 gap-2">
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Мишка VR
+                                      </span>
+                                      <input
+                                        type="number"
+                                        min={0.5}
+                                        max={1.8}
+                                        step={0.05}
+                                        value={
+                                          activeDoc.page2.nextChapter.bearScale
+                                        }
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page2: {
+                                              ...activeDoc.page2,
+                                              nextChapter: {
+                                                ...activeDoc.page2.nextChapter,
+                                                bearScale: Math.max(
+                                                  0.5,
+                                                  Math.min(
+                                                    1.8,
+                                                    Number(e.target.value) || 1
+                                                  )
+                                                ),
+                                              },
+                                            },
+                                          })
+                                        }
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Сдвиг X
+                                      </span>
+                                      <input
+                                        type="number"
+                                        value={
+                                          activeDoc.page2.nextChapter
+                                            .bearOffsetX
+                                        }
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page2: {
+                                              ...activeDoc.page2,
+                                              nextChapter: {
+                                                ...activeDoc.page2.nextChapter,
+                                                bearOffsetX:
+                                                  Number(e.target.value) || 0,
+                                              },
+                                            },
+                                          })
+                                        }
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Сдвиг Y
+                                      </span>
+                                      <input
+                                        type="number"
+                                        value={
+                                          activeDoc.page2.nextChapter
+                                            .bearOffsetY
+                                        }
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page2: {
+                                              ...activeDoc.page2,
+                                              nextChapter: {
+                                                ...activeDoc.page2.nextChapter,
+                                                bearOffsetY:
+                                                  Number(e.target.value) || 0,
+                                              },
+                                            },
+                                          })
+                                        }
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                  </div>
                                 </div>
                               </div>
                             )}
@@ -10449,13 +10848,27 @@ export function GroupEditorView({
                         <input
                           type="checkbox"
                           checked={checked}
-                          onChange={() =>
-                            setDraftModalModuleIds((prev) =>
-                              prev.includes(lib.id)
-                                ? prev.filter((id) => id !== lib.id)
-                                : [...prev, lib.id]
-                            )
-                          }
+                          onChange={() => {
+                            if (checked) {
+                              setDraftModalModuleIds((prev) =>
+                                prev.filter((id) => id !== lib.id)
+                              );
+                              setPage1LimitWarning(null);
+                              return;
+                            }
+                            const customCount = commonDraft.modules.filter(
+                              (m) => !m.libraryModuleId
+                            ).length;
+                            if (
+                              draftModalModuleIds.length + customCount >=
+                              MAX_PAGE1_MODULES
+                            ) {
+                              triggerPage1LimitWarning();
+                              return;
+                            }
+                            setPage1LimitWarning(null);
+                            setDraftModalModuleIds((prev) => [...prev, lib.id]);
+                          }}
                           className="mt-0.5 rounded border-zinc-300 text-[#0D9488] shrink-0"
                         />
                         <div className="min-w-0 flex-1">
@@ -10490,25 +10903,35 @@ export function GroupEditorView({
               )}
             </div>
 
-            <div className="shrink-0 px-5 py-3 border-t border-zinc-200 bg-[#FCFCFA] flex items-center justify-between gap-3">
-              <span className="text-[11px] font-semibold text-zinc-600 tabular-nums">
-                Выбрано: {draftModalModuleIds.length}
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setModulesModalOpen(false)}
-                  className="px-3.5 py-2 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 font-semibold text-zinc-700"
+            <div className="shrink-0 px-5 py-3 border-t border-zinc-200 bg-[#FCFCFA] flex flex-col gap-2">
+              {page1LimitWarning && (
+                <div
+                  role="status"
+                  className="px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-[11px] font-medium text-amber-900"
                 >
-                  Отмена
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmModulesModal}
-                  className="px-4 py-2 rounded-lg bg-[#0F766E] hover:bg-[#0D9488] text-white font-semibold"
-                >
-                  Добавить ({draftModalModuleIds.length})
-                </button>
+                  {page1LimitWarning}
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[11px] font-semibold text-zinc-600 tabular-nums">
+                  Выбрано: {draftModalModuleIds.length} / {MAX_PAGE1_MODULES} макс.
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setModulesModalOpen(false)}
+                    className="px-3.5 py-2 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 font-semibold text-zinc-700"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmModulesModal}
+                    className="px-4 py-2 rounded-lg bg-[#0F766E] hover:bg-[#0D9488] text-white font-semibold"
+                  >
+                    Добавить ({draftModalModuleIds.length})
+                  </button>
+                </div>
               </div>
             </div>
           </div>

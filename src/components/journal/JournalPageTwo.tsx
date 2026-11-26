@@ -161,6 +161,7 @@ export function JournalPageTwo({
 
   const renderPrideSlot = (standalone: boolean) => {
     const defaultW = standalone ? '714px' : '345px';
+    const hasExplicitPrideHeight = layouts.pride?.height !== undefined;
     if (!page2.showPride) {
       return standalone ? null : (
         <div key="sec-pride-empty" style={{ width: '345px', minHeight: '376px' }} />
@@ -170,7 +171,7 @@ export function JournalPageTwo({
       <div
         key="sec-pride"
         data-page2-section="pride"
-        className="shrink-0 h-full flex flex-col"
+        className={`shrink-0 flex flex-col ${hasExplicitPrideHeight ? 'self-start' : 'h-full'}`}
       >
         <DraggableDesignWrapper
           id="pride"
@@ -194,7 +195,7 @@ export function JournalPageTwo({
           onInteractionStart={onInteractionStart}
           onInteractionEnd={onInteractionEnd}
           style={{ width: defaultW }}
-          className="shrink-0 h-full"
+          className={`shrink-0 ${hasExplicitPrideHeight ? '' : 'h-full'}`}
         >
           <PrideSection
             config={page2}
@@ -220,6 +221,7 @@ export function JournalPageTwo({
 
   const renderMentorNoteSlot = (standalone: boolean) => {
     const defaultW = standalone ? '714px' : '345px';
+    const hasExplicitMentorHeight = layouts.mentorNote?.height !== undefined;
     if (!page2.showMentorNote) {
       return standalone ? null : (
         <div key="sec-mentor-empty" style={{ width: '345px', minHeight: '376px' }} />
@@ -229,7 +231,7 @@ export function JournalPageTwo({
       <div
         key="sec-mentor"
         data-page2-section="mentorNote"
-        className="shrink-0 h-full flex flex-col"
+        className={`shrink-0 flex flex-col ${hasExplicitMentorHeight ? 'self-start' : 'h-full'}`}
       >
         <DraggableDesignWrapper
           id="mentorNote"
@@ -253,7 +255,7 @@ export function JournalPageTwo({
           onInteractionStart={onInteractionStart}
           onInteractionEnd={onInteractionEnd}
           style={{ width: defaultW }}
-          className="shrink-0 h-full"
+          className={`shrink-0 ${hasExplicitMentorHeight ? '' : 'h-full'}`}
         >
           <MentorNote
             config={page2}

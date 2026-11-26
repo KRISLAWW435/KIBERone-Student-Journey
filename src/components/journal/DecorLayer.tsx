@@ -829,33 +829,31 @@ export function DraggableDesignWrapper({
     explicitHeight !== undefined && !isImageBox
       ? `${explicitHeight}px`
       : undefined;
+  const anchorSlotWidth = isMoved
+    ? externalStyle?.width ?? (slotSize && !isAbsoluteSlot ? `${slotSize.w}px` : undefined)
+    : explicitWidth !== undefined
+    ? `${explicitWidth}px`
+    : externalStyle?.width ??
+      (slotSize && !isAbsoluteSlot ? `${slotSize.w}px` : undefined);
+  const anchorSlotHeight = isMoved
+    ? externalStyle?.height ??
+      (slotSize && !isAbsoluteSlot && isImageBox ? `${slotSize.h}px` : undefined)
+    : explicitHeight !== undefined
+    ? isImageBox
+      ? `${explicitHeight}px`
+      : 'auto'
+    : externalStyle?.height ?? undefined;
 
   return (
     <div
       ref={slotRef}
       style={{
         ...externalStyle,
-        width:
-          explicitWidth !== undefined
-            ? `${explicitWidth}px`
-            : externalStyle?.width ??
-              (isMoved && slotSize && !isAbsoluteSlot
-                ? `${slotSize.w}px`
-                : undefined),
+        width: anchorSlotWidth,
         maxWidth:
-          explicitWidth !== undefined ? 'none' : externalStyle?.maxWidth,
-        height:
-          explicitHeight !== undefined
-            ? isImageBox
-              ? `${explicitHeight}px`
-              : 'auto'
-            : externalStyle?.height ??
-              (isMoved && slotSize && !isAbsoluteSlot
-                ? isImageBox
-                  ? `${slotSize.h}px`
-                  : 'auto'
-                : undefined),
-        minHeight: resolvedInnerMinHeight,
+          !isMoved && explicitWidth !== undefined ? 'none' : externalStyle?.maxWidth,
+        height: anchorSlotHeight,
+        minHeight: !isMoved ? resolvedInnerMinHeight : undefined,
         position: externalStyle?.position ?? 'relative',
         zIndex: isActive ? Math.max(resolvedZIndex ?? 10, 40) : resolvedZIndex,
       }}
@@ -886,6 +884,10 @@ export function DraggableDesignWrapper({
             explicitWidth !== undefined ? 'none' : externalStyle?.maxWidth,
           height: resolvedInnerHeight,
           minHeight: resolvedInnerMinHeight,
+          display:
+            explicitHeight !== undefined && !isImageBox ? 'flex' : undefined,
+          flexDirection:
+            explicitHeight !== undefined && !isImageBox ? 'column' : undefined,
           transform: hasCustomTransform
             ? `scale(${scale}) rotate(${rotation}deg)`
             : undefined,
@@ -1309,6 +1311,9 @@ export function DecorLayer({
             <div
               key={el.id}
               data-snap-id={el.id}
+              data-card-label={`Декор: ${
+                el.label || el.text || el.stickerText || 'элемент'
+              }`}
               onPointerDown={handlePointerDown}
               onClick={(e) => {
                 if (onSelectDecor) {

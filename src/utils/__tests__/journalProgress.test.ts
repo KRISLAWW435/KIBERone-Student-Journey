@@ -18,10 +18,15 @@ import {
   computeActiveModuleSuggestedSkillIds,
   computeJournalProgress,
   createStudentJournal,
+  DEFAULT_PAGE2_SECTION_ORDER,
   formatGroupPeriod,
   formatRuDate,
   getPrideTemplatesForModules,
   hasJournalDesignChanged,
+  MAX_PAGE1_MODULES,
+  MAX_PAGE1_PROJECTS,
+  normalizePage2SectionOrder,
+  PAGE1_CARD_LIMIT_MESSAGE,
   STRENGTH_EXAMPLE_MAX_CHARS,
   UNIVERSAL_PRIDE_TEMPLATES,
 } from '../journalProgress';
@@ -582,5 +587,131 @@ describe('hasJournalDesignChanged', () => {
     expect(hasJournalDesignChanged(base, layoutEdited)).toBe(true);
   });
 });
+
+describe('Задача №40: лимиты стр. 1, последовательность стр. 2 и размеры объектов', () => {
+  it('экспортирует лимиты максимум 6 модулей и 6 проектов и корректное сообщение', () => {
+    expect(MAX_PAGE1_MODULES).toBe(6);
+    expect(MAX_PAGE1_PROJECTS).toBe(6);
+    expect(PAGE1_CARD_LIMIT_MESSAGE).toContain(
+      'Достигнуто максимальное количество карточек'
+    );
+  });
+
+  it('поддерживает строгий порядок блоков второй страницы: Сильные стороны -> Гордость -> Письмо наставника -> Карта будущего', () => {
+    expect(DEFAULT_PAGE2_SECTION_ORDER).toEqual([
+      'strengths',
+      'pride',
+      'mentorNote',
+      'nextChapter',
+    ]);
+    expect(normalizePage2SectionOrder(undefined)).toEqual([
+      'strengths',
+      'pride',
+      'mentorNote',
+      'nextChapter',
+    ]);
+    expect(normalizePage2SectionOrder([])).toEqual([
+      'strengths',
+      'pride',
+      'mentorNote',
+      'nextChapter',
+    ]);
+    expect(
+      normalizePage2SectionOrder(['pride', 'pride', 'mentorNote'])
+    ).toEqual(['pride', 'mentorNote', 'strengths', 'nextChapter']);
+  });
+
+  it('отслеживает и переносит независимые width, height и preserveAspectRatio для карточек и медведя', () => {
+    const group = createBaseGroup();
+    const res1 = createBaseResident({
+      id: 'res-40-1',
+      fullName: 'Саша Один',
+      journalId: 'j-40-1',
+    });
+    const res2 = createBaseResident({
+      id: 'res-40-2',
+      fullName: 'Даша Два',
+      journalId: 'j-40-2',
+    });
+
+    const base = createStudentJournal(res1, group, TEST_BRANCH);
+    const resized: JournalDocument = {
+      ...base,
+      page2: {
+        ...base.page2,
+        objectLayouts: {
+          ...(base.page2.objectLayouts ?? {}),
+          pride: {
+            x: 0,
+            y: 0,
+            scale: 1,
+            rotation: 0,
+            zIndex: 10,
+            width: 390,
+            height: 290,
+            preserveAspectRatio: false,
+          },
+          mentorNote: {
+            x: 12,
+            y: -6,
+            scale: 1,
+            rotation: 0,
+            zIndex: 10,
+            width: 320,
+            height: 410,
+            preserveAspectRatio: true,
+          },
+          prideBear: {
+            x: 8,
+            y: 4,
+            scale: 1,
+            rotation: 0,
+            zIndex: 20,
+            width: 260,
+            height: 200,
+            preserveAspectRatio: false,
+          },
+        },
+      },
+    };
+
+    expect(hasJournalDesignChanged(base, resized)).toBe(true);
+
+    const target = createStudentJournal(res2, group, TEST_BRANCH);
+    const applied = applyDesignSnapshotToJournal(target, resized);
+
+    expect(applied.page2.objectLayouts?.pride).toEqual({
+      x: 0,
+      y: 0,
+      scale: 1,
+      rotation: 0,
+      zIndex: 10,
+      width: 390,
+      height: 290,
+      preserveAspectRatio: false,
+    });
+    expect(applied.page2.objectLayouts?.mentorNote).toEqual({
+      x: 12,
+      y: -6,
+      scale: 1,
+      rotation: 0,
+      zIndex: 10,
+      width: 320,
+      height: 410,
+      preserveAspectRatio: true,
+    });
+    expect(applied.page2.objectLayouts?.prideBear).toEqual({
+      x: 8,
+      y: 4,
+      scale: 1,
+      rotation: 0,
+      zIndex: 20,
+      width: 260,
+      height: 200,
+      preserveAspectRatio: false,
+    });
+  });
+});
+
 
 

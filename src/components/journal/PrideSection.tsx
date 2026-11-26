@@ -70,7 +70,7 @@ export function PrideSection({
   return (
     <section
       data-card-label="Мой момент гордости"
-      className="shrink-0 w-full min-w-0 box-border flex flex-col min-h-full"
+      className="shrink-0 w-full min-w-0 box-border flex flex-col flex-1 min-h-full"
     >
       <h3 className="font-journal-display font-black text-[17.5px] leading-[21px] tracking-tight uppercase text-[#111827] mb-[10px] shrink-0">
         МОЙ МОМЕНТ ГОРДОСТИ
