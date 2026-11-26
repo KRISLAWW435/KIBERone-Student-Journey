@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Check, Trash2, Upload, X } from 'lucide-react';
 import { MediaAsset, MediaCategory } from '../types/journal';
+import { resolveAssetUrl } from '../utils/assetUrl';
 
 interface MediaLibraryModalProps {
   assets: MediaAsset[];
@@ -143,7 +144,7 @@ export function MediaLibraryModal({
                 >
                   <div className="h-32 bg-[#F6F6F3] p-2 flex items-center justify-center overflow-hidden">
                     <img
-                      src={asset.url}
+                      src={resolveAssetUrl(asset.url)}
                       alt={asset.name}
                       referrerPolicy="no-referrer"
                       className="max-h-full max-w-full object-contain"

@@ -5,6 +5,7 @@ import {
   ProjectItem,
   StrengthIconKey,
 } from '../../types/journal';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 
 export const DECOR_VECTOR_ICON_OPTIONS: Array<{
   key: ModuleLucideIconKey;
@@ -644,7 +645,9 @@ export function StrengthLineIcon({
   size?: number;
 }) {
   const [failed, setFailed] = React.useState(false);
-  const src = STRENGTH_STICKER_ASSETS[type] || STRENGTH_STICKER_ASSETS.logic;
+  const src = resolveAssetUrl(
+    STRENGTH_STICKER_ASSETS[type] || STRENGTH_STICKER_ASSETS.logic
+  );
 
   if (failed) {
     return <StrengthFallbackSvg type={type} size={size} />;

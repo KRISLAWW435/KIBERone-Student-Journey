@@ -7,6 +7,7 @@ import {
   ModuleItem,
 } from '../../types/journal';
 import { InlineEditableText } from './DecorLayer';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 
 interface ModuleCardProps {
   module: ModuleItem;
@@ -167,7 +168,7 @@ export function ModuleCard({
             >
               {hasImage && resolvedImageUrl ? (
                 <img
-                  src={resolvedImageUrl}
+                  src={resolveAssetUrl(resolvedImageUrl)}
                   alt={module.title}
                   referrerPolicy="no-referrer"
                   onError={() => setImgError(true)}

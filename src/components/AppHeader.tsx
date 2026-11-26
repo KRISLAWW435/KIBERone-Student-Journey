@@ -8,6 +8,7 @@ import {
   Users,
 } from 'lucide-react';
 import { ASSETS } from '../data/presets';
+import { resolveAssetUrl } from '../utils/assetUrl';
 
 export type WorkspaceTab = 'home' | 'modules' | 'templates';
 
@@ -54,7 +55,7 @@ export function AppHeader({
           className="flex items-center gap-3 shrink-0"
         >
           <img
-            src={ASSETS.logo}
+            src={resolveAssetUrl(ASSETS.logo)}
             alt="KIBERone"
             referrerPolicy="no-referrer"
             className="h-8 w-auto object-contain block"

@@ -36,6 +36,7 @@ import {
 } from '../../types/journal';
 import { AppHeader, WorkspaceTab } from '../AppHeader';
 import { ContextualHint } from '../onboarding/OnboardingSystem';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 
 function ModuleCardPreviewImage({
   src,
@@ -50,15 +51,16 @@ function ModuleCardPreviewImage({
   posX?: number;
   posY?: number;
 }) {
+  const resolvedSrc = resolveAssetUrl(src);
   const [failed, setFailed] = React.useState(false);
   React.useEffect(() => {
     setFailed(false);
-  }, [src]);
+  }, [resolvedSrc]);
 
-  if (src && !failed) {
+  if (resolvedSrc && !failed) {
     return (
       <img
-        src={src}
+        src={resolvedSrc}
         alt={alt}
         referrerPolicy="no-referrer"
         onError={() => setFailed(true)}

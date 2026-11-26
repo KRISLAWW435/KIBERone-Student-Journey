@@ -14,6 +14,7 @@ import {
   OnboardingStepConfig,
 } from '../../data/onboardingTour';
 import { ASSETS } from '../../data/presets';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 
 interface OnboardingMascotProps {
   src?: string;
@@ -26,13 +27,14 @@ export function OnboardingMascot({
   alt = 'Фирменный 3D-мишка KIBERone',
   className = 'w-60 h-60 sm:w-64 sm:h-64',
 }: OnboardingMascotProps) {
+  const resolvedSrc = resolveAssetUrl(src);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     setFailed(false);
-  }, [src]);
+  }, [resolvedSrc]);
 
-  if (failed || !src) {
+  if (failed || !resolvedSrc) {
     return (
       <div
         data-testid="onboarding-mascot-fallback"
@@ -47,7 +49,7 @@ export function OnboardingMascot({
   return (
     <img
       data-testid="onboarding-mascot-image"
-      src={src}
+      src={resolvedSrc}
       alt={alt}
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
@@ -90,7 +92,7 @@ export function WelcomeScreen({
         <div className="px-6 sm:px-8 py-4 border-b border-zinc-200/80 flex items-center justify-between gap-4 bg-white">
           <div className="flex items-center gap-3 min-w-0">
             <img
-              src={ASSETS.logo}
+              src={resolveAssetUrl(ASSETS.logo)}
               alt="KIBERone"
               referrerPolicy="no-referrer"
               className="h-7 w-auto object-contain block shrink-0"

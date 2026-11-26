@@ -14,6 +14,7 @@ import {
   InlineEditableText,
   SnapLinesState,
 } from './DecorLayer';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 
 export const COVER_OBJECT_DEFAULTS = {
   logo: { x: 40, y: 22, width: 102, height: 54, zIndex: 22 },
@@ -198,7 +199,7 @@ export function CoverSection({
           } bg-white rounded-lg p-[6px] shadow-[3px_3px_0_#18181B] border-[1.6px] border-[#18181B]`}
         >
           <img
-            src={config.logoUrl}
+            src={resolveAssetUrl(config.logoUrl)}
             alt="KIBERone"
             referrerPolicy="no-referrer"
             className={`${

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 
 interface BearCharacterProps {
   src: string;
@@ -20,9 +21,10 @@ export function BearCharacter({
   className = '',
 }: BearCharacterProps) {
   const [failed, setFailed] = useState(false);
+  const resolvedSrc = resolveAssetUrl(src);
 
   // Use mix-blend-multiply when the user picks a white-background JPG bear
-  const isJpgOnWhite = /\.jpe?g$/i.test(src) || src.startsWith('data:image/jpeg');
+  const isJpgOnWhite = /\.jpe?g(\?.*)?$/i.test(resolvedSrc) || resolvedSrc.startsWith('data:image/jpeg');
 
   // Clean die-cut white sticker outline (~2px) + subtle paper lift shadow for transparent PNG bears
   const stickerFilter = !isJpgOnWhite
@@ -53,7 +55,7 @@ export function BearCharacter({
 
   return (
     <img
-      src={src}
+      src={resolvedSrc}
       alt={alt}
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}

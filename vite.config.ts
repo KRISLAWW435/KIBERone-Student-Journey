@@ -4,8 +4,12 @@ import fs from 'fs';
 import path from 'path';
 import {defineConfig} from 'vite';
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+  const isGitHubPages =
+    process.env.GITHUB_PAGES === 'true' || mode === 'gh-pages';
+
   return {
+    base: isGitHubPages ? '/KIBERone-Student-Journey/' : '/',
     plugins: [
       react(),
       tailwindcss(),

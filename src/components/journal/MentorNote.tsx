@@ -5,6 +5,7 @@ import {
   Page2Config,
 } from '../../types/journal';
 import { InlineEditableText } from './DecorLayer';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 
 interface MentorNoteProps {
   config: Page2Config;
@@ -190,7 +191,7 @@ export function MentorNote({
             {mentorNote.mentorPhotoUrl && (
               <div className="w-[56px] h-[56px] rounded-full overflow-hidden border-2 border-zinc-300 shadow-xs shrink-0 bg-zinc-100">
                 <img
-                  src={mentorNote.mentorPhotoUrl}
+                  src={resolveAssetUrl(mentorNote.mentorPhotoUrl)}
                   alt={mentorNote.signature}
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover"

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Edit3, Maximize, Minimize } from 'lucide-react';
 import { ASSETS } from '../../data/presets';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 import { JournalDocument, MediaAsset } from '../../types/journal';
 import { ExportMenu } from '../ExportMenu';
 import {
@@ -108,7 +109,7 @@ export function PreviewView({
             className="flex items-center gap-2 text-xs font-medium text-zinc-400 hover:text-white"
           >
             <img
-              src={ASSETS.logo}
+              src={resolveAssetUrl(ASSETS.logo)}
               alt="KIBERone"
               referrerPolicy="no-referrer"
               className="h-7 w-auto rounded-xs bg-white p-0.5 object-contain"

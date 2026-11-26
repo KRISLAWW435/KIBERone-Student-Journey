@@ -65,6 +65,7 @@ import {
   StickerPresetOption,
   STRENGTH_LIBRARY,
 } from '../../data/presets';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 import {
   ActiveTextFieldTarget,
   AgeCategory,
@@ -144,12 +145,13 @@ function ModuleThumbImage({
   iconClassName?: string;
   showLabel?: boolean;
 }) {
+  const resolvedSrc = resolveAssetUrl(src);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     setFailed(false);
-  }, [src]);
+  }, [resolvedSrc]);
 
-  if (!src || failed) {
+  if (!resolvedSrc || failed) {
     return (
       <div className="w-full h-full bg-zinc-100 flex flex-col items-center justify-center gap-1.5 text-zinc-400">
         <ImageIcon className={iconClassName} />
@@ -161,7 +163,7 @@ function ModuleThumbImage({
   }
   return (
     <img
-      src={src}
+      src={resolvedSrc}
       alt={alt}
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
@@ -610,10 +612,9 @@ export function GroupEditorView({
     }
     if (tourDirective.selectBlockId) {
       setActiveTarget({
-        kind: 'block',
         page: tourDirective.pageFocus === 2 ? 2 : 1,
-        blockId: tourDirective.selectBlockId,
-      });
+        block: tourDirective.selectBlockId,
+      } as EditorSectionTarget);
     }
   }, [tourDirective]);
 
@@ -2639,7 +2640,7 @@ export function GroupEditorView({
       <header className="h-14 shrink-0 bg-white border-b border-zinc-200/80 px-4 flex items-center justify-between gap-4 z-30">
         <div className="flex items-center gap-2.5 min-w-0">
           <img
-            src={ASSETS.logo}
+            src={resolveAssetUrl(ASSETS.logo)}
             alt="KIBERone"
             referrerPolicy="no-referrer"
             className="h-7 w-auto object-contain block shrink-0"
@@ -5925,7 +5926,7 @@ export function GroupEditorView({
                                     >
                                       {opt.kind === 'image' && opt.imageUrl ? (
                                         <img
-                                          src={opt.imageUrl}
+                                          src={resolveAssetUrl(opt.imageUrl)}
                                           alt={opt.label}
                                           className="w-7 h-7 object-contain"
                                         />
@@ -6738,7 +6739,7 @@ export function GroupEditorView({
                                       >
                                         {opt.kind === 'image' && opt.imageUrl ? (
                                           <img
-                                            src={opt.imageUrl}
+                                            src={resolveAssetUrl(opt.imageUrl)}
                                             alt={opt.label}
                                             className="w-6 h-6 object-contain"
                                           />
@@ -9381,7 +9382,7 @@ export function GroupEditorView({
                                                 <div className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-[#F0FDFA] border border-[#CCFBF1] text-[10px] text-[#0F766E]">
                                                   <div className="flex items-center gap-2 min-w-0">
                                                     <img
-                                                      src={proj.imageUrl}
+                                                      src={resolveAssetUrl(proj.imageUrl)}
                                                       alt={proj.title}
                                                       className={`w-5 h-5 rounded border border-teal-200 shrink-0 ${
                                                         proj.imageFit ===

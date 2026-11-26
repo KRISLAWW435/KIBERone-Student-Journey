@@ -2,6 +2,7 @@ import React from 'react';
 import { ActiveTextFieldTarget, ProjectItem } from '../../types/journal';
 import { InlineEditableText } from './DecorLayer';
 import { ProjectFallbackGraphic } from './JournalArtwork';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 
 interface ProjectCardProps {
   project: ProjectItem;
@@ -115,7 +116,7 @@ export function ProjectCard({
       >
         {project.imageUrl ? (
           <img
-            src={project.imageUrl}
+            src={resolveAssetUrl(project.imageUrl)}
             alt={displayTitle}
             referrerPolicy="no-referrer"
             style={{

@@ -6,6 +6,7 @@ import {
   PageBackgroundConfig,
 } from '../../types/journal';
 import { DecorVectorIcon } from './JournalArtwork';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 
 export interface SnapLine {
   pos: number;
@@ -1181,7 +1182,7 @@ function DecorGraphic({ element }: { element: DecorElement }) {
         return (
           <div className="w-full h-full rounded-xl overflow-hidden shadow-sm">
             <img
-              src={element.imageUrl}
+              src={resolveAssetUrl(element.imageUrl)}
               alt={element.label || 'Изображение'}
               referrerPolicy="no-referrer"
               style={{
@@ -1202,7 +1203,7 @@ function DecorGraphic({ element }: { element: DecorElement }) {
           element.id.startsWith('sticker-');
         return (
           <img
-            src={element.imageUrl}
+            src={resolveAssetUrl(element.imageUrl)}
             alt={element.label || 'Изображение'}
             referrerPolicy="no-referrer"
             style={
