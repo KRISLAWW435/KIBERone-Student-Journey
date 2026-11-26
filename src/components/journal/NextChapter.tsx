@@ -470,15 +470,15 @@ export function NextChapter({
           onInteractionEnd={onInteractionEnd}
           style={{
             position: 'absolute',
-            right: '14px',
-            bottom: '8px',
-            width: '184px',
-            height: '226px',
+            right: '8px',
+            bottom: '4px',
+            width: '218px',
+            height: '266px',
           }}
           className="flex items-end justify-center"
         >
           <div
-            style={{ width: '184px', height: '226px' }}
+            style={{ width: '218px', height: '266px' }}
             className="flex items-end justify-center"
           >
             <BearCharacter
@@ -496,7 +496,7 @@ export function NextChapter({
               offsetX={nextChapter.bearOffsetX}
               offsetY={nextChapter.bearOffsetY}
               cropTop={false}
-              className="w-[180px] h-[222px]"
+              className="w-[214px] h-[262px]"
             />
           </div>
         </DraggableDesignWrapper>

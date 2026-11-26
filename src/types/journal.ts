@@ -16,6 +16,8 @@ export type JournalStatus =
 
 export type StudentStatus = 'active' | 'paused' | 'completed';
 
+export type DesignScope = 'student' | 'group' | 'all';
+
 export interface Branch {
   id: string;
   name: string;

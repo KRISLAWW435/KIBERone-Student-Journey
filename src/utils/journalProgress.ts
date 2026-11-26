@@ -8,7 +8,9 @@ import {
 } from '../data/presets';
 import {
   Branch,
+  CanvasObjectTransform,
   ConfirmedResidentSkill,
+  DecorElement,
   GroupCommonCurriculum,
   JournalDocument,
   JournalProgress,
@@ -21,6 +23,8 @@ import {
   StudentGroup,
   StudentStatus,
 } from '../types/journal';
+
+export const STRENGTH_EXAMPLE_MAX_CHARS = 180;
 
 export function computeActiveModuleSuggestedSkillIds(
   modules: ModuleItem[],
@@ -612,6 +616,116 @@ export function applyGroupCommonDataToJournal(
           id: `nt-${existing.id}-${i}`,
         })),
       },
+    },
+  };
+
+  updated.completionProgress = computeJournalProgress(updated);
+  return updated;
+}
+
+function cloneObjectLayouts(
+  layouts?: Record<string, CanvasObjectTransform>
+): Record<string, CanvasObjectTransform> {
+  if (!layouts) return {};
+  const result: Record<string, CanvasObjectTransform> = {};
+  Object.entries(layouts).forEach(([key, val]) => {
+    if (val) {
+      result[key] = { ...val };
+    }
+  });
+  return result;
+}
+
+function cloneDecorElements(elements?: DecorElement[]): DecorElement[] {
+  if (!elements) return [];
+  return elements.map((el) => ({ ...el }));
+}
+
+export function applyDesignSnapshotToJournal(
+  target: JournalDocument,
+  source: JournalDocument
+): JournalDocument {
+  const now = new Date().toISOString();
+  const updated: JournalDocument = {
+    ...target,
+    updatedAt: now,
+    page1: {
+      ...target.page1,
+      background: source.page1.background
+        ? { ...source.page1.background }
+        : target.page1.background,
+      decorElements: cloneDecorElements(source.page1.decorElements),
+      decorSeeded: source.page1.decorSeeded ?? target.page1.decorSeeded,
+      objectLayouts: cloneObjectLayouts(source.page1.objectLayouts),
+      coverTitle: source.page1.coverTitle,
+      coverTitleSize: source.page1.coverTitleSize,
+      coverTitleColor: source.page1.coverTitleColor,
+      coverSubtitle: source.page1.coverSubtitle,
+      coverSubtitleSize: source.page1.coverSubtitleSize,
+      coverSubtitleColor: source.page1.coverSubtitleColor,
+      coverBgStart: source.page1.coverBgStart,
+      coverBgEnd: source.page1.coverBgEnd,
+      showAge: source.page1.showAge,
+      showBranch: source.page1.showBranch,
+      showCoverBear: source.page1.showCoverBear,
+      bearImageUrl: source.page1.bearImageUrl,
+      bearScale: source.page1.bearScale,
+      bearOffsetX: source.page1.bearOffsetX,
+      bearOffsetY: source.page1.bearOffsetY,
+      bearCropTop: source.page1.bearCropTop,
+      coverSpeechBubbleText: source.page1.coverSpeechBubbleText,
+      coverBubbleFontSize: source.page1.coverBubbleFontSize,
+      coverBubbleTextColor: source.page1.coverBubbleTextColor,
+      coverBubbleBgColor: source.page1.coverBubbleBgColor,
+      logoUrl: source.page1.logoUrl,
+      showModules: source.page1.showModules,
+      showSkills: source.page1.showSkills,
+      showProjects: source.page1.showProjects,
+      footerWebsite: source.page1.footerWebsite,
+    },
+    page2: {
+      ...target.page2,
+      background: source.page2.background
+        ? { ...source.page2.background }
+        : target.page2.background,
+      decorElements: cloneDecorElements(source.page2.decorElements),
+      decorSeeded: source.page2.decorSeeded ?? target.page2.decorSeeded,
+      tapeSeeded: source.page2.tapeSeeded ?? target.page2.tapeSeeded,
+      objectLayouts: cloneObjectLayouts(source.page2.objectLayouts),
+      headerTitle: source.page2.headerTitle,
+      headerTealColor: source.page2.headerTealColor,
+      headerYellowColor: source.page2.headerYellowColor,
+      showHeaderDecor: source.page2.showHeaderDecor,
+      showStrengths: source.page2.showStrengths,
+      strengthsColumns: source.page2.strengthsColumns,
+      showPride: source.page2.showPride,
+      prideTitle: source.page2.prideTitle,
+      prideBgColor: source.page2.prideBgColor,
+      prideBearUrl: source.page2.prideBearUrl,
+      prideBearScale: source.page2.prideBearScale,
+      prideBearOffsetX: source.page2.prideBearOffsetX,
+      prideBearOffsetY: source.page2.prideBearOffsetY,
+      showPrideConfetti: source.page2.showPrideConfetti,
+      showMentorNote: source.page2.showMentorNote,
+      mentorNote: {
+        ...target.page2.mentorNote,
+        fontStyle: source.page2.mentorNote.fontStyle,
+        fontSize: source.page2.mentorNote.fontSize,
+        tiltDeg: source.page2.mentorNote.tiltDeg,
+        mentorPhotoUrl: source.page2.mentorNote.mentorPhotoUrl,
+      },
+      showNextChapter: source.page2.showNextChapter,
+      nextChapter: {
+        ...target.page2.nextChapter,
+        bgColor: source.page2.nextChapter.bgColor,
+        bearUrl: source.page2.nextChapter.bearUrl,
+        bearScale: source.page2.nextChapter.bearScale,
+        bearOffsetX: source.page2.nextChapter.bearOffsetX,
+        bearOffsetY: source.page2.nextChapter.bearOffsetY,
+        speechBubbleText: source.page2.nextChapter.speechBubbleText,
+        bearVrMigrated: source.page2.nextChapter.bearVrMigrated,
+      },
+      footerWebsite: source.page2.footerWebsite,
     },
   };
 

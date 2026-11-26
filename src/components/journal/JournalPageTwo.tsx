@@ -218,6 +218,7 @@ export function JournalPageTwo({
             <DraggableDesignWrapper
               id="strengths"
               transform={layouts.strengths}
+              defaultZIndex={30}
               designMode={designMode}
               scaleFactor={scaleFactor}
               isActive={
@@ -236,7 +237,7 @@ export function JournalPageTwo({
               onSnapLinesChange={setSnapLines}
               onInteractionStart={onInteractionStart}
               onInteractionEnd={onInteractionEnd}
-              className="shrink-0"
+              className="shrink-0 relative z-30"
             >
               <section style={{ width: '714px' }} className="rounded-xl">
                 <h3 className="font-journal-display font-black text-[17.5px] leading-[21px] tracking-tight uppercase text-[#111827] mb-[10px]">
@@ -269,7 +270,7 @@ export function JournalPageTwo({
                       onSnapLinesChange={setSnapLines}
                       onInteractionStart={onInteractionStart}
                       onInteractionEnd={onInteractionEnd}
-                      className="h-full"
+                      className="h-full min-w-0"
                     >
                       <StrengthCard
                         strength={item}
@@ -299,8 +300,10 @@ export function JournalPageTwo({
               display: 'grid',
               gridTemplateColumns: '345px 345px',
               gap: '24px',
+              flex: '0 1 407px',
+              minHeight: '310px',
             }}
-            className="items-stretch shrink-0"
+            className="items-stretch min-h-0"
           >
             {page2.showPride ? (
               <DraggableDesignWrapper

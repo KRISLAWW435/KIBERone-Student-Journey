@@ -82,9 +82,9 @@ export function PrideSection({
         }}
         style={{
           width: '345px',
-          minHeight: '376px',
+          minHeight: '280px',
         }}
-        className={`relative flex-1 overflow-visible flex flex-col ${
+        className={`relative flex-1 min-h-0 overflow-visible flex flex-col ${
           onSelectTarget ? 'editable-block' : ''
         } ${isPrideActive ? 'editable-block-active' : ''}`}
       >
@@ -220,7 +220,7 @@ export function PrideSection({
           </div>
 
           {/* 2. Enlarged Trophy Bear Strictly Above Text Plaque */}
-          <div className="relative z-10 flex-1 flex items-center justify-center min-h-[214px] py-[2px]">
+          <div className="relative z-10 flex-1 flex items-center justify-center min-h-[140px] py-[2px]">
             <DraggableDesignWrapper
               id="prideBear"
               transform={bearTransform}

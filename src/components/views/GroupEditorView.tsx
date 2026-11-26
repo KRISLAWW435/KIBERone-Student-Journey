@@ -71,6 +71,7 @@ import {
   Branch,
   CanvasObjectTransform,
   DecorElement,
+  DesignScope,
   EditorSectionTarget,
   GroupCommonCurriculum,
   GroupCurriculumTemplate,
@@ -101,7 +102,9 @@ import {
   getStudentStatusLabel,
   getStudentStatusMeta,
   normalizeStudentStatus,
+  STRENGTH_EXAMPLE_MAX_CHARS,
 } from '../../utils/journalProgress';
+import { AutoResizeTextarea } from '../ui/AutoResizeTextarea';
 import { ExportMenu } from '../ExportMenu';
 import {
   A4_PAGE_HEIGHT,
@@ -190,7 +193,12 @@ interface GroupEditorViewProps {
   initialJournalId?: string | null;
   initialStudentId?: string | null;
   onSelectActiveJournal: (journalId: string) => void;
-  onChangeJournal: (updated: JournalDocument) => void;
+  onChangeJournal: (updated: JournalDocument, designScope?: DesignScope) => void;
+  onApplyDesignToScope?: (
+    sourceDoc: JournalDocument,
+    scope: DesignScope,
+    options?: { silent?: boolean }
+  ) => Promise<number>;
   onSaveGroupAndApplyCommon: (
     updatedGroup: StudentGroup,
     commonData: GroupCommonCurriculum
@@ -246,6 +254,7 @@ export function GroupEditorView({
   initialStudentId = null,
   onSelectActiveJournal,
   onChangeJournal: onCommitJournalToStore,
+  onApplyDesignToScope,
   onSaveGroupAndApplyCommon,
   onQuickAddStudent,
   onUpdateStudent,
@@ -264,8 +273,8 @@ export function GroupEditorView({
   const [autoScale, setAutoScale] = useState(0.68);
 
   // Resizable & collapsible side panels (Figma-style)
-  const [leftWidth, setLeftWidth] = useState(284);
-  const [rightWidth, setRightWidth] = useState(364);
+  const [leftWidth, setLeftWidth] = useState(280);
+  const [rightWidth, setRightWidth] = useState(420);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [draggingSide, setDraggingSide] = useState<'left' | 'right' | null>(
@@ -279,6 +288,8 @@ export function GroupEditorView({
 
   // Right Inspector state (Figma-style: Content vs Design tab + 5-step icon tab stepper)
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>('content');
+  const [designScope, setDesignScope] = useState<DesignScope>('student');
+  const [applyingDesignScope, setApplyingDesignScope] = useState(false);
   const [activeTarget, setActiveTarget] = useState<EditorSectionTarget>(null);
   const [activeTextField, setActiveTextField] =
     useState<ActiveTextFieldTarget>(null);
@@ -555,9 +566,12 @@ export function GroupEditorView({
   const onChangeJournal = useCallback(
     (updated: JournalDocument) => {
       const current = activeDocRef.current;
+      const effectiveScope: DesignScope =
+        inspectorMode === 'design' ? designScope : 'student';
+
       if (gestureActiveRef.current) {
         activeDocRef.current = updated;
-        onCommitJournalToStore(updated);
+        onCommitJournalToStore(updated, 'student');
         return;
       }
 
@@ -580,9 +594,9 @@ export function GroupEditorView({
       }
 
       activeDocRef.current = updated;
-      onCommitJournalToStore(updated);
+      onCommitJournalToStore(updated, effectiveScope);
     },
-    [onCommitJournalToStore]
+    [onCommitJournalToStore, inspectorMode, designScope]
   );
 
   const handleBeginCanvasGesture = useCallback(() => {
@@ -603,8 +617,12 @@ export function GroupEditorView({
       bucket.future = [];
       lastHistoryPushRef.current = { docId: '', ts: 0 };
       setHistoryVersion((v) => v + 1);
+
+      if (inspectorMode === 'design' && designScope !== 'student' && onApplyDesignToScope) {
+        void onApplyDesignToScope(current, designScope, { silent: true });
+      }
     }
-  }, []);
+  }, [inspectorMode, designScope, onApplyDesignToScope]);
 
   const currentHistory = activeDoc
     ? historyRef.current[activeDoc.id]
@@ -623,8 +641,8 @@ export function GroupEditorView({
     lastHistoryPushRef.current = { docId: '', ts: 0 };
     setHistoryVersion((v) => v + 1);
     activeDocRef.current = previous;
-    onCommitJournalToStore(previous);
-  }, [onCommitJournalToStore]);
+    onCommitJournalToStore(previous, inspectorMode === 'design' ? designScope : 'student');
+  }, [onCommitJournalToStore, inspectorMode, designScope]);
 
   const handleRedo = useCallback(() => {
     const current = activeDocRef.current;
@@ -637,8 +655,8 @@ export function GroupEditorView({
     lastHistoryPushRef.current = { docId: '', ts: 0 };
     setHistoryVersion((v) => v + 1);
     activeDocRef.current = next;
-    onCommitJournalToStore(next);
-  }, [onCommitJournalToStore]);
+    onCommitJournalToStore(next, inspectorMode === 'design' ? designScope : 'student');
+  }, [onCommitJournalToStore, inspectorMode, designScope]);
 
   // Keyboard shortcuts Ctrl+Z / Cmd+Z (Undo) and Ctrl+Y / Cmd+Shift+Z (Redo)
   useEffect(() => {
@@ -5019,6 +5037,13 @@ export function GroupEditorView({
                       }
                     }
 
+                          const isStrengthExampleField =
+                            activeTextField.page === 2 &&
+                            activeTextField.field === 'strengthExample';
+                          const isStrengthOverLimit =
+                            isStrengthExampleField &&
+                            currentValue.length > STRENGTH_EXAMPLE_MAX_CHARS;
+
                           return (
                             <div className="shrink-0 border-b border-[#0D9488]/25 bg-[#F0FDFA]/70 px-3.5 py-3 space-y-2">
                               <div className="flex items-center justify-between gap-2">
@@ -5039,14 +5064,38 @@ export function GroupEditorView({
                                   <X className="w-3.5 h-3.5" />
                                 </button>
                               </div>
-                              <textarea
+                              <AutoResizeTextarea
                                 ref={textEditorRef}
-                                rows={4}
+                                minRows={3}
                                 value={currentValue}
                                 onChange={(e) => updateValue(e.target.value)}
                                 placeholder="Введите текст — изменения сразу появятся на листе А4…"
-                                className="w-full rounded-lg border border-[#0D9488]/40 bg-white px-2.5 py-2 text-xs leading-relaxed text-zinc-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-[#0D9488]/25 focus:border-[#0D9488] resize-y"
+                                className={`w-full rounded-lg border bg-white px-2.5 py-2 text-xs leading-relaxed text-zinc-900 shadow-2xs focus:outline-none ${
+                                  isStrengthOverLimit
+                                    ? 'border-red-500 ring-2 ring-red-500/20 focus:border-red-500'
+                                    : 'border-[#0D9488]/40 focus:ring-2 focus:ring-[#0D9488]/25 focus:border-[#0D9488]'
+                                }`}
                               />
+                              {isStrengthExampleField && (
+                                <div className="flex items-center justify-between gap-2 text-[10px]">
+                                  {isStrengthOverLimit ? (
+                                    <span className="font-semibold text-red-600">
+                                      Превышен лимит ({STRENGTH_EXAMPLE_MAX_CHARS} симв.) — сократите текст для аккуратной вёрстки.
+                                    </span>
+                                  ) : (
+                                    <span className="text-zinc-500">
+                                      Рекомендуемая длина до {STRENGTH_EXAMPLE_MAX_CHARS} символов
+                                    </span>
+                                  )}
+                                  <span
+                                    className={`font-mono tabular-nums font-semibold shrink-0 ${
+                                      isStrengthOverLimit ? 'text-red-600' : 'text-zinc-500'
+                                    }`}
+                                  >
+                                    {currentValue.length}/{STRENGTH_EXAMPLE_MAX_CHARS}
+                                  </span>
+                                </div>
+                              )}
                               {companionNode}
                             </div>
                           );
@@ -5085,9 +5134,29 @@ export function GroupEditorView({
                             }
                           : null;
 
+                      const groupTargetCount = journals.filter(
+                        (j) =>
+                          j.id !== activeDoc.id &&
+                          (j.groupId === group.id ||
+                            (Boolean(j.residentId) &&
+                              residents.some(
+                                (r) =>
+                                  r.groupId === group.id && r.id === j.residentId
+                              )))
+                      ).length;
+                      const allGroupsTargetCount = journals.filter(
+                        (j) => j.id !== activeDoc.id
+                      ).length;
+                      const activeScopeTargetCount =
+                        designScope === 'group'
+                          ? groupTargetCount
+                          : designScope === 'all'
+                          ? allGroupsTargetCount
+                          : 0;
+
                       return (
                         <div className="flex-1 min-h-0 overflow-y-auto p-3.5 space-y-4 text-xs bg-[#FBFBFA]">
-                          {/* Active Page Selector + Hint */}
+                          {/* Active Page Selector + Global Design Scope Switcher */}
                           <div className="bg-white border border-zinc-200 rounded-lg p-3 space-y-2.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)]">
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-[11px] font-bold text-zinc-900">
@@ -5115,9 +5184,97 @@ export function GroupEditorView({
                                 ))}
                               </div>
                             </div>
-                            <p className="text-[11px] text-zinc-500 leading-relaxed">
-                              Кликните на блок на листе А4, чтобы перемещать, масштабировать или вращать его. Нажмите на любой текст на листе — справа откроется окно его редактирования.
-                            </p>
+
+                            {/* Global Design Scope 3-way Switcher */}
+                            <div className="pt-2 border-t border-zinc-100 space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                                  Область применения дизайна
+                                </span>
+                                {designScope !== 'student' && (
+                                  <span className="text-[10px] font-semibold text-[#0F766E]">
+                                    Авто-синхронизация
+                                  </span>
+                                )}
+                              </div>
+                              <div
+                                role="radiogroup"
+                                aria-label="Область применения дизайна"
+                                className="grid grid-cols-3 gap-1 p-0.5 rounded-lg bg-zinc-100"
+                              >
+                                {(
+                                  [
+                                    { id: 'student', label: 'Только этот ученик' },
+                                    { id: 'group', label: 'Вся группа' },
+                                    { id: 'all', label: 'Все группы' },
+                                  ] as const
+                                ).map((opt) => {
+                                  const selected = designScope === opt.id;
+                                  return (
+                                    <button
+                                      key={opt.id}
+                                      type="button"
+                                      role="radio"
+                                      aria-checked={selected}
+                                      onClick={() => setDesignScope(opt.id)}
+                                      className={`px-1.5 py-1.5 rounded-md text-[10px] font-semibold leading-tight text-center transition-colors ${
+                                        selected
+                                          ? 'bg-white text-[#0F766E] shadow-2xs border border-[#0D9488]/30'
+                                          : 'text-zinc-600 hover:text-zinc-900'
+                                      }`}
+                                    >
+                                      {opt.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
+                              <button
+                                type="button"
+                                disabled={
+                                  designScope === 'student' ||
+                                  applyingDesignScope ||
+                                  !onApplyDesignToScope
+                                }
+                                onClick={async () => {
+                                  if (!onApplyDesignToScope || designScope === 'student') {
+                                    return;
+                                  }
+                                  setApplyingDesignScope(true);
+                                  try {
+                                    await onApplyDesignToScope(activeDoc, designScope);
+                                  } finally {
+                                    setApplyingDesignScope(false);
+                                  }
+                                }}
+                                title={
+                                  designScope === 'student'
+                                    ? 'Выберите «Вся группа» или «Все группы», чтобы применить дизайн ко всем'
+                                    : 'Скопировать фон, цвета, позиции блоков и стикеры выбранного ученика во все журналы области'
+                                }
+                                className={`w-full inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-colors ${
+                                  designScope === 'student'
+                                    ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed'
+                                    : 'bg-[#0D9488] hover:bg-[#0F766E] text-white shadow-xs'
+                                }`}
+                              >
+                                <Users className="w-3.5 h-3.5 shrink-0" />
+                                <span className="truncate">
+                                  Применить текущий дизайн ко всем в выбранной области
+                                  {designScope !== 'student'
+                                    ? ` (${activeScopeTargetCount})`
+                                    : ''}
+                                </span>
+                              </button>
+
+                              <p className="text-[10px] text-zinc-500 leading-relaxed">
+                                {designScope === 'student'
+                                  ? 'Изменения дизайна сохраняются только для текущего ученика.'
+                                  : designScope === 'group'
+                                  ? 'Любое изменение дизайна (стикеры, фон, позиции) сразу применяется ко всем ученикам этой группы, сохраняя их личные данные.'
+                                  : 'Любое изменение дизайна сразу применяется ко всем журналам во всех группах, сохраняя личные данные учеников.'}
+                              </p>
+                            </div>
                           </div>
 
                           {/* Add Elements Toolbar (+ Text, + Sticker, + Image, + Icon) */}
@@ -9306,6 +9463,89 @@ export function GroupEditorView({
                                       Добавить
                                     </button>
                                   </div>
+
+                                  {activeDoc.page2.strengths.length > 0 && (
+                                    <div className="pt-2 border-t border-zinc-100 space-y-2.5">
+                                      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 block">
+                                        Описания выбранных сторон (до {STRENGTH_EXAMPLE_MAX_CHARS} симв.)
+                                      </span>
+                                      {activeDoc.page2.strengths.map((st) => {
+                                        const isEditingInFloating =
+                                          activeTextField?.page === 2 &&
+                                          activeTextField.field === 'strengthExample' &&
+                                          activeTextField.itemId === st.id;
+                                        const charCount = (st.example || '').length;
+                                        const isOverLimit =
+                                          charCount > STRENGTH_EXAMPLE_MAX_CHARS;
+
+                                        return (
+                                          <div
+                                            key={st.id}
+                                            className="p-2.5 rounded-lg border border-zinc-200/90 bg-zinc-50/50 space-y-1.5"
+                                          >
+                                            <div className="flex items-center justify-between gap-2">
+                                              <span className="text-[11px] font-bold text-zinc-800 truncate">
+                                                {st.title}
+                                              </span>
+                                              <span
+                                                className={`text-[10px] font-mono tabular-nums font-semibold shrink-0 ${
+                                                  isOverLimit
+                                                    ? 'text-red-600'
+                                                    : 'text-zinc-400'
+                                                }`}
+                                              >
+                                                {charCount}/{STRENGTH_EXAMPLE_MAX_CHARS}
+                                              </span>
+                                            </div>
+
+                                            {!isEditingInFloating ? (
+                                              <>
+                                                <AutoResizeTextarea
+                                                  minRows={2}
+                                                  value={st.example}
+                                                  onChange={(e) =>
+                                                    onChangeJournal({
+                                                      ...activeDoc,
+                                                      page2: {
+                                                        ...activeDoc.page2,
+                                                        strengths:
+                                                          activeDoc.page2.strengths.map(
+                                                            (s) =>
+                                                              s.id === st.id
+                                                                ? {
+                                                                    ...s,
+                                                                    example:
+                                                                      e.target.value,
+                                                                  }
+                                                                : s
+                                                          ),
+                                                      },
+                                                    })
+                                                  }
+                                                  placeholder="Короткий пример проявления сильной стороны…"
+                                                  aria-label={`Описание сильной стороны: ${st.title}`}
+                                                  className={`w-full px-2.5 py-1.5 rounded-md border text-xs leading-relaxed text-zinc-800 focus:outline-none transition-colors ${
+                                                    isOverLimit
+                                                      ? 'border-red-500 ring-1 ring-red-500/35 bg-red-50/40 focus:border-red-500'
+                                                      : 'border-zinc-200 bg-white focus:border-[#0D9488]'
+                                                  }`}
+                                                />
+                                                {isOverLimit && (
+                                                  <p className="text-[10px] font-medium text-red-600">
+                                                    Превышен лимит в {STRENGTH_EXAMPLE_MAX_CHARS} символов — текст может перекрывать блок ниже.
+                                                  </p>
+                                                )}
+                                              </>
+                                            ) : (
+                                              <p className="text-[10px] text-[#0F766E] italic">
+                                                Редактируется в верхнем окне ↑
+                                              </p>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -9714,8 +9954,8 @@ export function GroupEditorView({
                                       <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
                                         Приветствие
                                       </span>
-                                      <input
-                                        type="text"
+                                      <AutoResizeTextarea
+                                        minRows={1}
                                         value={
                                           activeDoc.page2.mentorNote.greeting
                                         }
@@ -9732,7 +9972,7 @@ export function GroupEditorView({
                                           })
                                         }
                                         placeholder="Саша, ты отлично поработал!"
-                                        className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs font-semibold text-zinc-900 focus:outline-none focus:bg-white focus:border-[#0D9488]"
+                                        className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs font-semibold text-zinc-900 leading-relaxed focus:outline-none focus:bg-white focus:border-[#0D9488]"
                                       />
                                     </label>
                                   )}
@@ -9745,8 +9985,8 @@ export function GroupEditorView({
                                       <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
                                         Основной текст
                                       </span>
-                                      <textarea
-                                        rows={4}
+                                      <AutoResizeTextarea
+                                        minRows={3}
                                         value={activeDoc.page2.mentorNote.body}
                                         onChange={(e) =>
                                           onChangeJournal({
@@ -9761,7 +10001,7 @@ export function GroupEditorView({
                                           })
                                         }
                                         placeholder="Личный отзыв наставника..."
-                                        className="w-full p-2.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-800 leading-relaxed focus:outline-none focus:bg-white focus:border-[#0D9488] resize-none"
+                                        className="w-full p-2.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-800 leading-relaxed focus:outline-none focus:bg-white focus:border-[#0D9488]"
                                       />
                                     </label>
                                   )}
@@ -9774,8 +10014,8 @@ export function GroupEditorView({
                                       <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
                                         Подпись
                                       </span>
-                                      <input
-                                        type="text"
+                                      <AutoResizeTextarea
+                                        minRows={1}
                                         value={
                                           activeDoc.page2.mentorNote.signature
                                         }
@@ -9791,7 +10031,8 @@ export function GroupEditorView({
                                             },
                                           })
                                         }
-                                        className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-700 focus:outline-none focus:bg-white focus:border-[#0D9488]"
+                                        placeholder="Твой наставник..."
+                                        className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-700 leading-relaxed focus:outline-none focus:bg-white focus:border-[#0D9488]"
                                       />
                                     </label>
                                   )}

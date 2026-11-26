@@ -42,8 +42,8 @@ export function MentorNote({
       </h3>
 
       <div
-        style={{ width: '345px', minHeight: '376px' }}
-        className="relative flex-1 flex flex-col pt-[8px]"
+        style={{ width: '345px', minHeight: '280px' }}
+        className="relative flex-1 min-h-0 flex flex-col pt-[8px]"
       >
         {/* Stacked striped notebook backing sheet */}
         <div
@@ -99,7 +99,7 @@ export function MentorNote({
           </div>
 
           {/* Handwritten Letter Body aligned to 28px notebook lines */}
-          <div className="pl-[6px] flex-1 min-h-0 overflow-hidden">
+          <div className="pl-[6px] flex-1 min-h-0 min-w-0 overflow-hidden">
             <div className="font-bold text-[14px] leading-[28px] text-[#111827]">
               Слово наставника:
             </div>
@@ -111,7 +111,7 @@ export function MentorNote({
                 fontSize: `${resolvedFontSize}px`,
                 lineHeight: '28px',
               }}
-              className="text-[#111827]"
+              className="text-[#111827] min-w-0"
             >
               {(mentorNote.greeting || onSelectTextField) && (
                 <InlineEditableText
@@ -131,7 +131,7 @@ export function MentorNote({
                     activeTextField.field === 'mentorGreeting'
                   }
                   as="div"
-                  className="font-semibold block"
+                  className="font-semibold block w-full min-w-0 break-words whitespace-pre-wrap [overflow-wrap:anywhere]"
                 />
               )}
               <InlineEditableText
@@ -151,13 +151,13 @@ export function MentorNote({
                   activeTextField.field === 'mentorBody'
                 }
                 as="p"
-                className="m-0 font-medium block"
+                className="m-0 font-medium block w-full min-w-0 break-words whitespace-pre-wrap [overflow-wrap:anywhere]"
               />
             </div>
           </div>
 
           {/* Handwritten Signature + Optional Mentor Photo */}
-          <div className="mt-[8px] pl-[6px] flex items-end justify-between gap-[10px] shrink-0">
+          <div className="mt-[8px] pl-[6px] flex items-end justify-between gap-[10px] shrink-0 min-w-0">
             <InlineEditableText
               value={mentorNote.signature}
               placeholder="Подпись наставника"
@@ -182,7 +182,7 @@ export function MentorNote({
                 fontSize: isHandwriting ? `${resolvedFontSize}px` : '13px',
                 lineHeight: '26px',
               }}
-              className="font-semibold text-[#111827] block"
+              className="font-semibold text-[#111827] block min-w-0 flex-1 break-words whitespace-pre-wrap [overflow-wrap:anywhere]"
             />
 
             {mentorNote.mentorPhotoUrl && (

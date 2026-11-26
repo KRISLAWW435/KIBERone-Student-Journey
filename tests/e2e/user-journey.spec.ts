@@ -363,4 +363,149 @@ test.describe('Полный пользовательский путь KIBERone S
       cardA.getByRole('button', { name: new RegExp(studentName) })
     ).toHaveCount(0);
   });
+
+  test('задача 38: панели 280/420px, auto-resize, лимит 180 символов и глобальное применение дизайна', async ({
+    page,
+  }) => {
+    const groupName = 'E2E Задача 38 · Дизайн';
+    const studentA = 'Первый Ученик';
+    const studentB = 'Второй Ученик';
+
+    await page.goto('/');
+
+    // Создаём группу с двумя учениками
+    await page.getByRole('button', { name: 'Создать группу' }).click();
+    const createModal = page.locator('form', {
+      hasText: 'Создать учебную группу',
+    });
+    await createModal
+      .getByPlaceholder('Например: Python Start · Вт/Чт 16:00')
+      .fill(groupName);
+    await createModal.locator('select').first().selectOption({ index: 0 });
+    await createModal.locator('input[type="date"]').nth(0).fill('2026-09-01');
+    await createModal.locator('input[type="date"]').nth(1).fill('2026-12-20');
+    await createModal.getByRole('button', { name: 'Сохранить группу' }).click();
+
+    const groupCard = page.locator('article', { hasText: groupName });
+    await expect(groupCard).toBeVisible();
+
+    for (const [name, age] of [
+      [studentA, '10'],
+      [studentB, '11'],
+    ] as const) {
+      await groupCard.getByRole('button', { name: 'Добавить ученика' }).click();
+      await groupCard.getByPlaceholder('Имя и фамилия ученика').fill(name);
+      await groupCard.getByPlaceholder('Возраст').fill(age);
+      await groupCard.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await expect(
+        groupCard.getByRole('button', { name: new RegExp(name) })
+      ).toBeVisible();
+    }
+
+    // Открываем редактор сразу на первом ученике
+    await groupCard.getByRole('button', { name: new RegExp(studentA) }).click();
+
+    const leftSidebar = page.locator('aside').first();
+    const rightSidebar = page.locator('aside').last();
+    await expect(leftSidebar).toBeVisible();
+    await expect(rightSidebar).toBeVisible();
+
+    // 1. Проверяем размеры панелей по умолчанию: левая 280px, правая 420px
+    const leftBox = await leftSidebar.boundingBox();
+    const rightBox = await rightSidebar.boundingBox();
+    expect(leftBox).not.toBeNull();
+    expect(rightBox).not.toBeNull();
+    if (leftBox && rightBox) {
+      expect(Math.round(leftBox.width)).toBe(280);
+      expect(Math.round(rightBox.width)).toBe(420);
+    }
+
+    // 2. Проверяем авто-увеличение textarea в «Письме наставника» (Приветствие / Основной текст / Подпись)
+    const inspectorNav = page.getByRole('navigation', {
+      name: 'Разделы журнала ученика',
+    });
+    await inspectorNav.getByRole('button', { name: /5\. Письмо/ }).click();
+
+    const greetingField = page.getByPlaceholder('Саша, ты отлично поработал!');
+    await expect(greetingField).toHaveJSProperty('tagName', 'TEXTAREA');
+    const greetingInitialBox = await greetingField.boundingBox();
+    await greetingField.fill('Привет!\nСтрока 2\nСтрока 3\nСтрока 4');
+    const greetingExpandedBox = await greetingField.boundingBox();
+    expect(greetingInitialBox).not.toBeNull();
+    expect(greetingExpandedBox).not.toBeNull();
+    if (greetingInitialBox && greetingExpandedBox) {
+      expect(greetingExpandedBox.height).toBeGreaterThan(
+        greetingInitialBox.height + 15
+      );
+    }
+
+    const signatureField = page.getByPlaceholder('Твой наставник...');
+    await expect(signatureField).toHaveJSProperty('tagName', 'TEXTAREA');
+
+    // 3. Проверяем увеличенного мишку на 2-й странице (~214x262px)
+    const pageTwoCanvas = page.locator(
+      'main article[aria-label="Страница 2: Мои достижения"]'
+    );
+    await expect(pageTwoCanvas).toBeVisible();
+    const vrBearWrapper = pageTwoCanvas.locator('[data-snap-id="nextBear"]');
+    await expect(vrBearWrapper).toBeVisible();
+    await expect(vrBearWrapper).toHaveCSS('width', '218px');
+    await expect(vrBearWrapper).toHaveCSS('height', '266px');
+
+    // 4. Проверяем авто-ресайз и лимит 180 символов + красную рамку в «Сильных сторонах»
+    await inspectorNav.getByRole('button', { name: /4\. Успехи/ }).click();
+    await page.getByRole('button', { name: 'Креативность' }).click();
+
+    const strengthTextarea = page.getByLabel(
+      'Описание сильной стороны: Креативность'
+    );
+    await expect(strengthTextarea).toBeVisible();
+    const overLimitText = 'Очень длинное описание сильной стороны ученика '.repeat(5);
+    await strengthTextarea.fill(overLimitText);
+    await expect(strengthTextarea).toHaveClass(/border-red-500/);
+    await expect(
+      page.getByText(/Превышен лимит в 180 символов/)
+    ).toBeVisible();
+
+    // Текст на карточке А4 не выходит за границы карточки по ширине
+    const strengthCardOk = await pageTwoCanvas
+      .locator('p', { hasText: 'Очень длинное описание' })
+      .evaluate((el) => el.scrollWidth <= el.clientWidth + 2);
+    expect(strengthCardOk).toBe(true);
+
+    // 5. Проверяем Global Design Scope во вкладке «Дизайн»
+    await rightSidebar.getByRole('button', { name: 'Дизайн' }).click();
+    const scopeGroup = page.getByRole('radiogroup', {
+      name: 'Область применения дизайна',
+    });
+    await expect(scopeGroup).toBeVisible();
+
+    const applyAllBtn = rightSidebar.getByRole('button', {
+      name: /Применить текущий дизайн ко всем в выбранной области/,
+    });
+    await expect(applyAllBtn).toBeDisabled();
+
+    // Включаем «Вся группа»
+    await scopeGroup.getByRole('radio', { name: 'Вся группа' }).click();
+    await expect(applyAllBtn).toBeEnabled();
+
+    // Включаем сетку выравнивания на Стр. 2 в режиме «Вся группа» -> должно примениться и ко 2-му ученику
+    const gridCheckbox = rightSidebar.getByLabel('Сетка выравнивания на А4');
+    await gridCheckbox.check();
+
+    // Нажимаем кнопку пакетного применения дизайна ко всей группе
+    await applyAllBtn.click();
+    await expect(
+      page.getByText(/Дизайн применён к 1 журналу \(вся группа\)/)
+    ).toBeVisible();
+
+    // Переключаемся на второго ученика и проверяем, что сетка дизайна (grid) применилась на Стр. 2, а личное имя на Стр. 1 сохранилось!
+    await leftSidebar.locator('button', { hasText: studentB }).first().click();
+    await expect(rightSidebar.getByLabel('Сетка выравнивания на А4')).toBeChecked();
+    await rightSidebar.getByRole('button', { name: 'Стр. 1', exact: true }).click();
+    const pageOneCanvas = page.locator(
+      'main article[aria-label="Страница 1: Мой путь в мире технологий"]'
+    );
+    await expect(pageOneCanvas).toContainText(studentB);
+  });
 });

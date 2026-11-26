@@ -14,12 +14,14 @@ import {
   KIBERONE_CURRICULUM_MODULES,
 } from '../../data/curriculumCatalog';
 import {
+  applyDesignSnapshotToJournal,
   computeActiveModuleSuggestedSkillIds,
   computeJournalProgress,
   createStudentJournal,
   formatGroupPeriod,
   formatRuDate,
   getPrideTemplatesForModules,
+  STRENGTH_EXAMPLE_MAX_CHARS,
   UNIVERSAL_PRIDE_TEMPLATES,
 } from '../journalProgress';
 
@@ -331,3 +333,101 @@ describe('computeActiveModuleSuggestedSkillIds и getPrideTemplatesForModules', 
     expect(fallbackTemplates).toContain(UNIVERSAL_PRIDE_TEMPLATES[0]);
   });
 });
+
+describe('applyDesignSnapshotToJournal (Глобальное применение дизайна)', () => {
+  it('копирует фон, стикеры, позиции блоков и стили, не перезаписывая личный контент ученика', () => {
+    expect(STRENGTH_EXAMPLE_MAX_CHARS).toBe(180);
+
+    const group = createBaseGroup();
+    const res1 = createBaseResident({
+      id: 'res-1',
+      fullName: 'Иван Первый',
+      age: '10 лет',
+      journalId: 'j-1',
+    });
+    const res2 = createBaseResident({
+      id: 'res-2',
+      fullName: 'Мария Вторая',
+      age: '11 лет',
+      journalId: 'j-2',
+    });
+
+    const source = createStudentJournal(res1, group, TEST_BRANCH);
+    source.page1.coverBgStart = '#1E293B';
+    source.page1.coverBgEnd = '#0F172A';
+    source.page1.background = { color: '#FEFCE8', showGrid: true, gridStyle: 'lines' };
+    source.page1.objectLayouts = {
+      coverBear: { x: 24, y: -12, scale: 1.15, rotation: 5, zIndex: 25 },
+    };
+    source.page1.decorElements = [
+      {
+        id: 'dec-custom-1',
+        kind: 'sticker',
+        stickerText: 'TOP CODER',
+        x: 120,
+        y: 80,
+        width: 110,
+        height: 44,
+        rotation: -6,
+        color: '#0D9488',
+        opacity: 1,
+        zIndex: 30,
+      },
+    ];
+    source.page2.prideBgColor = '#A7F3D0';
+    source.page2.mentorNote = {
+      ...source.page2.mentorNote,
+      greeting: 'Ваня, супер!',
+      body: 'Личное письмо для Вани, которое не должно попасть Маше.',
+      signature: 'Наставник Вани',
+      fontStyle: 'sans',
+      fontSize: 21,
+      tiltDeg: 1.5,
+    };
+    source.page2.nextChapter.bgColor = '#E0E7FF';
+    source.page2.nextChapter.bearScale = 1.25;
+
+    const target = createStudentJournal(res2, group, TEST_BRANCH);
+    target.page1.projects[0].title = 'Уникальный проект Маши';
+    target.page2.prideText = 'Маша заняла 1 место на хакатоне!';
+    target.page2.mentorNote = {
+      ...target.page2.mentorNote,
+      greeting: 'Маша, ты молодец!',
+      body: 'Личное письмо специально для Маши.',
+      signature: 'Твой наставник, Иван',
+    };
+
+    const updated = applyDesignSnapshotToJournal(target, source);
+
+    // Дизайн и макет перенесены
+    expect(updated.page1.coverBgStart).toBe('#1E293B');
+    expect(updated.page1.coverBgEnd).toBe('#0F172A');
+    expect(updated.page1.background?.color).toBe('#FEFCE8');
+    expect(updated.page1.background?.showGrid).toBe(true);
+    expect(updated.page1.objectLayouts?.coverBear?.x).toBe(24);
+    expect(updated.page1.decorElements).toHaveLength(1);
+    expect(updated.page1.decorElements?.[0].stickerText).toBe('TOP CODER');
+    expect(updated.page2.prideBgColor).toBe('#A7F3D0');
+    expect(updated.page2.mentorNote.fontStyle).toBe('sans');
+    expect(updated.page2.mentorNote.fontSize).toBe(21);
+    expect(updated.page2.mentorNote.tiltDeg).toBe(1.5);
+    expect(updated.page2.nextChapter.bgColor).toBe('#E0E7FF');
+    expect(updated.page2.nextChapter.bearScale).toBe(1.25);
+
+    // Клонирование массивов/объектов не шарит ссылки с источником
+    expect(updated.page1.decorElements?.[0]).not.toBe(source.page1.decorElements?.[0]);
+    expect(updated.page1.objectLayouts?.coverBear).not.toBe(
+      source.page1.objectLayouts?.coverBear
+    );
+
+    // Личный контент Маши полностью сохранён
+    expect(updated.id).toBe('j-2');
+    expect(updated.resident.fullName).toBe('Мария Вторая');
+    expect(updated.resident.age).toBe('11 лет');
+    expect(updated.page1.projects[0].title).toBe('Уникальный проект Маши');
+    expect(updated.page2.prideText).toBe('Маша заняла 1 место на хакатоне!');
+    expect(updated.page2.mentorNote.greeting).toBe('Маша, ты молодец!');
+    expect(updated.page2.mentorNote.body).toBe('Личное письмо специально для Маши.');
+  });
+});
+

@@ -45,6 +45,7 @@ import {
 } from './db/storage';
 import {
   Branch,
+  DesignScope,
   GroupCommonCurriculum,
   GroupCurriculumTemplate,
   JournalDocument,
@@ -64,6 +65,7 @@ import {
   formatJournalPdfFilename,
 } from './utils/exportService';
 import {
+  applyDesignSnapshotToJournal,
   applyGroupCommonDataToJournal,
   computeJournalProgress,
   createStudentJournal,
@@ -120,6 +122,11 @@ export default function App() {
   const exportPage1Ref = useRef<HTMLDivElement | null>(null);
   const exportPage2Ref = useRef<HTMLDivElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
+  const pendingSaveMapRef = useRef<Map<string, JournalDocument>>(new Map());
+  const journalsRef = useRef<JournalDocument[]>([]);
+  journalsRef.current = journals;
+  const residentsRef = useRef<ResidentRecord[]>([]);
+  residentsRef.current = residents;
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -242,31 +249,135 @@ export default function App() {
     []
   );
 
-  // Autosave journal edits to IndexedDB with live progress computation
+  const collectScopeTargets = useCallback(
+    (sourceDoc: JournalDocument, scope: DesignScope): JournalDocument[] => {
+      if (scope === 'student') return [];
+      const currentJournals = journalsRef.current;
+      if (scope === 'all') {
+        return currentJournals.filter((j) => j.id !== sourceDoc.id);
+      }
+      const targetGroupId = sourceDoc.groupId || activeGroupId;
+      const groupResIds = new Set(
+        residentsRef.current
+          .filter((r) => r.groupId === targetGroupId)
+          .map((r) => r.id)
+      );
+      return currentJournals.filter(
+        (j) =>
+          j.id !== sourceDoc.id &&
+          (j.groupId === targetGroupId ||
+            (Boolean(j.residentId) && groupResIds.has(j.residentId!)))
+      );
+    },
+    [activeGroupId]
+  );
+
+  // Autosave journal edits to IndexedDB with live progress computation and optional design scope replication
   const handleUpdateJournal = useCallback(
-    (updated: JournalDocument) => {
+    (updated: JournalDocument, designScope: DesignScope = 'student') => {
       const progress = computeJournalProgress(updated);
       const stamped: JournalDocument = {
         ...updated,
         completionProgress: progress,
         updatedAt: new Date().toISOString(),
       };
+
+      const targets =
+        designScope === 'student' ? [] : collectScopeTargets(stamped, designScope);
+      const replicatedMap = new Map<string, JournalDocument>();
+      targets.forEach((target) => {
+        replicatedMap.set(target.id, applyDesignSnapshotToJournal(target, stamped));
+      });
+
       setJournals((prev) =>
-        prev.map((j) => (j.id === stamped.id ? stamped : j))
+        prev.map((j) => {
+          if (j.id === stamped.id) return stamped;
+          return replicatedMap.get(j.id) ?? j;
+        })
       );
+
+      pendingSaveMapRef.current.set(stamped.id, stamped);
+      replicatedMap.forEach((doc, id) => {
+        pendingSaveMapRef.current.set(id, doc);
+      });
+
       setSaveState('saving');
       if (saveTimerRef.current) {
         window.clearTimeout(saveTimerRef.current);
       }
       saveTimerRef.current = window.setTimeout(() => {
-        saveJournal(stamped)
+        const batch = Array.from(pendingSaveMapRef.current.values());
+        pendingSaveMapRef.current.clear();
+        Promise.all(batch.map((doc) => saveJournal(doc)))
           .then(() => setSaveState('saved'))
           .catch(() =>
             showToast('Не удалось сохранить изменения в IndexedDB.')
           );
       }, 320);
     },
-    [showToast]
+    [collectScopeTargets, showToast]
+  );
+
+  const handleApplyDesignToScope = useCallback(
+    async (
+      sourceDoc: JournalDocument,
+      scope: DesignScope,
+      options?: { silent?: boolean }
+    ): Promise<number> => {
+      const stamped: JournalDocument = {
+        ...sourceDoc,
+        completionProgress: computeJournalProgress(sourceDoc),
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (scope === 'student') {
+        await saveJournal(stamped);
+        setJournals((prev) =>
+          prev.map((j) => (j.id === stamped.id ? stamped : j))
+        );
+        if (!options?.silent) {
+          showToast('Выберите «Вся группа» или «Все группы» для применения дизайна ко всем.');
+        }
+        return 0;
+      }
+
+      const targets = collectScopeTargets(stamped, scope);
+      const replicatedMap = new Map<string, JournalDocument>();
+      targets.forEach((target) => {
+        replicatedMap.set(target.id, applyDesignSnapshotToJournal(target, stamped));
+      });
+
+      setJournals((prev) =>
+        prev.map((j) => {
+          if (j.id === stamped.id) return stamped;
+          return replicatedMap.get(j.id) ?? j;
+        })
+      );
+
+      const docsToPersist = [stamped, ...Array.from(replicatedMap.values())];
+      setSaveState('saving');
+      try {
+        await Promise.all(docsToPersist.map((doc) => saveJournal(doc)));
+        docsToPersist.forEach((doc) => pendingSaveMapRef.current.delete(doc.id));
+        setSaveState('saved');
+      } catch {
+        showToast('Не удалось сохранить дизайн для всех журналов.');
+      }
+
+      if (!options?.silent) {
+        if (targets.length > 0) {
+          showToast(
+            `Дизайн применён к ${targets.length} ${
+              targets.length === 1 ? 'журналу' : 'журналам'
+            } (${scope === 'group' ? 'вся группа' : 'все группы'})`
+          );
+        } else {
+          showToast('В выбранной области нет других журналов для обновления.');
+        }
+      }
+      return targets.length;
+    },
+    [collectScopeTargets, showToast]
   );
 
   const handleUpdateJournalStatus = useCallback(
@@ -1069,6 +1180,7 @@ export default function App() {
             initialStudentId={editorEntryTarget.studentId ?? null}
             onSelectActiveJournal={(journalId) => setActiveId(journalId)}
             onChangeJournal={handleUpdateJournal}
+            onApplyDesignToScope={handleApplyDesignToScope}
             onSaveGroupAndApplyCommon={handleSaveGroupAndApplyCommon}
             onQuickAddStudent={handleQuickAddStudent}
             onUpdateStudent={handleUpdateStudent}
