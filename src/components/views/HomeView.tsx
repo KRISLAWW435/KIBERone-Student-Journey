@@ -37,7 +37,11 @@ interface HomeViewProps {
   residents: ResidentRecord[];
   journals: JournalDocument[];
   onNavigate: (tab: WorkspaceTab) => void;
-  onOpenGroupEditor: (groupId: string) => void;
+  onOpenGroupEditor: (
+    groupId: string,
+    journalId?: string | null,
+    studentId?: string | null
+  ) => void;
   onSaveGroup: (group: StudentGroup) => Promise<void>;
   onDeleteGroup: (groupId: string) => Promise<void>;
   onSaveBranch: (branch: Branch) => Promise<void>;
@@ -319,7 +323,7 @@ export function HomeView({
                 return (
                   <article
                     key={group.id}
-                    className="bg-white border border-zinc-200 rounded-2xl p-5 flex flex-col justify-between gap-4 hover:border-zinc-300 transition-colors"
+                    className="bg-white border border-zinc-200 rounded-2xl p-5 flex flex-col justify-between gap-4 hover:border-zinc-300 transition-colors overflow-hidden min-w-0"
                   >
                     {/* Top: Group Info */}
                     <div className="space-y-3.5">
@@ -448,7 +452,13 @@ export function HomeView({
                                 <button
                                   key={student.id}
                                   type="button"
-                                  onClick={() => onOpenGroupEditor(group.id)}
+                                  onClick={() =>
+                                    onOpenGroupEditor(
+                                      group.id,
+                                      j?.id ?? null,
+                                      student.id
+                                    )
+                                  }
                                   title={`${student.fullName} — ${
                                     prog ? prog.label : 'Не начат'
                                   }`}
@@ -605,34 +615,34 @@ export function HomeView({
 
                     {/* Card Footer Actions */}
                     <div className="pt-3 border-t border-zinc-100 space-y-2">
-                      <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={() => onOpenGroupEditor(group.id)}
-                          className="flex-1 inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-semibold transition-colors whitespace-nowrap"
+                          className="w-full min-w-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-semibold transition-colors"
                         >
-                          <Edit3 className="w-3.5 h-3.5" />
-                          <span>Открыть редактор группы</span>
+                          <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">Открыть редактор группы</span>
                         </button>
                         <button
                           type="button"
                           disabled={Boolean(batchProgress?.active)}
                           onClick={() => onBatchExportGroupZip(group)}
-                          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 text-white text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
+                          className="w-full min-w-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
                           title="Выгрузить готовые журналы группы в ZIP-архив"
                         >
                           {batchProgress?.active &&
                           batchProgress.groupId === group.id ? (
                             <>
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              <span className="tabular-nums">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                              <span className="tabular-nums truncate">
                                 {batchProgress.current}/{batchProgress.total}
                               </span>
                             </>
                           ) : (
                             <>
-                              <FolderArchive className="w-3.5 h-3.5" />
-                              <span>Выгрузить готовые (ZIP)</span>
+                              <FolderArchive className="w-3.5 h-3.5 shrink-0" />
+                              <span className="truncate">Выгрузить готовые (ZIP)</span>
                             </>
                           )}
                         </button>
@@ -662,12 +672,18 @@ export function HomeView({
                             activeStudents.length === 0 || groups.length < 2
                           }
                           onClick={() => {
-                            const target = groups.find((g) => g.id !== group.id);
-                            if (!target || activeStudents.length === 0) return;
+                            const orderedFirst =
+                              branches
+                                .flatMap((br) =>
+                                  groups.filter(
+                                    (g) => g.id !== group.id && g.branchId === br.id
+                                  )
+                                )[0] ?? groups.find((g) => g.id !== group.id);
+                            if (!orderedFirst || activeStudents.length === 0) return;
                             setTransferModal({
                               sourceGroupId: group.id,
                               residentId: activeStudents[0].id,
-                              targetGroupId: target.id,
+                              targetGroupId: orderedFirst.id,
                             });
                           }}
                           className="inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 disabled:opacity-45 text-[11px] font-medium text-zinc-700 whitespace-nowrap"
@@ -967,16 +983,44 @@ export function HomeView({
                 }
                 className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 bg-white"
               >
-                {groups
-                  .filter((g) => g.id !== transferModal.sourceGroupId)
-                  .map((g) => {
-                    const br = branchById.get(g.branchId);
-                    return (
-                      <option key={g.id} value={g.id}>
-                        {g.name} ({br?.name || 'Локация'})
-                      </option>
-                    );
-                  })}
+                {branches.map((br) => {
+                  const branchGroups = groups.filter(
+                    (g) => g.id !== transferModal.sourceGroupId && g.branchId === br.id
+                  );
+                  if (branchGroups.length === 0) return null;
+                  const optgroupLabel = br.address
+                    ? `${br.name} — ${br.address}`
+                    : br.name;
+                  return (
+                    <optgroup key={br.id} label={optgroupLabel}>
+                      {branchGroups.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.name}
+                          {g.mentorName ? ` · Наставник: ${g.mentorName}` : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
+                {(() => {
+                  const knownBranchIds = new Set(branches.map((b) => b.id));
+                  const ungrouped = groups.filter(
+                    (g) =>
+                      g.id !== transferModal.sourceGroupId &&
+                      !knownBranchIds.has(g.branchId)
+                  );
+                  if (ungrouped.length === 0) return null;
+                  return (
+                    <optgroup label="Другие локации">
+                      {ungrouped.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.name}
+                          {g.mentorName ? ` · Наставник: ${g.mentorName}` : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                })()}
               </select>
             </label>
 

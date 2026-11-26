@@ -1,0 +1,333 @@
+import { describe, expect, it } from 'vitest';
+import {
+  ASSETS,
+  DESIGN_PALETTES,
+  DEFAULT_SPEECH_BUBBLE_TEXT,
+} from '../../data/presets';
+import {
+  Branch,
+  JournalDocument,
+  ResidentRecord,
+  StudentGroup,
+} from '../../types/journal';
+import {
+  KIBERONE_CURRICULUM_MODULES,
+} from '../../data/curriculumCatalog';
+import {
+  computeActiveModuleSuggestedSkillIds,
+  computeJournalProgress,
+  createStudentJournal,
+  formatGroupPeriod,
+  formatRuDate,
+  getPrideTemplatesForModules,
+  UNIVERSAL_PRIDE_TEMPLATES,
+} from '../journalProgress';
+
+function createBaseResident(overrides: Partial<ResidentRecord> = {}): ResidentRecord {
+  return {
+    id: 'res-test-1',
+    groupId: 'grp-test-1',
+    branchId: 'branch-1',
+    fullName: 'Новый резидент',
+    age: '',
+    ageCategory: '9-11',
+    mentorName: 'Иван Петров',
+    status: 'active',
+    createdAt: '2026-09-01T10:00:00.000Z',
+    updatedAt: '2026-09-01T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function createBaseGroup(overrides: Partial<StudentGroup> = {}): StudentGroup {
+  return {
+    id: 'grp-test-1',
+    name: 'Python Start · Ср 17:00',
+    branchId: 'branch-1',
+    mentorName: 'Иван Петров',
+    ageCategory: '9-11',
+    startDate: '2026-09-01',
+    endDate: '2026-12-25',
+    createdAt: '2026-09-01T10:00:00.000Z',
+    updatedAt: '2026-09-01T10:00:00.000Z',
+    commonData: {
+      paletteId: DESIGN_PALETTES[0].id,
+      modules: [],
+      skills: [],
+      nextChapterTitle: 'Что интересного впереди?',
+      nextChapterDescription: 'Тебя ждут новые интересные модули:',
+      nextChapterTopics: [{ id: 'nt-1', title: 'Python', iconKey: 'python' }],
+    },
+    ...overrides,
+  };
+}
+
+const TEST_BRANCH: Branch = {
+  id: 'branch-1',
+  name: 'Локация 1',
+  address: 'ул. Ленина, 10',
+  createdAt: '2026-09-01T10:00:00.000Z',
+  updatedAt: '2026-09-01T10:00:00.000Z',
+};
+
+describe('formatRuDate и formatGroupPeriod', () => {
+  it('корректно форматирует ISO дату в формат ДД.ММ.ГГГГ', () => {
+    expect(formatRuDate('2026-09-01')).toBe('01.09.2026');
+    expect(formatRuDate('2026-12-25T12:00:00.000Z')).toBe('25.12.2026');
+    expect(formatRuDate('')).toBe('');
+  });
+
+  it('корректно формирует учебный период группы', () => {
+    expect(formatGroupPeriod('2026-09-01', '2026-12-25')).toBe(
+      'с 01.09.2026 по 25.12.2026'
+    );
+    expect(formatGroupPeriod('2026-09-01', '')).toBe('с 01.09.2026');
+    expect(formatGroupPeriod('', '2026-12-25')).toBe('по 25.12.2026');
+    expect(formatGroupPeriod('', '')).toBe('Учебный период');
+  });
+});
+
+describe('computeJournalProgress', () => {
+  it('для журнала с дефолтными текстами и шаблонными проектами возвращает прогресс 0/5 (не ready)', () => {
+    const resident = createBaseResident();
+    const group = createBaseGroup();
+    const doc = createStudentJournal(resident, group, TEST_BRANCH);
+
+    const progress = computeJournalProgress(doc);
+
+    expect(progress.filledBlocks).toBe(0);
+    expect(progress.totalBlocks).toBe(5);
+    expect(progress.statusLevel).toBe('not_started');
+    expect(progress.statusLevel).not.toBe('ready');
+
+    const projectsBlock = progress.blocks.find((b) => b.id === 'projects');
+    expect(projectsBlock?.completed).toBe(false);
+  });
+
+  it('если у ученика заполнены имя и возраст, но проекты не изменены — статус не ready и блок «Проекты» не выполнен', () => {
+    const resident = createBaseResident({
+      fullName: 'Артём Смирнов',
+      age: '10 лет',
+    });
+    const group = createBaseGroup();
+    const doc = createStudentJournal(resident, group, TEST_BRANCH);
+
+    const progress = computeJournalProgress(doc);
+
+    expect(progress.filledBlocks).toBe(1);
+    expect(progress.statusLevel).toBe('not_started');
+    expect(progress.blocks.find((b) => b.id === 'profile')?.completed).toBe(true);
+    expect(progress.blocks.find((b) => b.id === 'projects')?.completed).toBe(false);
+  });
+
+  it('если загружен реальный скриншот в проект — блок «Проекты» становится Готово', () => {
+    const resident = createBaseResident({
+      fullName: 'Артём Смирнов',
+      age: '10 лет',
+    });
+    const group = createBaseGroup();
+    const doc = createStudentJournal(resident, group, TEST_BRANCH);
+
+    doc.page1.projects[0] = {
+      ...doc.page1.projects[0],
+      isRealScreenshot: true,
+      imageUrl:
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    };
+
+    const progress = computeJournalProgress(doc);
+    const projectsBlock = progress.blocks.find((b) => b.id === 'projects');
+
+    expect(projectsBlock?.completed).toBe(true);
+    expect(progress.filledBlocks).toBe(2);
+    expect(progress.statusLevel).toBe('in_progress');
+  });
+
+  it('если изменен текст «Момент гордости» и добавлена сильная сторона — блок «Момент гордости» становится Готово', () => {
+    const resident = createBaseResident({
+      fullName: 'Артём Смирнов',
+      age: '10 лет',
+    });
+    const group = createBaseGroup();
+    const doc = createStudentJournal(resident, group, TEST_BRANCH);
+
+    // Без сильной стороны блок не засчитывается
+    doc.page2.prideText = 'Самостоятельно собрал 3D-уровень и помог другу.';
+    let progress = computeJournalProgress(doc);
+    expect(progress.blocks.find((b) => b.id === 'pride')?.completed).toBe(false);
+
+    // После добавления видимой сильной стороны блок становится Готово
+    doc.page2.strengths = [
+      {
+        id: 'str-1',
+        title: 'Логическое мышление',
+        example: 'Уверенно строит алгоритмы и условия.',
+        iconKey: 'logic',
+        bgColor: '#B8F2F5',
+      },
+    ];
+    progress = computeJournalProgress(doc);
+    expect(progress.blocks.find((b) => b.id === 'pride')?.completed).toBe(true);
+  });
+
+  it('если все 5 блоков заполнены — общий статус становится ready', () => {
+    const resident = createBaseResident({
+      fullName: 'Артём Смирнов',
+      age: '10 лет',
+    });
+    const group = createBaseGroup({
+      commonData: {
+        paletteId: DESIGN_PALETTES[0].id,
+        modules: [
+          {
+            id: 'm-1',
+            title: 'Python-разработка',
+            subtitle: 'Основы языка',
+            description: 'Переменные, циклы и мини-игры на Python.',
+            cardBgColor: '#FFF8B8',
+            size: 'normal',
+            order: 1,
+            visualMode: 'image',
+            customImageUrl: ASSETS.logo,
+            imageScale: 1.15,
+            imagePosX: 0,
+            imagePosY: -4,
+          },
+        ],
+        skills: [
+          {
+            id: 'sk-1',
+            label: 'Работа с циклами и условиями',
+            bgColor: '#FFE14D',
+            status: 'independent',
+          },
+        ],
+        nextChapterTitle: 'Что интересного впереди?',
+        nextChapterDescription: 'Тебя ждут новые интересные модули:',
+        nextChapterTopics: [{ id: 'nt-1', title: 'Python', iconKey: 'python' }],
+      },
+    });
+
+    const doc: JournalDocument = createStudentJournal(resident, group, TEST_BRANCH);
+    doc.page1.coverSpeechBubbleText = DEFAULT_SPEECH_BUBBLE_TEXT;
+    doc.page1.projects[0] = {
+      ...doc.page1.projects[0],
+      title: 'Космический шутер на Python',
+      isRealScreenshot: true,
+      imageUrl:
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    };
+    doc.page2.prideText = 'Создал свою игру с подсчётом очков и защитил проект!';
+    doc.page2.strengths = [
+      {
+        id: 'str-1',
+        title: 'Креативность',
+        example: 'Придумывает яркие игровые механики.',
+        iconKey: 'creativity',
+        bgColor: '#B8F2F5',
+      },
+    ];
+    doc.page2.mentorNote = {
+      ...doc.page2.mentorNote,
+      greeting: 'Артём, ты большой молодец!',
+      body: 'За этот модуль ты уверенно освоил циклы, условия и собрал собственный проект без подсказок.',
+      signature: 'Твой наставник, Иван',
+    };
+
+    const progress = computeJournalProgress(doc);
+
+    expect(progress.filledBlocks).toBe(5);
+    expect(progress.totalBlocks).toBe(5);
+    expect(progress.label).toBe('Заполнено 5 из 5 блоков');
+    expect(progress.statusLevel).toBe('ready');
+    expect(progress.blocks.every((b) => b.completed)).toBe(true);
+  });
+});
+
+describe('computeActiveModuleSuggestedSkillIds и getPrideTemplatesForModules', () => {
+  it('собирает suggestedSkills только от активных модулей, без дублей и с fallback на каталог', () => {
+    const mod1 = KIBERONE_CURRICULUM_MODULES.find((m) => m.id === 'm_python_ai')!;
+    const mod2 = KIBERONE_CURRICULUM_MODULES.find((m) => m.id === 'm_pygame')!;
+
+    const skills = computeActiveModuleSuggestedSkillIds(
+      [
+        {
+          id: 'mod-1',
+          libraryModuleId: mod1.id,
+          title: mod1.shortTitle,
+          subtitle: mod1.subtitle,
+          description: mod1.description,
+          cardBgColor: mod1.cardBgColor,
+          size: 'normal',
+          order: 1,
+          suggestedSkills: ['skill-python', 'skill-logic'],
+        },
+        {
+          id: 'mod-2',
+          libraryModuleId: mod2.id,
+          title: mod2.shortTitle,
+          subtitle: mod2.subtitle,
+          description: mod2.description,
+          cardBgColor: mod2.cardBgColor,
+          size: 'normal',
+          order: 2,
+          // Без явного suggestedSkills — берёт из каталога; skill-python пересекается с mod-1
+        },
+        {
+          id: 'mod-hidden',
+          libraryModuleId: 'm_roblox',
+          title: 'Roblox',
+          subtitle: '3D',
+          description: 'Hidden module',
+          cardBgColor: '#DBEAFE',
+          size: 'normal',
+          order: 3,
+          hidden: true,
+          suggestedSkills: ['skill-3d-modeling'],
+        },
+      ],
+      KIBERONE_CURRICULUM_MODULES
+    );
+
+    expect(skills).toContain('skill-python');
+    expect(skills).toContain('skill-logic');
+    expect(skills).not.toContain('skill-3d-modeling');
+    // Без дубликатов
+    expect(new Set(skills).size).toBe(skills.length);
+  });
+
+  it('подбирает релевантные шаблоны для «Момента гордости» в зависимости от модулей', () => {
+    const pythonTemplates = getPrideTemplatesForModules([
+      {
+        id: 'm1',
+        libraryModuleId: 'm_python_ai',
+        title: 'Python + AI',
+        subtitle: 'Разработка на Python',
+        description: '',
+        cardBgColor: '#FFF',
+        size: 'normal',
+        order: 1,
+      },
+    ]);
+    expect(pythonTemplates).toContain('Написал(а) первый код на Python');
+    expect(pythonTemplates).toContain(UNIVERSAL_PRIDE_TEMPLATES[0]);
+
+    const robloxTemplates = getPrideTemplatesForModules([
+      {
+        id: 'm2',
+        libraryModuleId: 'm_roblox',
+        title: 'Roblox',
+        subtitle: '3D-игры',
+        description: '',
+        cardBgColor: '#FFF',
+        size: 'normal',
+        order: 1,
+      },
+    ]);
+    expect(robloxTemplates).toContain('Разработал(а) собственную карту в Roblox');
+
+    const fallbackTemplates = getPrideTemplatesForModules([]);
+    expect(fallbackTemplates.length).toBeGreaterThanOrEqual(4);
+    expect(fallbackTemplates).toContain(UNIVERSAL_PRIDE_TEMPLATES[0]);
+  });
+});

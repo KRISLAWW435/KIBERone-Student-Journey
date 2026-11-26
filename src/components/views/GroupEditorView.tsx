@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowLeft,
   ArrowRight,
@@ -93,8 +94,10 @@ import {
 } from '../../types/journal';
 import {
   buildDefaultCommonData,
+  computeActiveModuleSuggestedSkillIds,
   computeJournalProgress,
   formatGroupPeriod,
+  getPrideTemplatesForModules,
   getStudentStatusLabel,
   getStudentStatusMeta,
   normalizeStudentStatus,
@@ -185,6 +188,7 @@ interface GroupEditorViewProps {
   activeJournalId: string | null;
   initialTab?: EditorTab;
   initialJournalId?: string | null;
+  initialStudentId?: string | null;
   onSelectActiveJournal: (journalId: string) => void;
   onChangeJournal: (updated: JournalDocument) => void;
   onSaveGroupAndApplyCommon: (
@@ -239,6 +243,7 @@ export function GroupEditorView({
   activeJournalId,
   initialTab = 'common',
   initialJournalId = null,
+  initialStudentId = null,
   onSelectActiveJournal,
   onChangeJournal: onCommitJournalToStore,
   onSaveGroupAndApplyCommon,
@@ -293,6 +298,8 @@ export function GroupEditorView({
   const [highlightedStudentModId, setHighlightedStudentModId] = useState<
     string | null
   >(null);
+  const [highlightedStudentProjCropId, setHighlightedStudentProjCropId] =
+    useState<string | null>(null);
 
   // Safe inline deletion confirmation states
   const [confirmDeleteStudentId, setConfirmDeleteStudentId] = useState<
@@ -382,23 +389,31 @@ export function GroupEditorView({
     [journals]
   );
 
-  const resolveStudentIdForJournal = useCallback(
-    (jId: string | null | undefined): string => {
-      if (!jId) return '';
-      const matchedJournal = journals.find((j) => j.id === jId);
-      const matchedStudent = allGroupStudents.find(
-        (s) =>
-          s.journalId === jId ||
-          (matchedJournal?.residentId && s.id === matchedJournal.residentId)
-      );
-      return matchedStudent?.id ?? '';
+  const resolveStudentIdForEntry = useCallback(
+    (jId: string | null | undefined, stId: string | null | undefined): string => {
+      if (stId && allGroupStudents.some((s) => s.id === stId)) {
+        return stId;
+      }
+      if (jId) {
+        const matchedJournal = journals.find((j) => j.id === jId);
+        const matchedStudent = allGroupStudents.find(
+          (s) =>
+            s.journalId === jId ||
+            (matchedJournal?.residentId && s.id === matchedJournal.residentId)
+        );
+        if (matchedStudent) return matchedStudent.id;
+      }
+      return (groupStudents[0] ?? allGroupStudents[0])?.id ?? '';
     },
-    [allGroupStudents, journals]
+    [allGroupStudents, groupStudents, journals]
   );
 
   const [selectedStudentId, setSelectedStudentId] = useState<string>(() =>
     initialTab === 'individual'
-      ? resolveStudentIdForJournal(initialJournalId ?? activeJournalId)
+      ? resolveStudentIdForEntry(
+          initialJournalId ?? activeJournalId,
+          initialStudentId
+        )
       : ''
   );
   const [expandedStudentIds, setExpandedStudentIds] = useState<
@@ -406,17 +421,35 @@ export function GroupEditorView({
   >({});
 
   const lastAppliedEntryRef = useRef<string>(
-    `${initialTab}:${initialJournalId ?? ''}`
+    `${group.id}:${initialTab}:${initialJournalId ?? ''}:${initialStudentId ?? ''}`
   );
+  const lastGroupIdRef = useRef<string>(group.id);
 
   useEffect(() => {
-    const entryKey = `${initialTab}:${initialJournalId ?? ''}`;
-    if (lastAppliedEntryRef.current === entryKey) return;
+    const groupChanged = lastGroupIdRef.current !== group.id;
+    const entryKey = `${group.id}:${initialTab}:${initialJournalId ?? ''}:${
+      initialStudentId ?? ''
+    }`;
+    const entryChanged = lastAppliedEntryRef.current !== entryKey;
+    if (!groupChanged && !entryChanged) return;
+
+    lastGroupIdRef.current = group.id;
     lastAppliedEntryRef.current = entryKey;
+
+    if (groupChanged) {
+      setExpandedStudentIds({});
+      setActiveInspectorStep('profile');
+      setEditingModuleVisual(null);
+      setEditingTopicIconId(null);
+      setHighlightedStudentModId(null);
+      setPendingCommonExit(null);
+    }
+
     if (initialTab === 'individual') {
       setEditorTab('individual');
-      const targetStudentId = resolveStudentIdForJournal(
-        initialJournalId ?? activeJournalId
+      const targetStudentId = resolveStudentIdForEntry(
+        initialJournalId ?? activeJournalId,
+        initialStudentId
       );
       if (targetStudentId) {
         setSelectedStudentId(targetStudentId);
@@ -424,13 +457,21 @@ export function GroupEditorView({
         if (matched && normalizeStudentStatus(matched.status) !== 'active') {
           setOnlyActive(false);
         }
+      } else {
+        setSelectedStudentId('');
       }
+    } else if (groupChanged) {
+      setEditorTab('common');
+      setCommonStep(1);
+      setSelectedStudentId('');
     }
   }, [
+    group.id,
     initialTab,
     initialJournalId,
+    initialStudentId,
     activeJournalId,
-    resolveStudentIdForJournal,
+    resolveStudentIdForEntry,
     allGroupStudents,
   ]);
 
@@ -442,6 +483,22 @@ export function GroupEditorView({
       setSelectedStudentId('');
     }
   }, [allGroupStudents, selectedStudentId]);
+
+  useEffect(() => {
+    if (editorTab !== 'individual' || allGroupStudents.length === 0) return;
+    const hasSelected =
+      Boolean(selectedStudentId) &&
+      allGroupStudents.some((s) => s.id === selectedStudentId);
+    if (!hasSelected) {
+      const first = groupStudents[0] ?? allGroupStudents[0];
+      if (first) {
+        setSelectedStudentId(first.id);
+        if (normalizeStudentStatus(first.status) !== 'active') {
+          setOnlyActive(false);
+        }
+      }
+    }
+  }, [editorTab, selectedStudentId, groupStudents, allGroupStudents]);
 
   const selectedStudent = selectedStudentId
     ? allGroupStudents.find((s) => s.id === selectedStudentId) ?? null
@@ -624,6 +681,34 @@ export function GroupEditorView({
   const [newCustomSkill, setNewCustomSkill] = useState('');
   const [newNextTopicTitle, setNewNextTopicTitle] = useState('');
   const [applyingCommon, setApplyingCommon] = useState(false);
+  const [pendingCommonExit, setPendingCommonExit] = useState<{
+    label: string;
+    proceed: () => void;
+  } | null>(null);
+
+  const hasUnsavedCommonChanges = useMemo(() => {
+    const savedCommon = buildDefaultCommonData(group);
+    const groupChanged =
+      groupDraft.name !== group.name ||
+      groupDraft.branchId !== group.branchId ||
+      groupDraft.mentorName !== group.mentorName ||
+      groupDraft.startDate !== group.startDate ||
+      groupDraft.endDate !== group.endDate ||
+      groupDraft.ageCategory !== group.ageCategory;
+    if (groupChanged) return true;
+    return JSON.stringify(commonDraft) !== JSON.stringify(savedCommon);
+  }, [group, groupDraft, commonDraft]);
+
+  const guardLeaveCommonTab = useCallback(
+    (label: string, proceed: () => void) => {
+      if (editorTab === 'common' && hasUnsavedCommonChanges) {
+        setPendingCommonExit({ label, proceed });
+        return;
+      }
+      proceed();
+    },
+    [editorTab, hasUnsavedCommonChanges]
+  );
 
   const topicsCatalogOptions = useMemo(() => {
     const mapCategoryToTopicIcon = (
@@ -728,18 +813,6 @@ export function GroupEditorView({
     setNewNextTopicTitle('');
   };
 
-  // When opening or switching groups, start on Group Common Data Step 1 with no student pre-selected
-  useEffect(() => {
-    setEditorTab('common');
-    setCommonStep(1);
-    setSelectedStudentId('');
-    setExpandedStudentIds({});
-    setActiveInspectorStep('profile');
-    setEditingModuleVisual(null);
-    setEditingTopicIconId(null);
-    setHighlightedStudentModId(null);
-  }, [group.id]);
-
   // Keep draft synced when group data updates
   useEffect(() => {
     setGroupDraft({ ...group });
@@ -786,9 +859,9 @@ export function GroupEditorView({
     };
   }, [draggingSide]);
 
-  // AI Mentor Note state
-  const [aiBusy, setAiBusy] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
+  // ВРЕМЕННО ОТКЛЮЧЕНО: AI-генерация письма (будет возвращена позже)
+  // const [aiBusy, setAiBusy] = useState(false);
+  // const [aiError, setAiError] = useState<string | null>(null);
   const [newStrengthTitle, setNewStrengthTitle] = useState('');
 
   // Canvas ResizeObserver & Figma-style Pan + Cursor-anchored Zoom
@@ -1493,8 +1566,72 @@ export function GroupEditorView({
 
   const handleSelectTextField = (target: ActiveTextFieldTarget) => {
     setActiveTextField(target);
-    if (target && (target.page === 1 || target.page === 2)) {
+    if (!target) return;
+    if (target.page === 1 || target.page === 2) {
       setDesignTargetPage(target.page);
+    }
+    if (
+      target.field === 'mentorGreeting' ||
+      target.field === 'mentorBody' ||
+      target.field === 'mentorSignature'
+    ) {
+      setActiveTarget({ page: 2, block: 'mentorNote' });
+      focusSection('mentorNote', 2);
+      return;
+    }
+    if (
+      target.field === 'nextChapterTitle' ||
+      target.field === 'nextTopicTitle'
+    ) {
+      setActiveTarget({ page: 2, block: 'nextChapter' });
+      if (inspectorMode !== 'design') {
+        focusSection('mentorNote', 2);
+      }
+      return;
+    }
+    if (target.field === 'decorText') {
+      setActiveTarget({
+        page: target.page,
+        block: 'decor',
+        itemId: target.itemId,
+      });
+      return;
+    }
+    if (inspectorMode === 'design') return;
+    if (target.page === 1) {
+      if (
+        target.field === 'coverTitle' ||
+        target.field === 'coverSubtitle' ||
+        target.field === 'coverSpeechBubble'
+      ) {
+        focusSection('profile', 1);
+      } else if (
+        target.field === 'moduleTitle' ||
+        target.field === 'moduleSubtitle' ||
+        target.field === 'moduleDescription'
+      ) {
+        setHighlightedStudentModId(target.itemId);
+        focusSection('curriculum', 1);
+      } else if (target.field === 'skillLabel') {
+        focusSection('curriculum', 1);
+      } else if (
+        target.field === 'projectTitle' ||
+        target.field === 'projectCaption' ||
+        target.field === 'projectDescription'
+      ) {
+        focusSection('projects', 1);
+      }
+    } else {
+      if (
+        target.field === 'prideTitle' ||
+        target.field === 'prideText' ||
+        target.field === 'strengthTitle' ||
+        target.field === 'strengthExample'
+      ) {
+        focusSection('pride', 2);
+      } else if (target.field === 'page2HeaderTitle') {
+        focusSection('pride', 2);
+      }
     }
   };
 
@@ -1559,15 +1696,16 @@ export function GroupEditorView({
         target.block === 'strengths'
       ) {
         focusSection('pride', 2);
-      } else if (target.block === 'nextBear') {
-        focusSection('pride', 2);
-      } else if (target.block === 'nextChapter') {
-        setEditorTab('common');
-        setCommonStep(4);
+      } else if (
+        target.block === 'nextBear' ||
+        target.block === 'nextChapter'
+      ) {
+        focusSection('mentorNote', 2);
       }
     }
   };
 
+  /* ВРЕМЕННО ОТКЛЮЧЕНО: AI-генерация письма (будет возвращена позже)
   const handleGenerateAiMentorNote = async () => {
     if (!activeDoc) return;
     setAiBusy(true);
@@ -1619,6 +1757,7 @@ export function GroupEditorView({
       setAiBusy(false);
     }
   };
+  */
 
   // Common Group Tab Helpers
 
@@ -1781,6 +1920,9 @@ export function GroupEditorView({
         visualMode: 'image',
         imageMediaId: lib.imageMediaId ?? null,
         customImageUrl: lib.customImageUrl,
+        imageScale: lib.imageScale,
+        imagePosX: lib.imagePosX,
+        imagePosY: lib.imagePosY,
         cardBgColor: lib.cardBgColor,
         layoutVariant: 'classic',
         size: 'normal',
@@ -1908,6 +2050,10 @@ export function GroupEditorView({
     const nextModules = activeDoc.page1.modules.map((m) =>
       m.id === modId ? { ...m, hidden: !m.hidden } : m
     );
+    const nextSuggestedPool = computeActiveModuleSuggestedSkillIds(
+      nextModules,
+      libraryModules
+    );
     onChangeJournal({
       ...activeDoc,
       page1: {
@@ -1916,6 +2062,7 @@ export function GroupEditorView({
           ? true
           : activeDoc.page1.showModules,
         modules: nextModules,
+        suggestedSkillsPool: nextSuggestedPool,
       },
     });
   };
@@ -1933,6 +2080,9 @@ export function GroupEditorView({
       visualMode: 'image',
       imageMediaId: lib.imageMediaId ?? null,
       customImageUrl: lib.customImageUrl,
+      imageScale: lib.imageScale,
+      imagePosX: lib.imagePosX,
+      imagePosY: lib.imagePosY,
       cardBgColor: lib.cardBgColor,
       layoutVariant: 'classic',
       size: 'normal',
@@ -1941,12 +2091,18 @@ export function GroupEditorView({
       isIndividual: true,
       suggestedSkills: [...(lib.suggestedSkills ?? [])],
     };
+    const nextModules = [...activeDoc.page1.modules, nextMod];
+    const nextSuggestedPool = computeActiveModuleSuggestedSkillIds(
+      nextModules,
+      libraryModules
+    );
     onChangeJournal({
       ...activeDoc,
       page1: {
         ...activeDoc.page1,
         showModules: true,
-        modules: [...activeDoc.page1.modules, nextMod],
+        modules: nextModules,
+        suggestedSkillsPool: nextSuggestedPool,
       },
     });
     setIndividualModPickerOpen(false);
@@ -1987,11 +2143,16 @@ export function GroupEditorView({
     const nextModules = activeDoc.page1.modules
       .filter((m) => m.id !== modId)
       .map((m, idx) => ({ ...m, order: idx + 1 }));
+    const nextSuggestedPool = computeActiveModuleSuggestedSkillIds(
+      nextModules,
+      libraryModules
+    );
     onChangeJournal({
       ...activeDoc,
       page1: {
         ...activeDoc.page1,
         modules: nextModules,
+        suggestedSkillsPool: nextSuggestedPool,
       },
     });
   };
@@ -2011,7 +2172,9 @@ export function GroupEditorView({
   const handleToggleStudentSkill = (skillId: string) => {
     if (!activeDoc) return;
     const nextSkills = activeDoc.page1.skills.map((s) =>
-      s.id === skillId ? { ...s, hidden: !s.hidden } : s
+      s.id === skillId
+        ? { ...s, hidden: !s.hidden, confirmedManually: Boolean(s.hidden) }
+        : s
     );
     onChangeJournal({
       ...activeDoc,
@@ -2026,15 +2189,65 @@ export function GroupEditorView({
     });
   };
 
+  const handleConfirmRecommendedSkills = (defs: SkillDefinition[]) => {
+    if (!activeDoc || defs.length === 0) return;
+    let nextSkills = [...activeDoc.page1.skills];
+    const now = Date.now();
+    defs.forEach((def, idx) => {
+      const existingIdx = nextSkills.findIndex(
+        (s) =>
+          s.skillId === def.id ||
+          s.label.trim().toLowerCase() === def.label.trim().toLowerCase()
+      );
+      if (existingIdx >= 0) {
+        nextSkills[existingIdx] = {
+          ...nextSkills[existingIdx],
+          skillId: nextSkills[existingIdx].skillId || def.id,
+          hidden: false,
+          confirmedManually: true,
+        };
+      } else {
+        nextSkills.push({
+          id: `ind-sk-${def.id}-${now}-${idx}`,
+          skillId: def.id,
+          label: def.label,
+          bgColor: def.defaultColor,
+          status: 'independent',
+          hidden: false,
+          isIndividual: true,
+          confirmedManually: true,
+        });
+      }
+    });
+    onChangeJournal({
+      ...activeDoc,
+      page1: {
+        ...activeDoc.page1,
+        showSkills: true,
+        skills: nextSkills,
+        confirmedSkills: syncConfirmedSkills(nextSkills),
+      },
+    });
+  };
+
   const handleAddIndividualSkill = () => {
     if (!activeDoc || !newIndividualSkill.trim()) return;
+    const trimmed = newIndividualSkill.trim();
+    const alreadyExists = activeDoc.page1.skills.some(
+      (s) => !s.hidden && s.label.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (alreadyExists) {
+      setNewIndividualSkill('');
+      return;
+    }
     const nextSkill: SkillItem = {
       id: `ind-sk-${Date.now()}`,
-      label: newIndividualSkill.trim(),
+      label: trimmed,
       bgColor: '#48C9D8',
       status: 'independent',
       hidden: false,
       isIndividual: true,
+      confirmedManually: true,
     };
     const nextSkills = [...activeDoc.page1.skills, nextSkill];
     onChangeJournal({
@@ -2075,7 +2288,9 @@ export function GroupEditorView({
           />
           <button
             type="button"
-            onClick={onBackHome}
+            onClick={() =>
+              guardLeaveCommonTab('Выход к списку групп', onBackHome)
+            }
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-medium text-zinc-700 hover:bg-zinc-50 whitespace-nowrap shrink-0"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
@@ -2119,7 +2334,11 @@ export function GroupEditorView({
           </button>
           <button
             type="button"
-            onClick={() => setEditorTab('individual')}
+            onClick={() =>
+              guardLeaveCommonTab('Переход в Редактор учеников', () =>
+                setEditorTab('individual')
+              )
+            }
             className={`h-full inline-flex items-center gap-1.5 px-1 border-b-2 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
               editorTab === 'individual'
                 ? 'border-[#0D9488] text-zinc-900'
@@ -2291,12 +2510,14 @@ export function GroupEditorView({
                     onChange={(e) => {
                       const nextId = e.target.value;
                       if (!nextId) return;
-                      setSelectedStudentId(nextId);
-                      setExpandedStudentIds((prev) => ({
-                        ...prev,
-                        [nextId]: true,
-                      }));
-                      setEditorTab('individual');
+                      guardLeaveCommonTab('Открытие журнала ученика', () => {
+                        setSelectedStudentId(nextId);
+                        setExpandedStudentIds((prev) => ({
+                          ...prev,
+                          [nextId]: true,
+                        }));
+                        setEditorTab('individual');
+                      });
                     }}
                     aria-label="Быстрый выбор ученика из всех статусов"
                     className="w-full rounded-md border border-zinc-200 bg-[#FAFAFA] px-2 py-1.5 text-[11px] font-medium text-zinc-700 focus:outline-none focus:border-[#0D9488]"
@@ -2451,14 +2672,19 @@ export function GroupEditorView({
                         <div className="flex items-start gap-1 px-3 py-2.5">
                           <button
                             type="button"
-                            onClick={() => {
-                              setSelectedStudentId(st.id);
-                              setExpandedStudentIds((prev) => ({
-                                ...prev,
-                                [st.id]: true,
-                              }));
-                              setEditorTab('individual');
-                            }}
+                            onClick={() =>
+                              guardLeaveCommonTab(
+                                `Открытие журнала «${st.fullName}»`,
+                                () => {
+                                  setSelectedStudentId(st.id);
+                                  setExpandedStudentIds((prev) => ({
+                                    ...prev,
+                                    [st.id]: true,
+                                  }));
+                                  setEditorTab('individual');
+                                }
+                              )
+                            }
                             className="flex-1 min-w-0 text-left space-y-1.5"
                           >
                             <div className="flex items-center justify-between gap-2">
@@ -2575,28 +2801,33 @@ export function GroupEditorView({
                               <button
                                 key={b.id}
                                 type="button"
-                                onClick={() => {
-                                  setSelectedStudentId(st.id);
-                                  setEditorTab('individual');
-                                  const sectionMap: Record<
-                                    string,
-                                    IndividualSection
-                                  > = {
-                                    profile: 'profile',
-                                    curriculum: 'curriculum',
-                                    projects: 'projects',
-                                    pride: 'pride',
-                                    mentorNote: 'mentorNote',
-                                  };
-                                  const targetSec =
-                                    sectionMap[b.id] ?? 'profile';
-                                  const page =
-                                    targetSec === 'pride' ||
-                                    targetSec === 'mentorNote'
-                                      ? 2
-                                      : 1;
-                                  focusSection(targetSec, page);
-                                }}
+                                onClick={() =>
+                                  guardLeaveCommonTab(
+                                    `Открытие журнала «${st.fullName}»`,
+                                    () => {
+                                      setSelectedStudentId(st.id);
+                                      setEditorTab('individual');
+                                      const sectionMap: Record<
+                                        string,
+                                        IndividualSection
+                                      > = {
+                                        profile: 'profile',
+                                        curriculum: 'curriculum',
+                                        projects: 'projects',
+                                        pride: 'pride',
+                                        mentorNote: 'mentorNote',
+                                      };
+                                      const targetSec =
+                                        sectionMap[b.id] ?? 'profile';
+                                      const page =
+                                        targetSec === 'pride' ||
+                                        targetSec === 'mentorNote'
+                                          ? 2
+                                          : 1;
+                                      focusSection(targetSec, page);
+                                    }
+                                  )
+                                }
                                 className="w-full flex items-center justify-between gap-2 px-1 py-1 rounded hover:bg-zinc-100/70 text-left transition-colors"
                               >
                                 <span className="flex items-center gap-1.5 min-w-0">
@@ -3161,16 +3392,21 @@ export function GroupEditorView({
                                           ? mod.cardBgColor
                                           : '#F4F4F5',
                                       }}
-                                      className="w-16 h-16 shrink-0 rounded-xl border border-zinc-200 overflow-hidden relative group flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
+                                      className="w-16 h-16 shrink-0 rounded-xl border border-zinc-200 overflow-hidden p-0.5 relative group flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
                                       title="Настроить картинку и фон модуля"
                                     >
                                       <ModuleThumbImage
                                         src={resolvedUrl}
                                         alt={mod.title}
                                         style={{
-                                          transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
+                                          transform: `translate(${Math.round(
+                                            imgX * 0.28
+                                          )}px, ${Math.round(
+                                            imgY * 0.28
+                                          )}px) scale(${imgScale})`,
+                                          transformOrigin: 'center center',
                                         }}
-                                        className="w-full h-full object-contain p-1"
+                                        className="w-full h-full object-contain transition-transform duration-150"
                                         iconClassName="w-5 h-5 stroke-[1.6]"
                                       />
                                       <span className="absolute inset-0 bg-zinc-900/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -3826,7 +4062,11 @@ export function GroupEditorView({
                 )}
                 <button
                   type="button"
-                  onClick={() => setEditorTab('individual')}
+                  onClick={() =>
+                    guardLeaveCommonTab('Переход в Редактор учеников', () =>
+                      setEditorTab('individual')
+                    )
+                  }
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[#0D9488]/40 bg-[#F0FDFA] hover:bg-[#CCFBF1]/60 text-[#0F766E] text-xs font-semibold whitespace-nowrap"
                 >
                   <span>Перейти в Редактор учеников</span>
@@ -4284,12 +4524,14 @@ export function GroupEditorView({
                     </div>
                   </div>
 
-                  {/* Live Right-Panel Text Editor (Synced in Real Time with A4 Canvas) */}
-                  {activeTextField && (() => {
-                    let fieldLabel = 'Редактирование текста';
-                    let currentValue = '';
-                    let updateValue: (next: string) => void = () => {};
-                    let companionNode: React.ReactNode = null;
+                  {/* Live Right-Panel Text Editor Builder (rendered below step bar in Content mode, at top of Design mode) */}
+                  {(() => {
+                    const floatingTextEditorNode = activeTextField
+                      ? (() => {
+                          let fieldLabel = 'Редактирование текста';
+                          let currentValue = '';
+                          let updateValue: (next: string) => void = () => {};
+                          let companionNode: React.ReactNode = null;
 
                     if (activeTextField.page === 1) {
                       if (activeTextField.field === 'coverTitle') {
@@ -4528,28 +4770,6 @@ export function GroupEditorView({
                                   />
                                 </div>
                               </label>
-                            </div>
-                            <span className="text-[10px] font-semibold text-zinc-500 block">
-                              Готовые фразы (нажмите для выбора):
-                            </span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {SPEECH_BUBBLE_PRESETS.map((preset) => {
-                                const isMatched = curBubble.trim() === preset;
-                                return (
-                                  <button
-                                    key={preset}
-                                    type="button"
-                                    onClick={() => updateValue(preset)}
-                                    className={`px-2 py-1 rounded-md border text-[10px] font-medium transition-colors text-left ${
-                                      isMatched
-                                        ? 'border-[#0D9488] bg-[#0D9488] text-white'
-                                        : 'border-zinc-200 bg-white text-zinc-700 hover:border-[#0D9488] hover:text-[#0F766E]'
-                                    }`}
-                                  >
-                                    {preset}
-                                  </button>
-                                );
-                              })}
                             </div>
                           </div>
                         );
@@ -4799,42 +5019,44 @@ export function GroupEditorView({
                       }
                     }
 
-                    return (
-                      <div className="shrink-0 border-b border-[#0D9488]/25 bg-[#F0FDFA]/70 px-3.5 py-3 space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-[#0F766E]">
-                              Редактирование текста · Стр. {activeTextField.page}
+                          return (
+                            <div className="shrink-0 border-b border-[#0D9488]/25 bg-[#F0FDFA]/70 px-3.5 py-3 space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#0F766E]">
+                                    Редактирование текста · Стр. {activeTextField.page}
+                                  </div>
+                                  <div className="text-xs font-bold text-zinc-900 truncate">
+                                    {fieldLabel}
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveTextField(null)}
+                                  className="p-1 rounded-md text-zinc-400 hover:text-zinc-800 hover:bg-white transition-colors"
+                                  title="Закрыть редактор текста"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <textarea
+                                ref={textEditorRef}
+                                rows={4}
+                                value={currentValue}
+                                onChange={(e) => updateValue(e.target.value)}
+                                placeholder="Введите текст — изменения сразу появятся на листе А4…"
+                                className="w-full rounded-lg border border-[#0D9488]/40 bg-white px-2.5 py-2 text-xs leading-relaxed text-zinc-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-[#0D9488]/25 focus:border-[#0D9488] resize-y"
+                              />
+                              {companionNode}
                             </div>
-                            <div className="text-xs font-bold text-zinc-900 truncate">
-                              {fieldLabel}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setActiveTextField(null)}
-                            className="p-1 rounded-md text-zinc-400 hover:text-zinc-800 hover:bg-white transition-colors"
-                            title="Закрыть редактор текста"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                        <textarea
-                          ref={textEditorRef}
-                          rows={4}
-                          value={currentValue}
-                          onChange={(e) => updateValue(e.target.value)}
-                          placeholder="Введите текст — изменения сразу появятся на листе А4…"
-                          className="w-full rounded-lg border border-[#0D9488]/40 bg-white px-2.5 py-2 text-xs leading-relaxed text-zinc-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-[#0D9488]/25 focus:border-[#0D9488] resize-y"
-                        />
-                        {companionNode}
-                      </div>
-                    );
-                  })()}
+                          );
+                        })()
+                      : null;
 
-                  {/* Inspector Body */}
-                  {inspectorMode === 'design' ? (
-                    (() => {
+                    return inspectorMode === 'design' ? (
+                      <>
+                        {floatingTextEditorNode}
+                        {(() => {
                       const pageCfg =
                         effectiveDesignPage === 1
                           ? activeDoc.page1
@@ -5215,23 +5437,29 @@ export function GroupEditorView({
                               {/* Text-specific Controls */}
                               {selectedDecor.kind === 'text' && (
                                 <div className="pt-2 border-t border-zinc-100 space-y-2.5">
-                                  <label className="block">
-                                    <span className="text-[10px] font-semibold text-zinc-600">
-                                      Текст блока
-                                    </span>
-                                    <textarea
-                                      rows={2}
-                                      value={selectedDecor.text ?? ''}
-                                      onChange={(e) =>
-                                        handleUpdateDecor(
-                                          activeTarget.page,
-                                          selectedDecor.id,
-                                          { text: e.target.value }
-                                        )
-                                      }
-                                      className="mt-1 w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs focus:outline-none focus:border-[#0D9488]"
-                                    />
-                                  </label>
+                                  {!(
+                                    activeTextField?.page === activeTarget.page &&
+                                    activeTextField.field === 'decorText' &&
+                                    activeTextField.itemId === selectedDecor.id
+                                  ) && (
+                                    <label className="block">
+                                      <span className="text-[10px] font-semibold text-zinc-600">
+                                        Текст блока
+                                      </span>
+                                      <textarea
+                                        rows={2}
+                                        value={selectedDecor.text ?? ''}
+                                        onChange={(e) =>
+                                          handleUpdateDecor(
+                                            activeTarget.page,
+                                            selectedDecor.id,
+                                            { text: e.target.value }
+                                          )
+                                        }
+                                        className="mt-1 w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs focus:outline-none focus:border-[#0D9488]"
+                                      />
+                                    </label>
+                                  )}
                                   <div className="grid grid-cols-2 gap-2">
                                     <label className="block">
                                       <span className="text-[10px] text-zinc-500">
@@ -5983,27 +6211,35 @@ export function GroupEditorView({
                               {selectedBlockId === 'coverTitle' && (
                                 <div className="pt-2.5 border-t border-zinc-100 space-y-2.5">
                                   <div className="text-[11px] font-bold text-zinc-800">
-                                    Текст и стиль заголовка
+                                    {activeTextField?.page === 1 &&
+                                    activeTextField.field === 'coverTitle'
+                                      ? 'Стиль заголовка'
+                                      : 'Текст и стиль заголовка'}
                                   </div>
-                                  <label className="block">
-                                    <span className="text-[10px] text-zinc-500">
-                                      Текст заголовка
-                                    </span>
-                                    <input
-                                      type="text"
-                                      value={activeDoc.page1.coverTitle}
-                                      onChange={(e) =>
-                                        onChangeJournal({
-                                          ...activeDoc,
-                                          page1: {
-                                            ...activeDoc.page1,
-                                            coverTitle: e.target.value,
-                                          },
-                                        })
-                                      }
-                                      className={flatInputClass}
-                                    />
-                                  </label>
+                                  {!(
+                                    activeTextField?.page === 1 &&
+                                    activeTextField.field === 'coverTitle'
+                                  ) && (
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Текст заголовка
+                                      </span>
+                                      <input
+                                        type="text"
+                                        value={activeDoc.page1.coverTitle}
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page1: {
+                                              ...activeDoc.page1,
+                                              coverTitle: e.target.value,
+                                            },
+                                          })
+                                        }
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                  )}
                                   <div className="grid grid-cols-2 gap-2">
                                     <label className="block">
                                       <span className="text-[10px] text-zinc-500">
@@ -6116,27 +6352,35 @@ export function GroupEditorView({
                               {selectedBlockId === 'coverSubtitle' && (
                                 <div className="pt-2.5 border-t border-zinc-100 space-y-2.5">
                                   <div className="text-[11px] font-bold text-zinc-800">
-                                    Текст и стиль подзаголовка
+                                    {activeTextField?.page === 1 &&
+                                    activeTextField.field === 'coverSubtitle'
+                                      ? 'Стиль подзаголовка'
+                                      : 'Текст и стиль подзаголовка'}
                                   </div>
-                                  <label className="block">
-                                    <span className="text-[10px] text-zinc-500">
-                                      Текст подзаголовка
-                                    </span>
-                                    <input
-                                      type="text"
-                                      value={activeDoc.page1.coverSubtitle}
-                                      onChange={(e) =>
-                                        onChangeJournal({
-                                          ...activeDoc,
-                                          page1: {
-                                            ...activeDoc.page1,
-                                            coverSubtitle: e.target.value,
-                                          },
-                                        })
-                                      }
-                                      className={flatInputClass}
-                                    />
-                                  </label>
+                                  {!(
+                                    activeTextField?.page === 1 &&
+                                    activeTextField.field === 'coverSubtitle'
+                                  ) && (
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Текст подзаголовка
+                                      </span>
+                                      <input
+                                        type="text"
+                                        value={activeDoc.page1.coverSubtitle}
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page1: {
+                                              ...activeDoc.page1,
+                                              coverSubtitle: e.target.value,
+                                            },
+                                          })
+                                        }
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                  )}
                                   <div className="grid grid-cols-2 gap-2">
                                     <label className="block">
                                       <span className="text-[10px] text-zinc-500">
@@ -6384,26 +6628,31 @@ export function GroupEditorView({
                                       );
                                     })}
                                   </div>
-                                  <textarea
-                                    rows={2}
-                                    value={
-                                      activeDoc.page1.coverSpeechBubbleText !==
-                                      undefined
-                                        ? activeDoc.page1.coverSpeechBubbleText
-                                        : DEFAULT_SPEECH_BUBBLE_TEXT
-                                    }
-                                    onChange={(e) =>
-                                      onChangeJournal({
-                                        ...activeDoc,
-                                        page1: {
-                                          ...activeDoc.page1,
-                                          coverSpeechBubbleText: e.target.value,
-                                        },
-                                      })
-                                    }
-                                    placeholder="Свой текст для облачка (без имени)…"
-                                    className="w-full rounded-md border border-zinc-200 bg-zinc-50/70 px-2.5 py-1.5 text-[11px] text-zinc-800 focus:outline-none focus:bg-white focus:border-[#0D9488] resize-none"
-                                  />
+                                  {!(
+                                    activeTextField?.page === 1 &&
+                                    activeTextField.field === 'coverSpeechBubble'
+                                  ) && (
+                                    <textarea
+                                      rows={2}
+                                      value={
+                                        activeDoc.page1.coverSpeechBubbleText !==
+                                        undefined
+                                          ? activeDoc.page1.coverSpeechBubbleText
+                                          : DEFAULT_SPEECH_BUBBLE_TEXT
+                                      }
+                                      onChange={(e) =>
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page1: {
+                                            ...activeDoc.page1,
+                                            coverSpeechBubbleText: e.target.value,
+                                          },
+                                        })
+                                      }
+                                      placeholder="Свой текст для облачка (без имени)…"
+                                      className="w-full rounded-md border border-zinc-200 bg-zinc-50/70 px-2.5 py-1.5 text-[11px] text-zinc-800 focus:outline-none focus:bg-white focus:border-[#0D9488] resize-none"
+                                    />
+                                  )}
                                   <div className="grid grid-cols-3 gap-2 pt-0.5">
                                     <label className="block">
                                       <span className="text-[10px] text-zinc-500">
@@ -6485,6 +6734,121 @@ export function GroupEditorView({
                                   </div>
                                 </div>
                               )}
+
+                              {(selectedBlockId === 'nextChapter' ||
+                                selectedBlockId === 'nextBear') && (
+                                <div className="pt-2.5 border-t border-zinc-100 space-y-2.5">
+                                  <div className="text-[11px] font-bold text-zinc-800">
+                                    Настройки «Что интересного впереди?»
+                                  </div>
+                                  {!(
+                                    activeTextField?.page === 2 &&
+                                    activeTextField.field === 'nextChapterTitle'
+                                  ) && (
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Заголовок блока
+                                      </span>
+                                      <input
+                                        type="text"
+                                        value={activeDoc.page2.nextChapter.title}
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page2: {
+                                              ...activeDoc.page2,
+                                              nextChapter: {
+                                                ...activeDoc.page2.nextChapter,
+                                                title: e.target.value,
+                                              },
+                                            },
+                                          })
+                                        }
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                  )}
+                                  <div className="grid grid-cols-3 gap-2">
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Мишка масштаб
+                                      </span>
+                                      <input
+                                        type="number"
+                                        min={0.5}
+                                        max={1.8}
+                                        step={0.05}
+                                        value={activeDoc.page2.nextChapter.bearScale}
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page2: {
+                                              ...activeDoc.page2,
+                                              nextChapter: {
+                                                ...activeDoc.page2.nextChapter,
+                                                bearScale: Math.max(
+                                                  0.5,
+                                                  Math.min(
+                                                    1.8,
+                                                    Number(e.target.value) || 1
+                                                  )
+                                                ),
+                                              },
+                                            },
+                                          })
+                                        }
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Сдвиг X
+                                      </span>
+                                      <input
+                                        type="number"
+                                        value={activeDoc.page2.nextChapter.bearOffsetX}
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page2: {
+                                              ...activeDoc.page2,
+                                              nextChapter: {
+                                                ...activeDoc.page2.nextChapter,
+                                                bearOffsetX:
+                                                  Number(e.target.value) || 0,
+                                              },
+                                            },
+                                          })
+                                        }
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                    <label className="block">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Сдвиг Y
+                                      </span>
+                                      <input
+                                        type="number"
+                                        value={activeDoc.page2.nextChapter.bearOffsetY}
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page2: {
+                                              ...activeDoc.page2,
+                                              nextChapter: {
+                                                ...activeDoc.page2.nextChapter,
+                                                bearOffsetY:
+                                                  Number(e.target.value) || 0,
+                                              },
+                                            },
+                                          })
+                                        }
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <div className="bg-white border border-dashed border-zinc-300 rounded-lg p-3 text-[11px] text-zinc-500 text-center">
@@ -6561,7 +6925,8 @@ export function GroupEditorView({
                           </div>
                         </div>
                       );
-                    })()
+                    })()}
+                      </>
                   ) : (
                     (() => {
                       const inspectorSteps: Array<{
@@ -6667,6 +7032,8 @@ export function GroupEditorView({
                               );
                             })}
                           </nav>
+
+                          {floatingTextEditorNode}
 
                           {/* Active Step Title & Quick Stepper Controls */}
                           <div className="shrink-0 px-4 py-2 border-b border-zinc-100 flex items-center justify-between gap-2 bg-white">
@@ -7106,44 +7473,54 @@ export function GroupEditorView({
                                     Заголовки обложки (Стр. 1)
                                   </span>
                                   <div className="grid grid-cols-2 gap-2.5">
-                                    <label className="block">
-                                      <span className="text-[10px] text-zinc-500 mb-0.5 block">
-                                        Заголовок
-                                      </span>
-                                      <input
-                                        type="text"
-                                        value={activeDoc.page1.coverTitle}
-                                        onChange={(e) =>
-                                          onChangeJournal({
-                                            ...activeDoc,
-                                            page1: {
-                                              ...activeDoc.page1,
-                                              coverTitle: e.target.value,
-                                            },
-                                          })
-                                        }
-                                        className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-white text-xs font-semibold text-zinc-900 focus:outline-none focus:border-[#0D9488]"
-                                      />
-                                    </label>
-                                    <label className="block">
-                                      <span className="text-[10px] text-zinc-500 mb-0.5 block">
-                                        Подзаголовок
-                                      </span>
-                                      <input
-                                        type="text"
-                                        value={activeDoc.page1.coverSubtitle}
-                                        onChange={(e) =>
-                                          onChangeJournal({
-                                            ...activeDoc,
-                                            page1: {
-                                              ...activeDoc.page1,
-                                              coverSubtitle: e.target.value,
-                                            },
-                                          })
-                                        }
-                                        className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-white text-xs font-medium text-zinc-900 focus:outline-none focus:border-[#0D9488]"
-                                      />
-                                    </label>
+                                    {!(
+                                      activeTextField?.page === 1 &&
+                                      activeTextField.field === 'coverTitle'
+                                    ) && (
+                                      <label className="block">
+                                        <span className="text-[10px] text-zinc-500 mb-0.5 block">
+                                          Заголовок
+                                        </span>
+                                        <input
+                                          type="text"
+                                          value={activeDoc.page1.coverTitle}
+                                          onChange={(e) =>
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page1: {
+                                                ...activeDoc.page1,
+                                                coverTitle: e.target.value,
+                                              },
+                                            })
+                                          }
+                                          className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-white text-xs font-semibold text-zinc-900 focus:outline-none focus:border-[#0D9488]"
+                                        />
+                                      </label>
+                                    )}
+                                    {!(
+                                      activeTextField?.page === 1 &&
+                                      activeTextField.field === 'coverSubtitle'
+                                    ) && (
+                                      <label className="block">
+                                        <span className="text-[10px] text-zinc-500 mb-0.5 block">
+                                          Подзаголовок
+                                        </span>
+                                        <input
+                                          type="text"
+                                          value={activeDoc.page1.coverSubtitle}
+                                          onChange={(e) =>
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page1: {
+                                                ...activeDoc.page1,
+                                                coverSubtitle: e.target.value,
+                                              },
+                                            })
+                                          }
+                                          className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-white text-xs font-medium text-zinc-900 focus:outline-none focus:border-[#0D9488]"
+                                        />
+                                      </label>
+                                    )}
                                   </div>
                                 </div>
 
@@ -7201,33 +7578,38 @@ export function GroupEditorView({
                                     </div>
                                   </div>
 
-                                  <label className="block pt-0.5">
-                                    <span className="text-[10px] font-medium text-zinc-500 mb-1 block">
-                                      Или свой текст (обновляется сразу на обложке):
-                                    </span>
-                                    <textarea
-                                      rows={2}
-                                      value={
-                                        activeDoc.page1
-                                          .coverSpeechBubbleText !== undefined
-                                          ? activeDoc.page1
-                                              .coverSpeechBubbleText
-                                          : DEFAULT_SPEECH_BUBBLE_TEXT
-                                      }
-                                      onChange={(e) =>
-                                        onChangeJournal({
-                                          ...activeDoc,
-                                          page1: {
-                                            ...activeDoc.page1,
-                                            coverSpeechBubbleText:
-                                              e.target.value,
-                                          },
-                                        })
-                                      }
-                                      placeholder="Например: Вау, вот это результат!"
-                                      className="w-full p-2.5 rounded-lg border border-zinc-200 bg-zinc-50/60 text-xs text-zinc-800 leading-relaxed placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/15 resize-none transition-colors"
-                                    />
-                                  </label>
+                                  {!(
+                                    activeTextField?.page === 1 &&
+                                    activeTextField.field === 'coverSpeechBubble'
+                                  ) && (
+                                    <label className="block pt-0.5">
+                                      <span className="text-[10px] font-medium text-zinc-500 mb-1 block">
+                                        Или свой текст (обновляется сразу на обложке):
+                                      </span>
+                                      <textarea
+                                        rows={2}
+                                        value={
+                                          activeDoc.page1
+                                            .coverSpeechBubbleText !== undefined
+                                            ? activeDoc.page1
+                                                .coverSpeechBubbleText
+                                            : DEFAULT_SPEECH_BUBBLE_TEXT
+                                        }
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page1: {
+                                              ...activeDoc.page1,
+                                              coverSpeechBubbleText:
+                                                e.target.value,
+                                            },
+                                          })
+                                        }
+                                        placeholder="Например: Вау, вот это результат!"
+                                        className="w-full p-2.5 rounded-lg border border-zinc-200 bg-zinc-50/60 text-xs text-zinc-800 leading-relaxed placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/15 resize-none transition-colors"
+                                      />
+                                    </label>
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -7347,13 +7729,26 @@ export function GroupEditorView({
                                                       ? mod.cardBgColor
                                                       : '#F4F4F5',
                                                   }}
-                                                  className="w-9 h-9 rounded-lg border border-zinc-200 overflow-hidden shrink-0 flex items-center justify-center relative group/thumb"
+                                                  className="w-9 h-9 rounded-lg border border-zinc-200 overflow-hidden p-0.5 shrink-0 flex items-center justify-center relative group/thumb"
                                                   title="Настроить картинку и фон модуля"
                                                 >
                                                   <ModuleThumbImage
                                                     src={resolvedUrl}
                                                     alt={mod.title}
-                                                    className="w-full h-full object-contain p-0.5"
+                                                    style={{
+                                                      transform: `translate(${Math.round(
+                                                        (mod.imagePosX ?? 0) *
+                                                          0.16
+                                                      )}px, ${Math.round(
+                                                        (mod.imagePosY ?? 0) *
+                                                          0.16
+                                                      )}px) scale(${
+                                                        mod.imageScale ?? 1
+                                                      })`,
+                                                      transformOrigin:
+                                                        'center center',
+                                                    }}
+                                                    className="w-full h-full object-contain transition-transform duration-150"
                                                     iconClassName="w-4 h-4 stroke-[1.6]"
                                                   />
                                                 </button>
@@ -7392,7 +7787,7 @@ export function GroupEditorView({
                                                     )}
                                                   </div>
 
-                                                  <div className="mt-1.5 flex items-center gap-2.5">
+                                                  <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
                                                     <button
                                                       type="button"
                                                       onClick={() =>
@@ -7404,6 +7799,24 @@ export function GroupEditorView({
                                                       className="text-[10px] font-semibold text-[#0D9488] hover:underline"
                                                     >
                                                       Картинка
+                                                    </button>
+
+                                                    <button
+                                                      type="button"
+                                                      onClick={() =>
+                                                        setHighlightedStudentModId(
+                                                          isHighlighted
+                                                            ? null
+                                                            : mod.id
+                                                        )
+                                                      }
+                                                      className={`text-[10px] font-semibold hover:underline ${
+                                                        isHighlighted
+                                                          ? 'text-[#0F766E] underline'
+                                                          : 'text-zinc-600'
+                                                      }`}
+                                                    >
+                                                      Кадрирование
                                                     </button>
 
                                                     <label
@@ -7427,6 +7840,119 @@ export function GroupEditorView({
                                                       <span>Фон</span>
                                                     </label>
                                                   </div>
+
+                                                  {isHighlighted && (
+                                                    <div className="mt-2 pt-2 border-t border-zinc-200/70 space-y-1.5">
+                                                      <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                                                        <span className="font-semibold text-zinc-700">
+                                                          Масштаб и сдвиг на А4
+                                                        </span>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() =>
+                                                            updateStudentMod({
+                                                              imageScale: 1,
+                                                              imagePosX: 0,
+                                                              imagePosY: 0,
+                                                            })
+                                                          }
+                                                          className="text-[#0D9488] hover:underline font-medium"
+                                                        >
+                                                          Сбросить
+                                                        </button>
+                                                      </div>
+                                                      <label className="block">
+                                                        <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                                                          <span>Масштаб</span>
+                                                          <span className="font-mono tabular-nums">
+                                                            {Math.round(
+                                                              (mod.imageScale ??
+                                                                1) * 100
+                                                            )}
+                                                            %
+                                                          </span>
+                                                        </div>
+                                                        <input
+                                                          type="range"
+                                                          min={0.5}
+                                                          max={2}
+                                                          step={0.05}
+                                                          value={
+                                                            mod.imageScale ?? 1
+                                                          }
+                                                          onChange={(e) =>
+                                                            updateStudentMod({
+                                                              imageScale:
+                                                                Number(
+                                                                  e.target.value
+                                                                ),
+                                                            })
+                                                          }
+                                                          className="w-full accent-[#0D9488] h-1.5"
+                                                        />
+                                                      </label>
+                                                      <div className="grid grid-cols-2 gap-2">
+                                                        <label className="block">
+                                                          <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                                                            <span>Сдвиг по X</span>
+                                                            <span className="font-mono tabular-nums">
+                                                              {mod.imagePosX ??
+                                                                0}
+                                                              px
+                                                            </span>
+                                                          </div>
+                                                          <input
+                                                            type="range"
+                                                            min={-60}
+                                                            max={60}
+                                                            step={1}
+                                                            value={
+                                                              mod.imagePosX ?? 0
+                                                            }
+                                                            onChange={(e) =>
+                                                              updateStudentMod({
+                                                                imagePosX:
+                                                                  Number(
+                                                                    e.target
+                                                                      .value
+                                                                  ),
+                                                              })
+                                                            }
+                                                            className="w-full accent-[#0D9488] h-1.5"
+                                                          />
+                                                        </label>
+                                                        <label className="block">
+                                                          <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                                                            <span>Сдвиг по Y</span>
+                                                            <span className="font-mono tabular-nums">
+                                                              {mod.imagePosY ??
+                                                                0}
+                                                              px
+                                                            </span>
+                                                          </div>
+                                                          <input
+                                                            type="range"
+                                                            min={-60}
+                                                            max={60}
+                                                            step={1}
+                                                            value={
+                                                              mod.imagePosY ?? 0
+                                                            }
+                                                            onChange={(e) =>
+                                                              updateStudentMod({
+                                                                imagePosY:
+                                                                  Number(
+                                                                    e.target
+                                                                      .value
+                                                                  ),
+                                                              })
+                                                            }
+                                                            className="w-full accent-[#0D9488] h-1.5"
+                                                          />
+                                                        </label>
+                                                      </div>
+                                                    </div>
+                                                  )}
                                                 </div>
                                               </div>
 
@@ -7768,6 +8294,90 @@ export function GroupEditorView({
                                     </div>
                                   )}
 
+                                  {(() => {
+                                    const activeSuggestedIds =
+                                      computeActiveModuleSuggestedSkillIds(
+                                        activeDoc.page1.modules,
+                                        libraryModules
+                                      );
+                                    const activeSkillIdSet = new Set(
+                                      activeDoc.page1.skills
+                                        .filter((s) => !s.hidden)
+                                        .map((s) => s.skillId)
+                                        .filter((id): id is string => Boolean(id))
+                                    );
+                                    const activeSkillLabelSet = new Set(
+                                      activeDoc.page1.skills
+                                        .filter((s) => !s.hidden)
+                                        .map((s) => s.label.trim().toLowerCase())
+                                    );
+                                    const unconfirmedRecommendedDefs =
+                                      activeSuggestedIds
+                                        .map((sid) =>
+                                          skillsCatalog.find(
+                                            (d) => d.id === sid
+                                          )
+                                        )
+                                        .filter((d): d is SkillDefinition =>
+                                          Boolean(d)
+                                        )
+                                        .filter(
+                                          (d) =>
+                                            !activeSkillIdSet.has(d.id) &&
+                                            !activeSkillLabelSet.has(
+                                              d.label.trim().toLowerCase()
+                                            )
+                                        );
+
+                                    if (
+                                      unconfirmedRecommendedDefs.length === 0
+                                    ) {
+                                      return null;
+                                    }
+
+                                    return (
+                                      <div className="p-2.5 rounded-lg bg-[#F0FDFA]/70 border border-[#0D9488]/25 space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="text-[10px] font-bold text-[#0F766E]">
+                                            Рекомендуемые из модулей (
+                                            {unconfirmedRecommendedDefs.length})
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleConfirmRecommendedSkills(
+                                                unconfirmedRecommendedDefs
+                                              )
+                                            }
+                                            className="text-[10px] font-semibold text-[#0D9488] hover:underline"
+                                          >
+                                            Подтвердить все
+                                          </button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {unconfirmedRecommendedDefs.map(
+                                            (def) => (
+                                              <button
+                                                key={def.id}
+                                                type="button"
+                                                onClick={() =>
+                                                  handleConfirmRecommendedSkills(
+                                                    [def]
+                                                  )
+                                                }
+                                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[#0D9488]/60 bg-white hover:bg-[#0D9488] text-zinc-800 hover:text-white text-[10px] font-medium transition-colors"
+                                                title="Нажмите, чтобы подтвердить навык для ученика"
+                                              >
+                                                <Plus className="w-3 h-3 shrink-0" />
+                                                <span>{def.label}</span>
+                                              </button>
+                                            )
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+
                                   <div className="p-2 rounded-md bg-[#F4F4F5] border border-dashed border-zinc-300 flex items-center gap-2">
                                     <div className="relative flex-1 flex items-center">
                                       <Plus className="w-3.5 h-3.5 text-[#0D9488] absolute left-2 pointer-events-none" />
@@ -7908,130 +8518,428 @@ export function GroupEditorView({
 
                                           {/* Clear Typographic Hierarchy: Title -> Caption -> Description */}
                                           <div className="space-y-2">
-                                            <input
-                                              type="text"
-                                              value={proj.title}
-                                              onChange={(e) =>
-                                                onChangeJournal({
-                                                  ...activeDoc,
-                                                  page1: {
-                                                    ...activeDoc.page1,
-                                                    projects:
-                                                      activeDoc.page1.projects.map(
-                                                        (p) =>
-                                                          p.id === proj.id
-                                                            ? {
-                                                                ...p,
-                                                                title:
-                                                                  e.target
-                                                                    .value,
-                                                              }
-                                                            : p
-                                                      ),
-                                                  },
-                                                })
-                                              }
-                                              placeholder="Название проекта"
-                                              className="w-full bg-transparent border-0 border-b border-zinc-200 px-0 py-1 text-sm font-bold text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-[#0D9488]"
-                                            />
+                                            {!(
+                                              activeTextField?.page === 1 &&
+                                              activeTextField.field ===
+                                                'projectTitle' &&
+                                              activeTextField.itemId === proj.id
+                                            ) && (
+                                              <input
+                                                type="text"
+                                                value={proj.title}
+                                                onChange={(e) =>
+                                                  onChangeJournal({
+                                                    ...activeDoc,
+                                                    page1: {
+                                                      ...activeDoc.page1,
+                                                      projects:
+                                                        activeDoc.page1.projects.map(
+                                                          (p) =>
+                                                            p.id === proj.id
+                                                              ? {
+                                                                  ...p,
+                                                                  title:
+                                                                    e.target
+                                                                      .value,
+                                                                }
+                                                              : p
+                                                        ),
+                                                    },
+                                                  })
+                                                }
+                                                placeholder="Название проекта"
+                                                className="w-full bg-transparent border-0 border-b border-zinc-200 px-0 py-1 text-sm font-bold text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-[#0D9488]"
+                                              />
+                                            )}
 
-                                            <input
-                                              type="text"
-                                              value={proj.caption}
-                                              onChange={(e) =>
-                                                onChangeJournal({
-                                                  ...activeDoc,
-                                                  page1: {
-                                                    ...activeDoc.page1,
-                                                    projects:
-                                                      activeDoc.page1.projects.map(
-                                                        (p) =>
-                                                          p.id === proj.id
-                                                            ? {
-                                                                ...p,
-                                                                caption:
-                                                                  e.target
-                                                                    .value,
-                                                              }
-                                                            : p
-                                                      ),
-                                                  },
-                                                })
-                                              }
-                                              placeholder="Подпись (например: Игра в Kodu)"
-                                              className="w-full bg-transparent border-0 border-b border-zinc-100 px-0 py-0.5 text-[11px] font-medium text-zinc-500 placeholder:text-zinc-400 focus:outline-none focus:border-[#0D9488]"
-                                            />
+                                            {!(
+                                              activeTextField?.page === 1 &&
+                                              (activeTextField.field ===
+                                                'projectCaption' ||
+                                                activeTextField.field ===
+                                                  'projectTitle') &&
+                                              activeTextField.itemId === proj.id
+                                            ) && (
+                                              <input
+                                                type="text"
+                                                value={proj.caption}
+                                                onChange={(e) =>
+                                                  onChangeJournal({
+                                                    ...activeDoc,
+                                                    page1: {
+                                                      ...activeDoc.page1,
+                                                      projects:
+                                                        activeDoc.page1.projects.map(
+                                                          (p) =>
+                                                            p.id === proj.id
+                                                              ? {
+                                                                  ...p,
+                                                                  caption:
+                                                                    e.target
+                                                                      .value,
+                                                                }
+                                                              : p
+                                                        ),
+                                                    },
+                                                  })
+                                                }
+                                                placeholder="Подпись (например: Игра в Kodu)"
+                                                className="w-full bg-transparent border-0 border-b border-zinc-100 px-0 py-0.5 text-[11px] font-medium text-zinc-500 placeholder:text-zinc-400 focus:outline-none focus:border-[#0D9488]"
+                                              />
+                                            )}
 
-                                            <textarea
-                                              rows={2}
-                                              value={proj.description}
-                                              onChange={(e) =>
-                                                onChangeJournal({
-                                                  ...activeDoc,
-                                                  page1: {
-                                                    ...activeDoc.page1,
-                                                    projects:
-                                                      activeDoc.page1.projects.map(
-                                                        (p) =>
-                                                          p.id === proj.id
-                                                            ? {
-                                                                ...p,
-                                                                description:
-                                                                  e.target
-                                                                    .value,
-                                                              }
-                                                            : p
-                                                      ),
-                                                  },
-                                                })
-                                              }
-                                              placeholder="Короткое описание..."
-                                              className="w-full bg-zinc-50/70 border border-zinc-200/80 rounded-md px-2.5 py-1.5 text-xs text-zinc-700 leading-relaxed placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-[#0D9488] resize-none"
-                                            />
+                                            {!(
+                                              activeTextField?.page === 1 &&
+                                              activeTextField.field ===
+                                                'projectDescription' &&
+                                              activeTextField.itemId === proj.id
+                                            ) && (
+                                              <textarea
+                                                rows={2}
+                                                value={proj.description}
+                                                onChange={(e) =>
+                                                  onChangeJournal({
+                                                    ...activeDoc,
+                                                    page1: {
+                                                      ...activeDoc.page1,
+                                                      projects:
+                                                        activeDoc.page1.projects.map(
+                                                          (p) =>
+                                                            p.id === proj.id
+                                                              ? {
+                                                                  ...p,
+                                                                  description:
+                                                                    e.target
+                                                                      .value,
+                                                                }
+                                                              : p
+                                                        ),
+                                                    },
+                                                  })
+                                                }
+                                                placeholder="Короткое описание..."
+                                                className="w-full bg-zinc-50/70 border border-zinc-200/80 rounded-md px-2.5 py-1.5 text-xs text-zinc-700 leading-relaxed placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-[#0D9488] resize-none"
+                                              />
+                                            )}
                                           </div>
 
                                           {/* Unified Bottom Screenshot Upload Zone */}
                                           <div className="pt-2 border-t border-zinc-100 space-y-2">
                                             {proj.imageUrl && (
-                                              <div className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-[#F0FDFA] border border-[#CCFBF1] text-[10px] text-[#0F766E]">
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                  <img
-                                                    src={proj.imageUrl}
-                                                    alt={proj.title}
-                                                    className="w-5 h-5 rounded object-cover border border-teal-200 shrink-0"
-                                                  />
-                                                  <span className="font-medium truncate">
-                                                    Скриншот загружен
-                                                  </span>
+                                              <div className="space-y-2">
+                                                <div className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-[#F0FDFA] border border-[#CCFBF1] text-[10px] text-[#0F766E]">
+                                                  <div className="flex items-center gap-2 min-w-0">
+                                                    <img
+                                                      src={proj.imageUrl}
+                                                      alt={proj.title}
+                                                      className={`w-5 h-5 rounded border border-teal-200 shrink-0 ${
+                                                        proj.imageFit ===
+                                                        'contain'
+                                                          ? 'object-contain bg-white'
+                                                          : 'object-cover'
+                                                      }`}
+                                                    />
+                                                    <span className="font-medium truncate">
+                                                      Скриншот загружен
+                                                    </span>
+                                                  </div>
+                                                  <div className="flex items-center gap-1.5 shrink-0">
+                                                    <button
+                                                      type="button"
+                                                      onClick={() =>
+                                                        setHighlightedStudentProjCropId(
+                                                          highlightedStudentProjCropId ===
+                                                            proj.id
+                                                            ? null
+                                                            : proj.id
+                                                        )
+                                                      }
+                                                      className={`text-[10px] font-semibold hover:underline ${
+                                                        highlightedStudentProjCropId ===
+                                                        proj.id
+                                                          ? 'text-[#0F766E] underline'
+                                                          : 'text-zinc-600'
+                                                      }`}
+                                                    >
+                                                      Кадрирование
+                                                    </button>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() =>
+                                                        onChangeJournal({
+                                                          ...activeDoc,
+                                                          page1: {
+                                                            ...activeDoc.page1,
+                                                            projects:
+                                                              activeDoc.page1.projects.map(
+                                                                (p) =>
+                                                                  p.id ===
+                                                                  proj.id
+                                                                    ? {
+                                                                        ...p,
+                                                                        imageUrl:
+                                                                          undefined,
+                                                                        isRealScreenshot:
+                                                                          false,
+                                                                      }
+                                                                    : p
+                                                              ),
+                                                          },
+                                                        })
+                                                      }
+                                                      className="text-zinc-400 hover:text-red-600 shrink-0"
+                                                      title="Убрать скриншот"
+                                                    >
+                                                      <X className="w-3 h-3" />
+                                                    </button>
+                                                  </div>
                                                 </div>
-                                                <button
-                                                  type="button"
-                                                  onClick={() =>
-                                                    onChangeJournal({
-                                                      ...activeDoc,
-                                                      page1: {
-                                                        ...activeDoc.page1,
-                                                        projects:
-                                                          activeDoc.page1.projects.map(
-                                                            (p) =>
-                                                              p.id === proj.id
-                                                                ? {
-                                                                    ...p,
-                                                                    imageUrl:
-                                                                      undefined,
-                                                                    isRealScreenshot:
-                                                                      false,
-                                                                  }
-                                                                : p
-                                                          ),
-                                                      },
-                                                    })
-                                                  }
-                                                  className="text-zinc-400 hover:text-red-600 shrink-0"
-                                                  title="Убрать скриншот"
-                                                >
-                                                  <X className="w-3 h-3" />
-                                                </button>
+
+                                                <div className="flex items-center justify-between gap-1.5 text-[10px]">
+                                                  <span className="text-zinc-500 font-medium">
+                                                    Формат:
+                                                  </span>
+                                                  <div className="inline-flex rounded-md border border-zinc-200 overflow-hidden bg-zinc-50">
+                                                    <button
+                                                      type="button"
+                                                      onClick={() =>
+                                                        onChangeJournal({
+                                                          ...activeDoc,
+                                                          page1: {
+                                                            ...activeDoc.page1,
+                                                            projects:
+                                                              activeDoc.page1.projects.map(
+                                                                (p) =>
+                                                                  p.id ===
+                                                                  proj.id
+                                                                    ? {
+                                                                        ...p,
+                                                                        imageFit:
+                                                                          'cover',
+                                                                      }
+                                                                    : p
+                                                              ),
+                                                          },
+                                                        })
+                                                      }
+                                                      className={`px-2 py-0.5 font-semibold transition-colors ${
+                                                        proj.imageFit !==
+                                                        'contain'
+                                                          ? 'bg-[#0D9488] text-white'
+                                                          : 'text-zinc-600 hover:bg-white'
+                                                      }`}
+                                                    >
+                                                      Скриншот (cover)
+                                                    </button>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() =>
+                                                        onChangeJournal({
+                                                          ...activeDoc,
+                                                          page1: {
+                                                            ...activeDoc.page1,
+                                                            projects:
+                                                              activeDoc.page1.projects.map(
+                                                                (p) =>
+                                                                  p.id ===
+                                                                  proj.id
+                                                                    ? {
+                                                                        ...p,
+                                                                        imageFit:
+                                                                          'contain',
+                                                                      }
+                                                                    : p
+                                                              ),
+                                                          },
+                                                        })
+                                                      }
+                                                      className={`px-2 py-0.5 font-semibold transition-colors ${
+                                                        proj.imageFit ===
+                                                        'contain'
+                                                          ? 'bg-[#0D9488] text-white'
+                                                          : 'text-zinc-600 hover:bg-white'
+                                                      }`}
+                                                    >
+                                                      3D-модель (contain)
+                                                    </button>
+                                                  </div>
+                                                </div>
+
+                                                {highlightedStudentProjCropId ===
+                                                  proj.id && (
+                                                  <div className="p-2 rounded-md border border-zinc-200 bg-zinc-50/70 space-y-1.5">
+                                                    <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                                                      <span className="font-semibold text-zinc-700">
+                                                        Масштаб и сдвиг
+                                                      </span>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                          onChangeJournal({
+                                                            ...activeDoc,
+                                                            page1: {
+                                                              ...activeDoc.page1,
+                                                              projects:
+                                                                activeDoc.page1.projects.map(
+                                                                  (p) =>
+                                                                    p.id ===
+                                                                    proj.id
+                                                                      ? {
+                                                                          ...p,
+                                                                          imageScale: 1,
+                                                                          imagePosX: 0,
+                                                                          imagePosY: 0,
+                                                                        }
+                                                                      : p
+                                                                ),
+                                                            },
+                                                          })
+                                                        }
+                                                        className="text-[#0D9488] hover:underline font-medium"
+                                                      >
+                                                        Сбросить
+                                                      </button>
+                                                    </div>
+                                                    <label className="block">
+                                                      <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                                                        <span>Масштаб</span>
+                                                        <span className="font-mono tabular-nums">
+                                                          {Math.round(
+                                                            (proj.imageScale ??
+                                                              1) * 100
+                                                          )}
+                                                          %
+                                                        </span>
+                                                      </div>
+                                                      <input
+                                                        type="range"
+                                                        min={0.5}
+                                                        max={2}
+                                                        step={0.05}
+                                                        value={
+                                                          proj.imageScale ?? 1
+                                                        }
+                                                        onChange={(e) =>
+                                                          onChangeJournal({
+                                                            ...activeDoc,
+                                                            page1: {
+                                                              ...activeDoc.page1,
+                                                              projects:
+                                                                activeDoc.page1.projects.map(
+                                                                  (p) =>
+                                                                    p.id ===
+                                                                    proj.id
+                                                                      ? {
+                                                                          ...p,
+                                                                          imageScale:
+                                                                            Number(
+                                                                              e
+                                                                                .target
+                                                                                .value
+                                                                            ),
+                                                                        }
+                                                                      : p
+                                                                ),
+                                                            },
+                                                          })
+                                                        }
+                                                        className="w-full accent-[#0D9488] h-1.5"
+                                                      />
+                                                    </label>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                      <label className="block">
+                                                        <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                                                          <span>Сдвиг X</span>
+                                                          <span className="font-mono tabular-nums">
+                                                            {proj.imagePosX ??
+                                                              0}
+                                                            px
+                                                          </span>
+                                                        </div>
+                                                        <input
+                                                          type="range"
+                                                          min={-60}
+                                                          max={60}
+                                                          step={1}
+                                                          value={
+                                                            proj.imagePosX ?? 0
+                                                          }
+                                                          onChange={(e) =>
+                                                            onChangeJournal({
+                                                              ...activeDoc,
+                                                              page1: {
+                                                                ...activeDoc
+                                                                  .page1,
+                                                                projects:
+                                                                  activeDoc.page1.projects.map(
+                                                                    (p) =>
+                                                                      p.id ===
+                                                                      proj.id
+                                                                        ? {
+                                                                            ...p,
+                                                                            imagePosX:
+                                                                              Number(
+                                                                                e
+                                                                                  .target
+                                                                                  .value
+                                                                              ),
+                                                                          }
+                                                                        : p
+                                                                  ),
+                                                              },
+                                                            })
+                                                          }
+                                                          className="w-full accent-[#0D9488] h-1.5"
+                                                        />
+                                                      </label>
+                                                      <label className="block">
+                                                        <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                                                          <span>Сдвиг Y</span>
+                                                          <span className="font-mono tabular-nums">
+                                                            {proj.imagePosY ??
+                                                              0}
+                                                            px
+                                                          </span>
+                                                        </div>
+                                                        <input
+                                                          type="range"
+                                                          min={-60}
+                                                          max={60}
+                                                          step={1}
+                                                          value={
+                                                            proj.imagePosY ?? 0
+                                                          }
+                                                          onChange={(e) =>
+                                                            onChangeJournal({
+                                                              ...activeDoc,
+                                                              page1: {
+                                                                ...activeDoc
+                                                                  .page1,
+                                                                projects:
+                                                                  activeDoc.page1.projects.map(
+                                                                    (p) =>
+                                                                      p.id ===
+                                                                      proj.id
+                                                                        ? {
+                                                                            ...p,
+                                                                            imagePosY:
+                                                                              Number(
+                                                                                e
+                                                                                  .target
+                                                                                  .value
+                                                                              ),
+                                                                          }
+                                                                        : p
+                                                                  ),
+                                                              },
+                                                            })
+                                                          }
+                                                          className="w-full accent-[#0D9488] h-1.5"
+                                                        />
+                                                      </label>
+                                                    </div>
+                                                  </div>
+                                                )}
                                               </div>
                                             )}
 
@@ -8109,6 +9017,38 @@ export function GroupEditorView({
                                         </div>
                                       )
                                     )}
+
+                                    {activeDoc.page1.projects.length < 4 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const nextProj: ProjectItem = {
+                                            id: `proj-${Date.now()}`,
+                                            title: 'Новый проект',
+                                            caption: 'Подпись проекта',
+                                            description:
+                                              'Что было реализовано на занятии.',
+                                            fallbackTheme: 'python',
+                                            isRealScreenshot: false,
+                                          };
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page1: {
+                                              ...activeDoc.page1,
+                                              showProjects: true,
+                                              projects: [
+                                                ...activeDoc.page1.projects,
+                                                nextProj,
+                                              ],
+                                            },
+                                          });
+                                        }}
+                                        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-zinc-300 bg-[#F4F4F5] hover:border-[#0D9488] hover:bg-[#F0FDFA] text-[#0F766E] text-[11px] font-semibold transition-colors"
+                                      >
+                                        <Plus className="w-3.5 h-3.5" />
+                                        <span>Добавить проект</span>
+                                      </button>
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -8118,29 +9058,79 @@ export function GroupEditorView({
                             {activeInspectorStep === 'pride' && (
                               <div className="space-y-4">
                                 {/* Pride Moment Card */}
-                                <div className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-2.5">
-                                  <div className="pb-1.5 border-b border-zinc-100">
-                                    <span className="text-[11px] font-bold text-zinc-800 block">
-                                      Момент гордости ученика
-                                    </span>
+                                {!(
+                                  activeTextField?.page === 2 &&
+                                  activeTextField.field === 'prideText'
+                                ) && (
+                                  <div className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-2.5">
+                                    <div className="pb-1.5 border-b border-zinc-100">
+                                      <span className="text-[11px] font-bold text-zinc-800 block">
+                                        Момент гордости ученика
+                                      </span>
+                                    </div>
+
+                                    {(() => {
+                                      const prideTemplates =
+                                        getPrideTemplatesForModules(
+                                          activeDoc.page1.modules
+                                        );
+                                      return (
+                                        <div className="space-y-1.5">
+                                          <span className="text-[10px] font-medium text-zinc-400 block">
+                                            Быстрые шаблоны (по модулям):
+                                          </span>
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {prideTemplates.map((tplText) => {
+                                              const isSelected =
+                                                activeDoc.page2.prideText.trim() ===
+                                                tplText;
+                                              return (
+                                                <button
+                                                  key={tplText}
+                                                  type="button"
+                                                  onClick={() =>
+                                                    onChangeJournal({
+                                                      ...activeDoc,
+                                                      page2: {
+                                                        ...activeDoc.page2,
+                                                        showPride: true,
+                                                        prideText: tplText,
+                                                      },
+                                                    })
+                                                  }
+                                                  className={`px-2 py-1 rounded border text-[10px] font-medium text-left transition-colors ${
+                                                    isSelected
+                                                      ? 'border-[#0D9488] bg-[#F0FDFA] text-[#0F766E]'
+                                                      : 'border-zinc-200 bg-white hover:border-[#0D9488] hover:text-[#0F766E] text-zinc-700'
+                                                  }`}
+                                                >
+                                                  {tplText}
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+
+                                    <textarea
+                                      rows={3}
+                                      value={activeDoc.page2.prideText}
+                                      onChange={(e) =>
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page2: {
+                                            ...activeDoc.page2,
+                                            showPride: true,
+                                            prideText: e.target.value,
+                                          },
+                                        })
+                                      }
+                                      placeholder="Чем ученик может гордиться по итогам периода?"
+                                      className="w-full p-3 rounded-lg border border-zinc-200 bg-zinc-50/60 text-xs text-zinc-800 leading-relaxed placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/15 resize-none transition-colors"
+                                    />
                                   </div>
-                                  <textarea
-                                    rows={3}
-                                    value={activeDoc.page2.prideText}
-                                    onChange={(e) =>
-                                      onChangeJournal({
-                                        ...activeDoc,
-                                        page2: {
-                                          ...activeDoc.page2,
-                                          showPride: true,
-                                          prideText: e.target.value,
-                                        },
-                                      })
-                                    }
-                                    placeholder="Чем ученик может гордиться по итогам периода?"
-                                    className="w-full p-3 rounded-lg border border-zinc-200 bg-zinc-50/60 text-xs text-zinc-800 leading-relaxed placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/15 resize-none transition-colors"
-                                  />
-                                </div>
+                                )}
 
                                 {/* Strengths Card */}
                                 <div className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3">
@@ -8320,10 +9310,343 @@ export function GroupEditorView({
                               </div>
                             )}
 
-                            {/* STEP 5: СЛОВО НАСТАВНИКА */}
+                            {/* STEP 5: СЛОВО НАСТАВНИКА (+ КАРТА БУДУЩЕГО при клике на блок) */}
                             {activeInspectorStep === 'mentorNote' && (
                               <div className="space-y-4">
-                                {/* Card 1: AI Generation Zone */}
+                                {activeTarget?.page === 2 &&
+                                  (activeTarget.block === 'nextChapter' ||
+                                    activeTarget.block === 'nextBear') && (
+                                    <div className="bg-white border border-[#0D9488]/40 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3">
+                                      <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-zinc-100">
+                                        <span className="text-[11px] font-bold text-[#0F766E]">
+                                          Что интересного впереди? (Стр. 2)
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => setActiveTarget(null)}
+                                          className="p-0.5 rounded text-zinc-400 hover:text-zinc-800"
+                                          title="Свернуть настройки блока"
+                                        >
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+
+                                      <label className="flex items-center justify-between gap-2 cursor-pointer">
+                                        <span className="text-[11px] font-medium text-zinc-700">
+                                          Показывать блок на стр. 2
+                                        </span>
+                                        <input
+                                          type="checkbox"
+                                          checked={activeDoc.page2.showNextChapter}
+                                          onChange={(e) =>
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page2: {
+                                                ...activeDoc.page2,
+                                                showNextChapter:
+                                                  e.target.checked,
+                                              },
+                                            })
+                                          }
+                                          className="rounded border-zinc-300 text-[#0D9488]"
+                                        />
+                                      </label>
+
+                                      {!(
+                                        activeTextField?.page === 2 &&
+                                        activeTextField.field ===
+                                          'nextChapterTitle'
+                                      ) && (
+                                        <label className="block">
+                                          <span className="text-[10px] font-medium text-zinc-500 mb-1 block">
+                                            Заголовок карты будущего
+                                          </span>
+                                          <input
+                                            type="text"
+                                            value={
+                                              activeDoc.page2.nextChapter.title
+                                            }
+                                            onChange={(e) =>
+                                              onChangeJournal({
+                                                ...activeDoc,
+                                                page2: {
+                                                  ...activeDoc.page2,
+                                                  nextChapter: {
+                                                    ...activeDoc.page2
+                                                      .nextChapter,
+                                                    title: e.target.value,
+                                                  },
+                                                },
+                                              })
+                                            }
+                                            className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs font-semibold text-zinc-900 focus:outline-none focus:bg-white focus:border-[#0D9488]"
+                                          />
+                                        </label>
+                                      )}
+
+                                      <div className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-[10px] font-medium text-zinc-500">
+                                            Станции на маршруте (до 3)
+                                          </span>
+                                          {activeDoc.page2.nextChapter.topics
+                                            .length < 3 && (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                onChangeJournal({
+                                                  ...activeDoc,
+                                                  page2: {
+                                                    ...activeDoc.page2,
+                                                    nextChapter: {
+                                                      ...activeDoc.page2
+                                                        .nextChapter,
+                                                      topics: [
+                                                        ...activeDoc.page2
+                                                          .nextChapter.topics,
+                                                        {
+                                                          id: `nt-${Date.now()}`,
+                                                          title: 'Новый модуль',
+                                                          iconKey: 'ai',
+                                                        },
+                                                      ],
+                                                    },
+                                                  },
+                                                })
+                                              }
+                                              className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#0D9488] hover:underline"
+                                            >
+                                              <Plus className="w-3 h-3" />
+                                              <span>Добавить</span>
+                                            </button>
+                                          )}
+                                        </div>
+
+                                        {activeDoc.page2.nextChapter.topics.map(
+                                          (topic) => {
+                                            const editingThisTopicText =
+                                              activeTextField?.page === 2 &&
+                                              activeTextField.field ===
+                                                'nextTopicTitle' &&
+                                              activeTextField.itemId ===
+                                                topic.id;
+                                            return (
+                                              <div
+                                                key={topic.id}
+                                                className="flex items-center gap-1.5 p-1.5 rounded-md border border-zinc-200 bg-zinc-50/60"
+                                              >
+                                                <NextTopicLineIcon
+                                                  type={topic.iconKey}
+                                                  className="w-4 h-4 shrink-0 text-[#0F766E]"
+                                                />
+                                                {editingThisTopicText ? (
+                                                  <span className="flex-1 text-[11px] font-medium text-zinc-600 truncate">
+                                                    {topic.title}
+                                                  </span>
+                                                ) : (
+                                                  <input
+                                                    type="text"
+                                                    value={topic.title}
+                                                    onChange={(e) =>
+                                                      onChangeJournal({
+                                                        ...activeDoc,
+                                                        page2: {
+                                                          ...activeDoc.page2,
+                                                          nextChapter: {
+                                                            ...activeDoc.page2
+                                                              .nextChapter,
+                                                            topics:
+                                                              activeDoc.page2.nextChapter.topics.map(
+                                                                (t) =>
+                                                                  t.id ===
+                                                                  topic.id
+                                                                    ? {
+                                                                        ...t,
+                                                                        title:
+                                                                          e
+                                                                            .target
+                                                                            .value,
+                                                                      }
+                                                                    : t
+                                                              ),
+                                                          },
+                                                        },
+                                                      })
+                                                    }
+                                                    className="flex-1 min-w-0 bg-white border border-zinc-200 rounded px-2 py-1 text-[11px] font-medium text-zinc-900 focus:outline-none focus:border-[#0D9488]"
+                                                  />
+                                                )}
+                                                <select
+                                                  value={topic.iconKey}
+                                                  onChange={(e) =>
+                                                    onChangeJournal({
+                                                      ...activeDoc,
+                                                      page2: {
+                                                        ...activeDoc.page2,
+                                                        nextChapter: {
+                                                          ...activeDoc.page2
+                                                            .nextChapter,
+                                                          topics:
+                                                            activeDoc.page2.nextChapter.topics.map(
+                                                              (t) =>
+                                                                t.id ===
+                                                                topic.id
+                                                                  ? {
+                                                                      ...t,
+                                                                      iconKey:
+                                                                        e.target
+                                                                          .value as NextTopicIconKey,
+                                                                    }
+                                                                  : t
+                                                            ),
+                                                        },
+                                                      },
+                                                    })
+                                                  }
+                                                  aria-label="Иконка станции"
+                                                  className="bg-white border border-zinc-200 rounded px-1 py-1 text-[10px] text-zinc-700"
+                                                >
+                                                  {NEXT_TOPIC_LIBRARY.map(
+                                                    (opt) => (
+                                                      <option
+                                                        key={opt.iconKey}
+                                                        value={opt.iconKey}
+                                                      >
+                                                        {opt.title}
+                                                      </option>
+                                                    )
+                                                  )}
+                                                </select>
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    onChangeJournal({
+                                                      ...activeDoc,
+                                                      page2: {
+                                                        ...activeDoc.page2,
+                                                        nextChapter: {
+                                                          ...activeDoc.page2
+                                                            .nextChapter,
+                                                          topics:
+                                                            activeDoc.page2.nextChapter.topics.filter(
+                                                              (t) =>
+                                                                t.id !==
+                                                                topic.id
+                                                            ),
+                                                        },
+                                                      },
+                                                    })
+                                                  }
+                                                  className="p-1 text-zinc-400 hover:text-red-600"
+                                                  title="Убрать станцию"
+                                                >
+                                                  <Trash2 className="w-3 h-3" />
+                                                </button>
+                                              </div>
+                                            );
+                                          }
+                                        )}
+                                      </div>
+
+                                      <div className="pt-1 border-t border-zinc-100 grid grid-cols-3 gap-2">
+                                        <label className="block">
+                                          <span className="text-[10px] text-zinc-500">
+                                            Мишка VR
+                                          </span>
+                                          <input
+                                            type="number"
+                                            min={0.5}
+                                            max={1.8}
+                                            step={0.05}
+                                            value={
+                                              activeDoc.page2.nextChapter
+                                                .bearScale
+                                            }
+                                            onChange={(e) =>
+                                              onChangeJournal({
+                                                ...activeDoc,
+                                                page2: {
+                                                  ...activeDoc.page2,
+                                                  nextChapter: {
+                                                    ...activeDoc.page2
+                                                      .nextChapter,
+                                                    bearScale: Math.max(
+                                                      0.5,
+                                                      Math.min(
+                                                        1.8,
+                                                        Number(
+                                                          e.target.value
+                                                        ) || 1
+                                                      )
+                                                    ),
+                                                  },
+                                                },
+                                              })
+                                            }
+                                            className={flatInputClass}
+                                          />
+                                        </label>
+                                        <label className="block">
+                                          <span className="text-[10px] text-zinc-500">
+                                            Сдвиг X
+                                          </span>
+                                          <input
+                                            type="number"
+                                            value={
+                                              activeDoc.page2.nextChapter
+                                                .bearOffsetX
+                                            }
+                                            onChange={(e) =>
+                                              onChangeJournal({
+                                                ...activeDoc,
+                                                page2: {
+                                                  ...activeDoc.page2,
+                                                  nextChapter: {
+                                                    ...activeDoc.page2
+                                                      .nextChapter,
+                                                    bearOffsetX:
+                                                      Number(e.target.value) ||
+                                                      0,
+                                                  },
+                                                },
+                                              })
+                                            }
+                                            className={flatInputClass}
+                                          />
+                                        </label>
+                                        <label className="block">
+                                          <span className="text-[10px] text-zinc-500">
+                                            Сдвиг Y
+                                          </span>
+                                          <input
+                                            type="number"
+                                            value={
+                                              activeDoc.page2.nextChapter
+                                                .bearOffsetY
+                                            }
+                                            onChange={(e) =>
+                                              onChangeJournal({
+                                                ...activeDoc,
+                                                page2: {
+                                                  ...activeDoc.page2,
+                                                  nextChapter: {
+                                                    ...activeDoc.page2
+                                                      .nextChapter,
+                                                    bearOffsetY:
+                                                      Number(e.target.value) ||
+                                                      0,
+                                                  },
+                                                },
+                                              })
+                                            }
+                                            className={flatInputClass}
+                                          />
+                                        </label>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                {/* ВРЕМЕННО ОТКЛЮЧЕНО: AI-генерация письма (будет возвращена позже)
                                 <div className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3">
                                   <div className="flex items-center gap-1.5 pb-1.5 border-b border-zinc-100">
                                     <Sparkles className="w-3.5 h-3.5 text-[#0D9488]" />
@@ -8331,59 +9654,20 @@ export function GroupEditorView({
                                       AI-генерация письма
                                     </span>
                                   </div>
+                                  <textarea ... observationsDraft />
+                                  <button onClick={handleGenerateAiMentorNote}>...</button>
+                                </div>
+                                */}
 
-                                  <label className="block">
-                                    <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
-                                      Наблюдения наставника
+                                {/* Unified Single Card: Письмо наставника */}
+                                <div className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3">
+                                  <div className="pb-1.5 border-b border-zinc-100">
+                                    <span className="text-[11px] font-bold text-zinc-800">
+                                      Письмо наставника
                                     </span>
-                                    <textarea
-                                      rows={2}
-                                      value={
-                                        activeDoc.page2.mentorNote
-                                          .observationsDraft
-                                      }
-                                      onChange={(e) =>
-                                        onChangeJournal({
-                                          ...activeDoc,
-                                          page2: {
-                                            ...activeDoc.page2,
-                                            mentorNote: {
-                                              ...activeDoc.page2.mentorNote,
-                                              observationsDraft: e.target.value,
-                                            },
-                                          },
-                                        })
-                                      }
-                                      placeholder="Факты: помог группе, разобрался в циклах..."
-                                      className="w-full p-2.5 rounded-md border border-zinc-200 bg-zinc-50/60 text-xs text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/15 resize-none"
-                                    />
-                                  </label>
+                                  </div>
 
-                                  <button
-                                    type="button"
-                                    disabled={aiBusy}
-                                    onClick={handleGenerateAiMentorNote}
-                                    className="w-full inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg bg-gradient-to-r from-[#0D9488] to-[#0F766E] hover:from-[#0F766E] hover:to-[#115E59] text-white text-xs font-bold shadow-sm transition-all disabled:opacity-60"
-                                  >
-                                    {aiBusy ? (
-                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                    ) : (
-                                      <Sparkles className="w-3.5 h-3.5" />
-                                    )}
-                                    <span>
-                                      {aiBusy
-                                        ? 'Формулируем письмо...'
-                                        : 'Сгенерировать тёплое письмо (AI)'}
-                                    </span>
-                                  </button>
-
-                                  {aiError && (
-                                    <div className="p-2 rounded bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
-                                      {aiError}
-                                    </div>
-                                  )}
-
-                                  <div className="pt-1 space-y-1.5">
+                                  <div className="space-y-1.5">
                                     <span className="text-[10px] font-medium text-zinc-400 block">
                                       Быстрые шаблоны:
                                     </span>
@@ -8421,90 +9705,96 @@ export function GroupEditorView({
                                       ))}
                                     </div>
                                   </div>
-                                </div>
 
-                                {/* Card 2: Unified Letter Container */}
-                                <div className="bg-white border border-zinc-200 rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3">
-                                  <div className="pb-1.5 border-b border-zinc-100">
-                                    <span className="text-[11px] font-bold text-zinc-800">
-                                      Письмо ученику
-                                    </span>
-                                  </div>
-
-                                  <label className="block">
-                                    <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
-                                      Приветствие
-                                    </span>
-                                    <input
-                                      type="text"
-                                      value={
-                                        activeDoc.page2.mentorNote.greeting
-                                      }
-                                      onChange={(e) =>
-                                        onChangeJournal({
-                                          ...activeDoc,
-                                          page2: {
-                                            ...activeDoc.page2,
-                                            mentorNote: {
-                                              ...activeDoc.page2.mentorNote,
-                                              greeting: e.target.value,
+                                  {!(
+                                    activeTextField?.page === 2 &&
+                                    activeTextField.field === 'mentorGreeting'
+                                  ) && (
+                                    <label className="block">
+                                      <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
+                                        Приветствие
+                                      </span>
+                                      <input
+                                        type="text"
+                                        value={
+                                          activeDoc.page2.mentorNote.greeting
+                                        }
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page2: {
+                                              ...activeDoc.page2,
+                                              mentorNote: {
+                                                ...activeDoc.page2.mentorNote,
+                                                greeting: e.target.value,
+                                              },
                                             },
-                                          },
-                                        })
-                                      }
-                                      placeholder="Саша, ты отлично поработал!"
-                                      className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs font-semibold text-zinc-900 focus:outline-none focus:bg-white focus:border-[#0D9488]"
-                                    />
-                                  </label>
+                                          })
+                                        }
+                                        placeholder="Саша, ты отлично поработал!"
+                                        className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs font-semibold text-zinc-900 focus:outline-none focus:bg-white focus:border-[#0D9488]"
+                                      />
+                                    </label>
+                                  )}
 
-                                  <label className="block">
-                                    <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
-                                      Основной текст
-                                    </span>
-                                    <textarea
-                                      rows={4}
-                                      value={activeDoc.page2.mentorNote.body}
-                                      onChange={(e) =>
-                                        onChangeJournal({
-                                          ...activeDoc,
-                                          page2: {
-                                            ...activeDoc.page2,
-                                            mentorNote: {
-                                              ...activeDoc.page2.mentorNote,
-                                              body: e.target.value,
+                                  {!(
+                                    activeTextField?.page === 2 &&
+                                    activeTextField.field === 'mentorBody'
+                                  ) && (
+                                    <label className="block">
+                                      <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
+                                        Основной текст
+                                      </span>
+                                      <textarea
+                                        rows={4}
+                                        value={activeDoc.page2.mentorNote.body}
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page2: {
+                                              ...activeDoc.page2,
+                                              mentorNote: {
+                                                ...activeDoc.page2.mentorNote,
+                                                body: e.target.value,
+                                              },
                                             },
-                                          },
-                                        })
-                                      }
-                                      placeholder="Личный отзыв наставника..."
-                                      className="w-full p-2.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-800 leading-relaxed focus:outline-none focus:bg-white focus:border-[#0D9488] resize-none"
-                                    />
-                                  </label>
+                                          })
+                                        }
+                                        placeholder="Личный отзыв наставника..."
+                                        className="w-full p-2.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-800 leading-relaxed focus:outline-none focus:bg-white focus:border-[#0D9488] resize-none"
+                                      />
+                                    </label>
+                                  )}
 
-                                  <label className="block">
-                                    <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
-                                      Подпись
-                                    </span>
-                                    <input
-                                      type="text"
-                                      value={
-                                        activeDoc.page2.mentorNote.signature
-                                      }
-                                      onChange={(e) =>
-                                        onChangeJournal({
-                                          ...activeDoc,
-                                          page2: {
-                                            ...activeDoc.page2,
-                                            mentorNote: {
-                                              ...activeDoc.page2.mentorNote,
-                                              signature: e.target.value,
+                                  {!(
+                                    activeTextField?.page === 2 &&
+                                    activeTextField.field === 'mentorSignature'
+                                  ) && (
+                                    <label className="block">
+                                      <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
+                                        Подпись
+                                      </span>
+                                      <input
+                                        type="text"
+                                        value={
+                                          activeDoc.page2.mentorNote.signature
+                                        }
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page2: {
+                                              ...activeDoc.page2,
+                                              mentorNote: {
+                                                ...activeDoc.page2.mentorNote,
+                                                signature: e.target.value,
+                                              },
                                             },
-                                          },
-                                        })
-                                      }
-                                      className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-700 focus:outline-none focus:bg-white focus:border-[#0D9488]"
-                                    />
-                                  </label>
+                                          })
+                                        }
+                                        className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-700 focus:outline-none focus:bg-white focus:border-[#0D9488]"
+                                      />
+                                    </label>
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -8512,7 +9802,8 @@ export function GroupEditorView({
                         </>
                       );
                     })()
-                  )}
+                  );
+                  })()}
                 </aside>
             </>
             )}
@@ -9021,15 +10312,16 @@ export function GroupEditorView({
                           ? targetMod.cardBgColor || '#C9F3EE'
                           : '#F4F4F5',
                       }}
-                      className="w-full aspect-[4/3] p-2.5 border-b border-black/10 overflow-hidden flex items-center justify-center"
+                      className="w-full aspect-[4/3] p-1 border-b border-black/10 overflow-hidden flex items-center justify-center"
                     >
                       <ModuleThumbImage
                         src={resolvedUrl}
                         alt={targetMod.title}
                         style={{
                           transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
+                          transformOrigin: 'center center',
                         }}
-                        className="w-full h-full object-contain drop-shadow-[0_4px_10px_rgba(15,23,42,0.16)]"
+                        className="w-full h-full object-contain drop-shadow-[0_4px_10px_rgba(15,23,42,0.16)] transition-transform duration-150"
                         iconClassName="w-8 h-8 stroke-[1.6]"
                         showLabel
                       />
@@ -9188,8 +10480,8 @@ export function GroupEditorView({
                           </div>
                           <input
                             type="range"
-                            min={0.7}
-                            max={2.2}
+                            min={0.5}
+                            max={2}
                             step={0.05}
                             value={imgScale}
                             onChange={(e) =>
@@ -9261,6 +10553,74 @@ export function GroupEditorView({
             </div>
           );
         })()}
+
+      {/* UNSAVED COMMON CHANGES WARNING MODAL */}
+      {pendingCommonExit && (
+        <div
+          className="fixed inset-0 z-50 bg-zinc-900/45 backdrop-blur-[1px] flex items-center justify-center p-4"
+          onClick={() => setPendingCommonExit(null)}
+        >
+          <div
+            className="w-full max-w-md bg-white rounded-2xl border border-zinc-200 shadow-xl p-5 space-y-4 text-xs"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-4 h-4" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-zinc-900">
+                  У вас есть непримененные изменения
+                </h3>
+                <p className="text-xs text-zinc-600 leading-relaxed">
+                  У вас есть непримененные изменения. Применить их ко всем ученикам?
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2 border-t border-zinc-100">
+              <button
+                type="button"
+                onClick={() => setPendingCommonExit(null)}
+                className="px-3 py-2 rounded-lg border border-zinc-200 text-zinc-700 hover:bg-zinc-50 font-semibold"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextAction = pendingCommonExit.proceed;
+                  setGroupDraft({ ...group });
+                  setCommonDraft(buildDefaultCommonData(group));
+                  setPendingCommonExit(null);
+                  nextAction();
+                }}
+                className="px-3 py-2 rounded-lg border border-zinc-200 text-zinc-700 hover:bg-zinc-50 font-semibold"
+              >
+                Выйти без применения
+              </button>
+              <button
+                type="button"
+                disabled={applyingCommon}
+                onClick={async () => {
+                  const nextAction = pendingCommonExit.proceed;
+                  setApplyingCommon(true);
+                  try {
+                    await onSaveGroupAndApplyCommon(groupDraft, commonDraft);
+                    setPendingCommonExit(null);
+                    nextAction();
+                  } finally {
+                    setApplyingCommon(false);
+                  }
+                }}
+                className="px-4 py-2 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white font-semibold disabled:opacity-50"
+              >
+                {applyingCommon ? 'Применяем...' : 'Применить ко всем'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

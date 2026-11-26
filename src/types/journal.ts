@@ -257,6 +257,7 @@ export interface SkillItem {
   status?: SkillMasteryStatus;
   hidden?: boolean;
   isIndividual?: boolean;
+  confirmedManually?: boolean;
 }
 
 export interface ProjectItem {
@@ -265,6 +266,7 @@ export interface ProjectItem {
   caption: string;
   description: string;
   imageUrl?: string;
+  imageFit?: 'cover' | 'contain';
   imageScale?: number;
   imagePosX?: number;
   imagePosY?: number;
@@ -486,6 +488,9 @@ export interface LibraryModule {
   visualNotes?: string;
   imageMediaId?: string | null;
   customImageUrl?: string;
+  imageScale?: number;
+  imagePosX?: number;
+  imagePosY?: number;
   cardBgColor: string;
   accentColor?: string;
   suggestedSkills: string[];

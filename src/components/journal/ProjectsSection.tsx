@@ -12,6 +12,7 @@ interface ProjectsSectionProps {
   projects: ProjectItem[];
   layouts?: Record<string, CanvasObjectTransform>;
   compact?: boolean;
+  stretchHeight?: boolean;
   designMode?: boolean;
   scaleFactor?: number;
   activeTarget?: EditorSectionTarget;
@@ -48,6 +49,7 @@ export function ProjectsSection({
   projects,
   layouts = {},
   compact = false,
+  stretchHeight = false,
   designMode = false,
   scaleFactor = 1,
   activeTarget,
@@ -64,6 +66,10 @@ export function ProjectsSection({
   const itemsToRender =
     visibleProjects.length > 0 ? visibleProjects.slice(0, 4) : STARTER_FALLBACK_PROJECTS;
   const isFallback = visibleProjects.length === 0;
+  const count = itemsToRender.length;
+  const layoutVariant: 'single' | 'double' | 'multi' =
+    count === 1 ? 'single' : count === 2 ? 'double' : 'multi';
+  const canStretch = stretchHeight && count <= 2 && !compact;
 
   return (
     <DraggableDesignWrapper
@@ -87,22 +93,30 @@ export function ProjectsSection({
       onSnapLinesChange={onSnapLinesChange}
       onInteractionStart={onInteractionStart}
       onInteractionEnd={onInteractionEnd}
-      className="shrink-0 block opacity-100 visible"
+      className={`shrink-0 opacity-100 visible ${
+        canStretch ? 'flex-1 min-h-0 flex flex-col' : 'block'
+      }`}
     >
-      <section style={{ width: '714px' }} className="block overflow-visible">
-        <h2 className="font-journal-display font-black text-[17.5px] leading-[21px] tracking-tight uppercase text-[#111827] mb-[12px]">
+      <section
+        style={{ width: '714px' }}
+        className={`overflow-visible ${
+          canStretch ? 'flex-1 min-h-0 flex flex-col' : 'block'
+        }`}
+      >
+        <h2 className="font-journal-display font-black text-[17.5px] leading-[21px] tracking-tight uppercase text-[#111827] mb-[12px] shrink-0">
           МОИ РЕЗУЛЬТАТЫ
         </h2>
         <div
-          style={{
-            width: itemsToRender.length === 1 ? '260px' : '714px',
-          }}
+          data-projects-count={count}
+          style={{ width: '714px' }}
           className={`grid items-stretch auto-rows-fr gap-[14px] ${
-            itemsToRender.length === 1
+            canStretch ? 'flex-1 min-h-0' : ''
+          } ${
+            count === 1
               ? 'grid-cols-1'
-              : itemsToRender.length === 2
+              : count === 2
               ? 'grid-cols-2'
-              : itemsToRender.length === 4
+              : count === 4
               ? 'grid-cols-4'
               : 'grid-cols-3'
           }`}
@@ -143,6 +157,8 @@ export function ProjectsSection({
               <ProjectCard
                 project={proj}
                 compact={compact}
+                layoutVariant={layoutVariant}
+                stretchHeight={canStretch}
                 isActive={
                   !isFallback &&
                   activeTarget?.page === 1 &&

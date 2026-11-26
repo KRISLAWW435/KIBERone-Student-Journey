@@ -39,9 +39,15 @@ import { AppHeader, WorkspaceTab } from '../AppHeader';
 function ModuleCardPreviewImage({
   src,
   alt,
+  scale = 1,
+  posX = 0,
+  posY = 0,
 }: {
   src?: string;
   alt: string;
+  scale?: number;
+  posX?: number;
+  posY?: number;
 }) {
   const [failed, setFailed] = React.useState(false);
   React.useEffect(() => {
@@ -55,7 +61,11 @@ function ModuleCardPreviewImage({
         alt={alt}
         referrerPolicy="no-referrer"
         onError={() => setFailed(true)}
-        className="w-full h-full object-contain p-1.5 drop-shadow-[0_4px_8px_rgba(15,23,42,0.14)]"
+        style={{
+          transform: `translate(${posX}px, ${posY}px) scale(${scale})`,
+          transformOrigin: 'center center',
+        }}
+        className="w-full h-full object-contain drop-shadow-[0_4px_8px_rgba(15,23,42,0.14)] transition-transform duration-150"
       />
     );
   }
@@ -335,7 +345,15 @@ export function ModulesLibraryView({
 
   const renderCardVisual = (mod: LibraryModule) => {
     const imgUrl = resolveModuleImageUrl(mod);
-    return <ModuleCardPreviewImage src={imgUrl} alt={mod.displayTitle} />;
+    return (
+      <ModuleCardPreviewImage
+        src={imgUrl}
+        alt={mod.displayTitle}
+        scale={mod.imageScale ?? 1}
+        posX={mod.imagePosX ?? 0}
+        posY={mod.imagePosY ?? 0}
+      />
+    );
   };
 
   const subTabs: Array<{
@@ -910,7 +928,7 @@ export function ModulesLibraryView({
                         style={{
                           backgroundColor: imgUrl ? mod.cardBgColor : '#F4F4F5',
                         }}
-                        className="aspect-[4/3] rounded-lg border border-black/10 overflow-hidden flex items-center justify-center p-2 mb-2.5"
+                        className="aspect-[4/3] rounded-lg border border-black/10 overflow-hidden flex items-center justify-center p-1 mb-2.5"
                       >
                         {renderCardVisual(mod)}
                       </div>
@@ -1056,7 +1074,7 @@ export function ModulesLibraryView({
                     <div className="bg-white border-[1.5px] border-[#18181B] rounded-xl p-2.5 shadow-[0_4px_10px_rgba(0,0,0,0.08)]">
                       <div
                         style={{ backgroundColor: editingModule.cardBgColor }}
-                        className="aspect-[4/3] rounded-lg border border-black/10 overflow-hidden flex items-center justify-center p-2 mb-2"
+                        className="aspect-[4/3] rounded-lg border border-black/10 overflow-hidden flex items-center justify-center p-1 mb-2"
                       >
                         {renderCardVisual(editingModule)}
                       </div>
@@ -1252,6 +1270,96 @@ export function ModulesLibraryView({
                         </label>
                       </div>
 
+                      <div className="pt-2 border-t border-zinc-200/70 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold text-zinc-700">
+                            Масштаб и кадрирование (50%–200%)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditingModule({
+                                ...editingModule,
+                                imageScale: 1,
+                                imagePosX: 0,
+                                imagePosY: 0,
+                              })
+                            }
+                            className="text-[11px] font-medium text-[#0D9488] hover:underline"
+                          >
+                            Сбросить
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <label className="block space-y-1">
+                            <div className="flex items-center justify-between text-[11px] text-zinc-500">
+                              <span>Масштаб</span>
+                              <span className="font-mono tabular-nums">
+                                {Math.round((editingModule.imageScale ?? 1) * 100)}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min={0.5}
+                              max={2}
+                              step={0.05}
+                              value={editingModule.imageScale ?? 1}
+                              onChange={(e) =>
+                                setEditingModule({
+                                  ...editingModule,
+                                  imageScale: Number(e.target.value),
+                                })
+                              }
+                              className="w-full accent-[#0D9488]"
+                            />
+                          </label>
+                          <label className="block space-y-1">
+                            <div className="flex items-center justify-between text-[11px] text-zinc-500">
+                              <span>Сдвиг по X</span>
+                              <span className="font-mono tabular-nums">
+                                {editingModule.imagePosX ?? 0}px
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min={-60}
+                              max={60}
+                              step={1}
+                              value={editingModule.imagePosX ?? 0}
+                              onChange={(e) =>
+                                setEditingModule({
+                                  ...editingModule,
+                                  imagePosX: Number(e.target.value),
+                                })
+                              }
+                              className="w-full accent-[#0D9488]"
+                            />
+                          </label>
+                          <label className="block space-y-1">
+                            <div className="flex items-center justify-between text-[11px] text-zinc-500">
+                              <span>Сдвиг по Y</span>
+                              <span className="font-mono tabular-nums">
+                                {editingModule.imagePosY ?? 0}px
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min={-60}
+                              max={60}
+                              step={1}
+                              value={editingModule.imagePosY ?? 0}
+                              onChange={(e) =>
+                                setEditingModule({
+                                  ...editingModule,
+                                  imagePosY: Number(e.target.value),
+                                })
+                              }
+                              className="w-full accent-[#0D9488]"
+                            />
+                          </label>
+                        </div>
+                      </div>
+
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
@@ -1284,6 +1392,9 @@ export function ModulesLibraryView({
                                 visualMode: 'image',
                                 imageMediaId: null,
                                 customImageUrl: undefined,
+                                imageScale: 1,
+                                imagePosX: 0,
+                                imagePosY: 0,
                               })
                             }
                             className="text-zinc-500 hover:underline"

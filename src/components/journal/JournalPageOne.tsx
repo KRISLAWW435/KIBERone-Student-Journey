@@ -409,11 +409,24 @@ export function JournalPageOne({
 
           {/* 4. МОИ РЕЗУЛЬТАТЫ */}
           {page1.showProjects !== false && (
-            <div className={isCompactModules ? 'mt-[2px]' : isCompactSkills ? 'mt-[8px]' : 'mt-[14px]'}>
+            <div
+              className={`${
+                visibleProjects.length <= 2 && !isCompactModules
+                  ? 'flex-1 min-h-0 flex flex-col'
+                  : ''
+              } ${
+                isCompactModules
+                  ? 'mt-[2px]'
+                  : isCompactSkills
+                  ? 'mt-[8px]'
+                  : 'mt-[14px]'
+              }`}
+            >
               <ProjectsSection
                 projects={page1.projects}
                 layouts={layouts}
                 compact={isCompactProjects || isCompactModules}
+                stretchHeight={visibleProjects.length <= 2 && !isCompactModules}
                 designMode={designMode}
                 scaleFactor={scaleFactor}
                 activeTarget={activeTarget}

@@ -6,6 +6,8 @@ import { ProjectFallbackGraphic } from './JournalArtwork';
 interface ProjectCardProps {
   project: ProjectItem;
   compact?: boolean;
+  layoutVariant?: 'single' | 'double' | 'multi';
+  stretchHeight?: boolean;
   isActive?: boolean;
   activeTextField?: ActiveTextFieldTarget;
   onSelectTextField?: (target: ActiveTextFieldTarget) => void;
@@ -18,6 +20,8 @@ interface ProjectCardProps {
 export function ProjectCard({
   project,
   compact = false,
+  layoutVariant = 'multi',
+  stretchHeight = false,
   isActive = false,
   activeTextField,
   onSelectTextField,
@@ -26,12 +30,26 @@ export function ProjectCard({
   const imgScale = project.imageScale ?? 1;
   const imgX = project.imagePosX ?? 0;
   const imgY = project.imagePosY ?? 0;
+  const imgFit = project.imageFit === 'contain' ? 'contain' : 'cover';
 
   const displayTitle = project.title?.trim() || 'Мой проект';
   const displayCaption =
     project.caption?.trim() ||
     project.description?.trim() ||
     'Краткое описание проекта';
+
+  const fixedImageHeight =
+    layoutVariant === 'single'
+      ? compact
+        ? '132px'
+        : '192px'
+      : layoutVariant === 'double'
+      ? compact
+        ? '122px'
+        : '184px'
+      : compact
+      ? '72px'
+      : '108px';
 
   return (
     <div
@@ -58,8 +76,12 @@ export function ProjectCard({
 
       {/* Edge-to-Edge Screenshot / Illustration */}
       <div
-        style={{ height: compact ? '66px' : '102px' }}
-        className="self-stretch overflow-hidden border-b border-[#18181B]/12 bg-zinc-100 shrink-0"
+        style={stretchHeight ? undefined : { height: fixedImageHeight }}
+        className={`self-stretch overflow-hidden border-b border-[#18181B]/12 ${
+          imgFit === 'contain' ? 'bg-zinc-50 p-1' : 'bg-zinc-100'
+        } ${
+          stretchHeight ? 'flex-1 min-h-[150px] max-h-[250px]' : 'shrink-0'
+        }`}
       >
         {project.imageUrl ? (
           <img
@@ -68,8 +90,11 @@ export function ProjectCard({
             referrerPolicy="no-referrer"
             style={{
               transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
+              transformOrigin: 'center center',
             }}
-            className="w-full h-full object-cover transition-transform duration-150"
+            className={`w-full h-full transition-transform duration-150 ${
+              imgFit === 'contain' ? 'object-contain' : 'object-cover'
+            }`}
           />
         ) : (
           <ProjectFallbackGraphic theme={project.fallbackTheme} />
@@ -80,7 +105,9 @@ export function ProjectCard({
       <div
         className={`${
           compact ? 'px-[8px] py-[6px]' : 'px-[10px] py-[8px]'
-        } text-center flex-1 flex flex-col justify-center`}
+        } text-center ${
+          stretchHeight ? 'shrink-0' : 'flex-1 flex flex-col justify-center'
+        }`}
       >
         <InlineEditableText
           value={project.title}
@@ -102,7 +129,11 @@ export function ProjectCard({
           }
           as="div"
           className={`font-journal-display font-extrabold ${
-            compact ? 'text-[12.5px]' : 'text-[14px]'
+            compact
+              ? 'text-[12.5px]'
+              : layoutVariant === 'single'
+              ? 'text-[15.5px]'
+              : 'text-[14px]'
           } leading-[1.2] text-[#111827] block`}
         />
         <InlineEditableText
@@ -125,7 +156,9 @@ export function ProjectCard({
             activeTextField.itemId === project.id
           }
           as="div"
-          className="font-journal-body text-[10px] leading-[1.4] text-[#3F3F46] mt-[4px] block"
+          className={`font-journal-body ${
+            layoutVariant === 'single' ? 'text-[11px]' : 'text-[10px]'
+          } leading-[1.4] text-[#3F3F46] mt-[4px] block`}
         />
       </div>
     </div>

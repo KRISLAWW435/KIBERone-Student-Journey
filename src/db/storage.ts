@@ -598,6 +598,9 @@ export async function getAllLibraryModules(): Promise<LibraryModule[]> {
             ? raw.customImageUrl || ''
             : matchedOfficial.illustrationValue,
           visualMode: 'image',
+          imageScale: raw.imageScale ?? matchedOfficial.imageScale,
+          imagePosX: raw.imagePosX ?? matchedOfficial.imagePosX,
+          imagePosY: raw.imagePosY ?? matchedOfficial.imagePosY,
           cardBgColor: raw.cardBgColor || matchedOfficial.cardBgColor,
           accentColor: raw.cardBgColor || matchedOfficial.accentColor,
           isActive:

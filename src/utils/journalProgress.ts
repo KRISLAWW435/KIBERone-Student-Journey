@@ -14,11 +14,132 @@ import {
   JournalProgress,
   JournalProgressBlock,
   JournalProgressLevel,
+  LibraryModule,
+  ModuleItem,
   ResidentRecord,
   SkillDefinition,
   StudentGroup,
   StudentStatus,
 } from '../types/journal';
+
+export function computeActiveModuleSuggestedSkillIds(
+  modules: ModuleItem[],
+  libraryModules: LibraryModule[] = []
+): string[] {
+  const seen = new Set<string>();
+  modules.forEach((mod) => {
+    if (mod.hidden) return;
+    let rawIds = mod.suggestedSkills ?? [];
+    if (rawIds.length === 0 && libraryModules.length > 0) {
+      const lib =
+        libraryModules.find((l) => mod.libraryModuleId && l.id === mod.libraryModuleId) ??
+        libraryModules.find(
+          (l) =>
+            (l.officialTitle || l.title).trim().toLowerCase() ===
+              (mod.officialTitle || mod.title).trim().toLowerCase() ||
+            (l.shortTitle || l.displayTitle || '').trim().toLowerCase() ===
+              mod.title.trim().toLowerCase()
+        );
+      if (lib?.suggestedSkills) {
+        rawIds = lib.suggestedSkills;
+      }
+    }
+    rawIds.forEach((sid) => {
+      if (sid) seen.add(sid);
+    });
+  });
+  return Array.from(seen);
+}
+
+export const UNIVERSAL_PRIDE_TEMPLATES: string[] = [
+  'Успешно защитил(а) проект перед группой',
+  'Самостоятельно нашёл(ла) и исправил(а) ошибку в коде',
+  'Довёл(а) сложный проект до рабочего результата',
+  'Помогал(а) одногруппникам и уверенно отвечал(а) на вопросы',
+];
+
+const MODULE_PRIDE_TEMPLATE_RULES: Array<{
+  keywords: string[];
+  categories?: string[];
+  templates: string[];
+}> = [
+  {
+    keywords: ['python', 'pygame', 'turtle'],
+    templates: [
+      'Написал(а) первый код на Python',
+      'Создал(а) мини-игру на Python',
+    ],
+  },
+  {
+    keywords: ['roblox', 'роблокс'],
+    templates: [
+      'Разработал(а) собственную карту в Roblox',
+      'Настроил(а) игровые механики и объекты в Roblox Studio',
+    ],
+  },
+  {
+    keywords: ['figma', 'дизайн', 'design', 'photoshop', 'blender', 'tinkercad', 'spline', 'aseprite'],
+    categories: ['design-3d'],
+    templates: [
+      'Создал(а) свой первый сайт в Figma',
+      'Собрал(а) авторскую 3D-модель и продумал(а) композицию',
+    ],
+  },
+  {
+    keywords: ['minecraft', 'scratch', 'kodu', 'construct', 'godot', 'unity', 'unreal', 'геймдизайн'],
+    categories: ['games'],
+    templates: [
+      'Создал(а) собственную игру с уровнями и правилами',
+      'Продумал(а) и протестировал(а) логику игровых персонажей',
+    ],
+  },
+  {
+    keywords: ['html', 'css', 'javascript', 'typescript', 'tilda', 'лендинг'],
+    categories: ['web-mobile'],
+    templates: [
+      'Сверстал(а) и оформил(а) собственную веб-страницу',
+    ],
+  },
+  {
+    keywords: ['ai', 'ии', 'нейросет', 'prompt', 'вайбкодинг', 'kodik'],
+    categories: ['ai'],
+    templates: [
+      'Освоил(а) работу с нейросетями и применил(а) ИИ в проекте',
+    ],
+  },
+];
+
+export function getPrideTemplatesForModules(modules: ModuleItem[]): string[] {
+  const activeMods = modules.filter((m) => !m.hidden);
+  const picked = new Set<string>();
+
+  if (activeMods.length === 0) {
+    // Общий список, если модули пока не выбраны
+    [
+      'Написал(а) первый код на Python',
+      'Создал(а) мини-игру',
+      'Разработал(а) собственную карту в Roblox',
+      'Создал(а) свой первый сайт в Figma',
+      ...UNIVERSAL_PRIDE_TEMPLATES,
+    ].forEach((t) => picked.add(t));
+    return Array.from(picked);
+  }
+
+  activeMods.forEach((mod) => {
+    const haystack = `${mod.libraryModuleId || ''} ${mod.officialTitle || ''} ${mod.title || ''} ${mod.subtitle || ''}`.toLowerCase();
+    const cat = (mod.category || '').toLowerCase();
+    MODULE_PRIDE_TEMPLATE_RULES.forEach((rule) => {
+      const matchesKeyword = rule.keywords.some((kw) => haystack.includes(kw));
+      const matchesCat = rule.categories?.some((c) => cat === c) ?? false;
+      if (matchesKeyword || matchesCat) {
+        rule.templates.forEach((t) => picked.add(t));
+      }
+    });
+  });
+
+  UNIVERSAL_PRIDE_TEMPLATES.forEach((t) => picked.add(t));
+  return Array.from(picked);
+}
 
 export function formatRuDate(isoDate?: string): string {
   if (!isoDate) return '';
@@ -109,11 +230,45 @@ export function computeJournalProgress(doc: JournalDocument): JournalProgress {
   const hasCurriculum = visibleModules.length > 0 && skillsCount > 0;
 
   const visibleProjects = doc.page1.projects.filter((p) => !p.hidden);
-  const hasProjects = visibleProjects.some(
-    (p) =>
-      (p.isRealScreenshot && Boolean(p.imageUrl)) ||
-      (p.title.trim().length > 0 && p.description.trim().length > 8)
-  );
+  const DEFAULT_PROJECT_TITLES = new Set([
+    'мой первый проект',
+    'учебный мини-проект',
+    'учебный проект',
+    'новый проект',
+  ]);
+  const DEFAULT_PROJECT_CAPTIONS = new Set([
+    'игровая сцена и алгоритмы модуля',
+    'практическая работа на занятии',
+    'практическая работа на модуле',
+    'самостоятельное задание в группе',
+    'создание программы и тестирование',
+    'подпись проекта',
+  ]);
+  const DEFAULT_PROJECT_DESCRIPTIONS = new Set([
+    'создана собственная сцена и проверена логика работы.',
+    'закрепление основных приёмов программирования.',
+    'создание игровой сцены и проверка алгоритмов.',
+    'закрепление основных навыков модуля.',
+    'собственная игровая сцена и алгоритмы.',
+    'закрепление ключевых навыков модуля.',
+    'что было реализовано на занятии.',
+  ]);
+  const hasProjects = visibleProjects.some((p) => {
+    if (p.isRealScreenshot && Boolean(p.imageUrl)) return true;
+    const titleClean = (p.title || '').trim();
+    const captionClean = (p.caption || '').trim();
+    const descClean = (p.description || '').trim();
+    const hasCustomTitle =
+      titleClean.length > 1 &&
+      !DEFAULT_PROJECT_TITLES.has(titleClean.toLowerCase());
+    const hasCustomCaption =
+      captionClean.length > 2 &&
+      !DEFAULT_PROJECT_CAPTIONS.has(captionClean.toLowerCase());
+    const hasCustomDesc =
+      descClean.length > 8 &&
+      !DEFAULT_PROJECT_DESCRIPTIONS.has(descClean.toLowerCase());
+    return hasCustomTitle || hasCustomCaption || hasCustomDesc;
+  });
 
   const visibleStrengths = doc.page2.strengths.filter((s) => !s.hidden);
   const hasPrideAndStrengths =
@@ -247,9 +402,7 @@ export function createStudentJournal(
       showSkills: true,
       skills: mappedSkills,
       confirmedSkills,
-      suggestedSkillsPool: Array.from(
-        new Set(mappedModules.flatMap((m) => m.suggestedSkills ?? []))
-      ),
+      suggestedSkillsPool: computeActiveModuleSuggestedSkillIds(mappedModules),
       showProjects: true,
       projects: [
         {
@@ -436,9 +589,7 @@ export function applyGroupCommonDataToJournal(
       showSkills: mergedSkills.length > 0 ? true : existing.page1.showSkills,
       skills: mergedSkills,
       confirmedSkills: mappedConfirmed,
-      suggestedSkillsPool: Array.from(
-        new Set(mergedModules.flatMap((m) => m.suggestedSkills ?? []))
-      ),
+      suggestedSkillsPool: computeActiveModuleSuggestedSkillIds(mergedModules),
     },
     page2: {
       ...existing.page2,

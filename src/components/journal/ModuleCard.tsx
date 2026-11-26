@@ -126,12 +126,12 @@ export function ModuleCard({
           </div>
         )}
 
-        {/* 4:3 Colored Upper Graphic Container (object-fit: contain) */}
+        {/* 4:3 Colored Upper Graphic Container (full uncropped object-contain + center scale/shift) */}
         {variant !== 'minimal' && (
           <div
             style={{ backgroundColor: headerBgColor }}
             className={`w-full aspect-[4/3] ${
-              compact ? 'max-h-[126px] p-[6px]' : 'max-h-[154px] p-[8px]'
+              compact ? 'max-h-[132px] p-[3px]' : 'max-h-[164px] p-[4px]'
             } border-b-[1.4px] border-[#18181B]/12 overflow-hidden flex items-center justify-center shrink-0 relative`}
           >
             {hasImage && resolvedImageUrl ? (
@@ -142,6 +142,7 @@ export function ModuleCard({
                 onError={() => setImgError(true)}
                 style={{
                   transform: `translate(${imgX}px, ${imgY}px) scale(${imgScale})`,
+                  transformOrigin: 'center center',
                 }}
                 className="w-full h-full object-contain drop-shadow-[0_6px_12px_rgba(15,23,42,0.16)] transition-transform duration-150"
               />

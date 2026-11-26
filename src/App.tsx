@@ -91,7 +91,8 @@ export default function App() {
   const [editorEntryTarget, setEditorEntryTarget] = useState<{
     tab: 'common' | 'individual';
     journalId: string | null;
-  }>({ tab: 'common', journalId: null });
+    studentId?: string | null;
+  }>({ tab: 'common', journalId: null, studentId: null });
   const [createGroupSignal, setCreateGroupSignal] = useState(0);
   const [saveState, setSaveState] = useState<'saved' | 'saving'>('saved');
   const [loading, setLoading] = useState(true);
@@ -500,6 +501,16 @@ export default function App() {
     );
 
     if (existingJournal) {
+      updatedRes.journalId = existingJournal.id;
+      const nextMentor =
+        targetGroup.mentorName || existingJournal.resident.mentorName;
+      const prevSig = existingJournal.page2.mentorNote.signature || '';
+      const nextSig =
+        targetGroup.mentorName &&
+        (!prevSig.trim() || prevSig.trim().startsWith('Твой наставник,'))
+          ? `Твой наставник, ${targetGroup.mentorName.split(' ')[0]}`
+          : prevSig;
+
       const updatedJournal: JournalDocument = {
         ...existingJournal,
         groupId: targetGroup.id,
@@ -508,8 +519,19 @@ export default function App() {
           ...existingJournal.resident,
           branch: targetBranch ? targetBranch.name : existingJournal.resident.branch,
           period: formatGroupPeriod(targetGroup.startDate, targetGroup.endDate),
-          mentorName: targetGroup.mentorName || existingJournal.resident.mentorName,
+          mentorName: nextMentor,
           ageCategory: targetGroup.ageCategory,
+        },
+        page1: {
+          ...existingJournal.page1,
+          showBranch: Boolean(targetBranch) || existingJournal.page1.showBranch,
+        },
+        page2: {
+          ...existingJournal.page2,
+          mentorNote: {
+            ...existingJournal.page2.mentorNote,
+            signature: nextSig,
+          },
         },
       };
       updatedJournal.completionProgress = computeJournalProgress(updatedJournal);
@@ -631,10 +653,23 @@ export default function App() {
     );
   };
 
-  const handleOpenGroupEditor = (groupId: string) => {
+  const handleOpenGroupEditor = (
+    groupId: string,
+    journalId?: string | null,
+    studentId?: string | null
+  ) => {
     setActiveGroupId(groupId);
-    setActiveId(null);
-    setEditorEntryTarget({ tab: 'common', journalId: null });
+    if (journalId || studentId) {
+      setActiveId(journalId ?? null);
+      setEditorEntryTarget({
+        tab: 'individual',
+        journalId: journalId ?? null,
+        studentId: studentId ?? null,
+      });
+    } else {
+      setActiveId(null);
+      setEditorEntryTarget({ tab: 'common', journalId: null, studentId: null });
+    }
     setRoute('groupEditor');
   };
 
@@ -1031,6 +1066,7 @@ export default function App() {
             activeJournalId={activeId}
             initialTab={editorEntryTarget.tab}
             initialJournalId={editorEntryTarget.journalId}
+            initialStudentId={editorEntryTarget.studentId ?? null}
             onSelectActiveJournal={(journalId) => setActiveId(journalId)}
             onChangeJournal={handleUpdateJournal}
             onSaveGroupAndApplyCommon={handleSaveGroupAndApplyCommon}
