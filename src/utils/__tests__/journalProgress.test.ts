@@ -3,6 +3,8 @@ import {
   ASSETS,
   DESIGN_PALETTES,
   DEFAULT_SPEECH_BUBBLE_TEXT,
+  MENTOR_NOTE_TEMPLATES,
+  STRENGTH_LIBRARY,
 } from '../../data/presets';
 import {
   Branch,
@@ -25,6 +27,9 @@ import {
   hasJournalDesignChanged,
   MAX_PAGE1_MODULES,
   MAX_PAGE1_PROJECTS,
+  MENTOR_BODY_MAX_CHARS,
+  MENTOR_GREETING_MAX_CHARS,
+  MENTOR_SIGNATURE_MAX_CHARS,
   normalizePage2SectionOrder,
   PAGE1_CARD_LIMIT_MESSAGE,
   STRENGTH_EXAMPLE_MAX_CHARS,
@@ -317,7 +322,7 @@ describe('computeActiveModuleSuggestedSkillIds и getPrideTemplatesForModules', 
         order: 1,
       },
     ]);
-    expect(pythonTemplates).toContain('Написал(а) первый код на Python');
+    expect(pythonTemplates).toContain('Написан первый рабочий код на Python');
     expect(pythonTemplates).toContain(UNIVERSAL_PRIDE_TEMPLATES[0]);
 
     const robloxTemplates = getPrideTemplatesForModules([
@@ -332,11 +337,53 @@ describe('computeActiveModuleSuggestedSkillIds и getPrideTemplatesForModules', 
         order: 1,
       },
     ]);
-    expect(robloxTemplates).toContain('Разработал(а) собственную карту в Roblox');
+    expect(robloxTemplates).toContain('Создана собственная игровая карта в Roblox');
 
     const fallbackTemplates = getPrideTemplatesForModules([]);
     expect(fallbackTemplates.length).toBeGreaterThanOrEqual(4);
     expect(fallbackTemplates).toContain(UNIVERSAL_PRIDE_TEMPLATES[0]);
+  });
+
+  it('шаблоны письма наставника, гордости и сильных сторон гендерно-нейтральны и без (а)/(ла), а лимиты А4 заданы корректно', () => {
+    expect(MENTOR_GREETING_MAX_CHARS).toBe(60);
+    expect(MENTOR_BODY_MAX_CHARS).toBe(280);
+    expect(MENTOR_SIGNATURE_MAX_CHARS).toBe(50);
+
+    const allModuleTemplates = getPrideTemplatesForModules(
+      KIBERONE_CURRICULUM_MODULES.map((m, idx) => ({
+        id: `m-${idx}`,
+        libraryModuleId: m.id,
+        title: m.title,
+        subtitle: m.subtitle || '',
+        description: '',
+        category: m.category,
+        cardBgColor: '#FFF',
+        size: 'normal' as const,
+        order: idx + 1,
+      }))
+    );
+
+    const textsToCheck = [
+      ...UNIVERSAL_PRIDE_TEMPLATES,
+      ...getPrideTemplatesForModules([]),
+      ...allModuleTemplates,
+      ...MENTOR_NOTE_TEMPLATES.flatMap((t) => [t.greeting, t.body]),
+      ...STRENGTH_LIBRARY.map((s) => s.defaultExample),
+    ];
+
+    const forbiddenSlashOrParenthesis = /\(а\)|\(ла\)|\/а\b/i;
+    const forbiddenGenderedForms =
+      /\b(поработал|проявил|создал|написал|разработал|собрал|разобрался|довёл|сверстал|освоил|нашёл|сам)\b/i;
+
+    for (const txt of textsToCheck) {
+      expect(txt).not.toMatch(forbiddenSlashOrParenthesis);
+      expect(txt).not.toMatch(forbiddenGenderedForms);
+    }
+
+    for (const tpl of MENTOR_NOTE_TEMPLATES) {
+      expect(tpl.greeting.length).toBeLessThanOrEqual(MENTOR_GREETING_MAX_CHARS);
+      expect(tpl.body.length).toBeLessThanOrEqual(MENTOR_BODY_MAX_CHARS);
+    }
   });
 });
 

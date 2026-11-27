@@ -110,6 +110,9 @@ import {
   hasJournalDesignChanged,
   MAX_PAGE1_MODULES,
   MAX_PAGE1_PROJECTS,
+  MENTOR_BODY_MAX_CHARS,
+  MENTOR_GREETING_MAX_CHARS,
+  MENTOR_SIGNATURE_MAX_CHARS,
   normalizeStudentStatus,
   PAGE1_CARD_LIMIT_MESSAGE,
   STRENGTH_EXAMPLE_MAX_CHARS,
@@ -5684,9 +5687,23 @@ export function GroupEditorView({
                           const isStrengthExampleField =
                             activeTextField.page === 2 &&
                             activeTextField.field === 'strengthExample';
-                          const isStrengthOverLimit =
-                            isStrengthExampleField &&
-                            currentValue.length > STRENGTH_EXAMPLE_MAX_CHARS;
+                          const mentorFieldLimit =
+                            activeTextField.page === 2 &&
+                            activeTextField.field === 'mentorGreeting'
+                              ? MENTOR_GREETING_MAX_CHARS
+                              : activeTextField.page === 2 &&
+                                  activeTextField.field === 'mentorBody'
+                                ? MENTOR_BODY_MAX_CHARS
+                                : activeTextField.page === 2 &&
+                                    activeTextField.field === 'mentorSignature'
+                                  ? MENTOR_SIGNATURE_MAX_CHARS
+                                  : null;
+                          const activeFieldLimit = isStrengthExampleField
+                            ? STRENGTH_EXAMPLE_MAX_CHARS
+                            : mentorFieldLimit;
+                          const isActiveFieldOverLimit =
+                            activeFieldLimit !== null &&
+                            currentValue.length > activeFieldLimit;
 
                           return (
                             <div className="shrink-0 border-b border-[#0D9488]/25 bg-[#F0FDFA]/70 px-3.5 py-3 space-y-2">
@@ -5715,28 +5732,32 @@ export function GroupEditorView({
                                 onChange={(e) => updateValue(e.target.value)}
                                 placeholder="Введите текст — изменения сразу появятся на листе А4…"
                                 className={`w-full rounded-lg border bg-white px-2.5 py-2 text-xs leading-relaxed text-zinc-900 shadow-2xs focus:outline-none ${
-                                  isStrengthOverLimit
-                                    ? 'border-red-500 ring-2 ring-red-500/20 focus:border-red-500'
+                                  isActiveFieldOverLimit
+                                    ? 'border-amber-500 ring-2 ring-amber-500/20 focus:border-amber-500'
                                     : 'border-[#0D9488]/40 focus:ring-2 focus:ring-[#0D9488]/25 focus:border-[#0D9488]'
                                 }`}
                               />
-                              {isStrengthExampleField && (
+                              {activeFieldLimit !== null && (
                                 <div className="flex items-center justify-between gap-2 text-[10px]">
-                                  {isStrengthOverLimit ? (
-                                    <span className="font-semibold text-red-600">
-                                      Превышен лимит ({STRENGTH_EXAMPLE_MAX_CHARS} симв.) — сократите текст для аккуратной вёрстки.
+                                  {isActiveFieldOverLimit ? (
+                                    <span className="font-semibold text-amber-700">
+                                      {isStrengthExampleField
+                                        ? `Превышен лимит (${activeFieldLimit} симв.) — сократите текст для аккуратной вёрстки.`
+                                        : `Превышен рекомендуемый объём (${activeFieldLimit} симв.) — текст может выйти за пределы блока на листе А4.`}
                                     </span>
                                   ) : (
                                     <span className="text-zinc-500">
-                                      Рекомендуемая длина до {STRENGTH_EXAMPLE_MAX_CHARS} символов
+                                      Рекомендуемая длина до {activeFieldLimit} символов
                                     </span>
                                   )}
                                   <span
                                     className={`font-mono tabular-nums font-semibold shrink-0 ${
-                                      isStrengthOverLimit ? 'text-red-600' : 'text-zinc-500'
+                                      isActiveFieldOverLimit
+                                        ? 'text-amber-700'
+                                        : 'text-zinc-500'
                                     }`}
                                   >
-                                    {currentValue.length}/{STRENGTH_EXAMPLE_MAX_CHARS}
+                                    {currentValue.length}/{activeFieldLimit}
                                   </span>
                                 </div>
                               )}
@@ -10232,7 +10253,7 @@ export function GroupEditorView({
                                               id: `str-custom-${Date.now()}`,
                                               title: newStrengthTitle.trim(),
                                               example:
-                                                'Ярко проявил себя на практических заданиях.',
+                                                'Отлично показывает себя на практических заданиях.',
                                               iconKey: 'creativity',
                                               bgColor: '#B8F2F5',
                                             };
@@ -10263,7 +10284,7 @@ export function GroupEditorView({
                                           id: `str-custom-${Date.now()}`,
                                           title: newStrengthTitle.trim(),
                                           example:
-                                            'Ярко проявил себя на практических заданиях.',
+                                            'Отлично показывает себя на практических заданиях.',
                                           iconKey: 'creativity',
                                           bgColor: '#B8F2F5',
                                         };
@@ -10514,93 +10535,192 @@ export function GroupEditorView({
                                   {!(
                                     activeTextField?.page === 2 &&
                                     activeTextField.field === 'mentorGreeting'
-                                  ) && (
-                                    <label className="block">
-                                      <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
-                                        Приветствие
-                                      </span>
-                                      <AutoResizeTextarea
-                                        minRows={1}
-                                        value={
-                                          activeDoc.page2.mentorNote.greeting
-                                        }
-                                        onChange={(e) =>
-                                          onChangeJournal({
-                                            ...activeDoc,
-                                            page2: {
-                                              ...activeDoc.page2,
-                                              mentorNote: {
-                                                ...activeDoc.page2.mentorNote,
-                                                greeting: e.target.value,
+                                  ) && (() => {
+                                    const greetingLen =
+                                      activeDoc.page2.mentorNote.greeting.length;
+                                    const isGreetingOver =
+                                      greetingLen > MENTOR_GREETING_MAX_CHARS;
+                                    return (
+                                      <label className="block space-y-1">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="text-[11px] font-medium text-zinc-500">
+                                            Приветствие
+                                          </span>
+                                          <span
+                                            data-mentor-counter="greeting"
+                                            className={`text-[10px] font-mono tabular-nums font-semibold ${
+                                              isGreetingOver
+                                                ? 'text-amber-700'
+                                                : 'text-zinc-400'
+                                            }`}
+                                          >
+                                            {greetingLen}/
+                                            {MENTOR_GREETING_MAX_CHARS}
+                                          </span>
+                                        </div>
+                                        <AutoResizeTextarea
+                                          minRows={1}
+                                          value={
+                                            activeDoc.page2.mentorNote.greeting
+                                          }
+                                          onChange={(e) =>
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page2: {
+                                                ...activeDoc.page2,
+                                                mentorNote: {
+                                                  ...activeDoc.page2.mentorNote,
+                                                  greeting: e.target.value,
+                                                },
                                               },
-                                            },
-                                          })
-                                        }
-                                        placeholder="Саша, ты отлично поработал!"
-                                        className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs font-semibold text-zinc-900 leading-relaxed focus:outline-none focus:bg-white focus:border-[#0D9488]"
-                                      />
-                                    </label>
-                                  )}
+                                            })
+                                          }
+                                          placeholder="Дарья, отличный результат за этот период!"
+                                          className={`w-full px-2.5 py-1.5 rounded-md border text-xs font-semibold text-zinc-900 leading-relaxed focus:outline-none transition-colors ${
+                                            isGreetingOver
+                                              ? 'border-amber-500 ring-1 ring-amber-500/30 bg-amber-50/40 focus:border-amber-500'
+                                              : 'border-zinc-200 bg-zinc-50/50 focus:bg-white focus:border-[#0D9488]'
+                                          }`}
+                                        />
+                                        {isGreetingOver && (
+                                          <p
+                                            data-mentor-warning="greeting"
+                                            className="text-[10px] font-medium text-amber-700"
+                                          >
+                                            Превышена рекомендуемая длина (
+                                            {MENTOR_GREETING_MAX_CHARS} симв.) —
+                                            приветствие может занять лишние строки на листе А4.
+                                          </p>
+                                        )}
+                                      </label>
+                                    );
+                                  })()}
 
                                   {!(
                                     activeTextField?.page === 2 &&
                                     activeTextField.field === 'mentorBody'
-                                  ) && (
-                                    <label className="block">
-                                      <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
-                                        Основной текст
-                                      </span>
-                                      <AutoResizeTextarea
-                                        minRows={3}
-                                        value={activeDoc.page2.mentorNote.body}
-                                        onChange={(e) =>
-                                          onChangeJournal({
-                                            ...activeDoc,
-                                            page2: {
-                                              ...activeDoc.page2,
-                                              mentorNote: {
-                                                ...activeDoc.page2.mentorNote,
-                                                body: e.target.value,
+                                  ) && (() => {
+                                    const bodyLen =
+                                      activeDoc.page2.mentorNote.body.length;
+                                    const isBodyOver =
+                                      bodyLen > MENTOR_BODY_MAX_CHARS;
+                                    return (
+                                      <label className="block space-y-1">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="text-[11px] font-medium text-zinc-500">
+                                            Основной текст
+                                          </span>
+                                          <span
+                                            data-mentor-counter="body"
+                                            className={`text-[10px] font-mono tabular-nums font-semibold ${
+                                              isBodyOver
+                                                ? 'text-amber-700'
+                                                : 'text-zinc-400'
+                                            }`}
+                                          >
+                                            {bodyLen}/{MENTOR_BODY_MAX_CHARS}
+                                          </span>
+                                        </div>
+                                        <AutoResizeTextarea
+                                          minRows={3}
+                                          value={activeDoc.page2.mentorNote.body}
+                                          onChange={(e) =>
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page2: {
+                                                ...activeDoc.page2,
+                                                mentorNote: {
+                                                  ...activeDoc.page2.mentorNote,
+                                                  body: e.target.value,
+                                                },
                                               },
-                                            },
-                                          })
-                                        }
-                                        placeholder="Личный отзыв наставника..."
-                                        className="w-full p-2.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-800 leading-relaxed focus:outline-none focus:bg-white focus:border-[#0D9488]"
-                                      />
-                                    </label>
-                                  )}
+                                            })
+                                          }
+                                          placeholder="Личный отзыв наставника..."
+                                          className={`w-full p-2.5 rounded-md border text-xs text-zinc-800 leading-relaxed focus:outline-none transition-colors ${
+                                            isBodyOver
+                                              ? 'border-amber-500 ring-1 ring-amber-500/30 bg-amber-50/40 focus:border-amber-500'
+                                              : 'border-zinc-200 bg-zinc-50/50 focus:bg-white focus:border-[#0D9488]'
+                                          }`}
+                                        />
+                                        {isBodyOver && (
+                                          <p
+                                            data-mentor-warning="body"
+                                            className="text-[10px] font-medium text-amber-700"
+                                          >
+                                            Превышен рекомендуемый объём (
+                                            {MENTOR_BODY_MAX_CHARS} симв.) — текст
+                                            может выйти за пределы блока на листе А4 при печати.
+                                          </p>
+                                        )}
+                                      </label>
+                                    );
+                                  })()}
 
                                   {!(
                                     activeTextField?.page === 2 &&
                                     activeTextField.field === 'mentorSignature'
-                                  ) && (
-                                    <label className="block">
-                                      <span className="text-[11px] font-medium text-zinc-500 mb-1 block">
-                                        Подпись
-                                      </span>
-                                      <AutoResizeTextarea
-                                        minRows={1}
-                                        value={
-                                          activeDoc.page2.mentorNote.signature
-                                        }
-                                        onChange={(e) =>
-                                          onChangeJournal({
-                                            ...activeDoc,
-                                            page2: {
-                                              ...activeDoc.page2,
-                                              mentorNote: {
-                                                ...activeDoc.page2.mentorNote,
-                                                signature: e.target.value,
+                                  ) && (() => {
+                                    const signatureLen =
+                                      activeDoc.page2.mentorNote.signature
+                                        .length;
+                                    const isSignatureOver =
+                                      signatureLen > MENTOR_SIGNATURE_MAX_CHARS;
+                                    return (
+                                      <label className="block space-y-1">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="text-[11px] font-medium text-zinc-500">
+                                            Подпись
+                                          </span>
+                                          <span
+                                            data-mentor-counter="signature"
+                                            className={`text-[10px] font-mono tabular-nums font-semibold ${
+                                              isSignatureOver
+                                                ? 'text-amber-700'
+                                                : 'text-zinc-400'
+                                            }`}
+                                          >
+                                            {signatureLen}/
+                                            {MENTOR_SIGNATURE_MAX_CHARS}
+                                          </span>
+                                        </div>
+                                        <AutoResizeTextarea
+                                          minRows={1}
+                                          value={
+                                            activeDoc.page2.mentorNote.signature
+                                          }
+                                          onChange={(e) =>
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page2: {
+                                                ...activeDoc.page2,
+                                                mentorNote: {
+                                                  ...activeDoc.page2.mentorNote,
+                                                  signature: e.target.value,
+                                                },
                                               },
-                                            },
-                                          })
-                                        }
-                                        placeholder="Твой наставник..."
-                                        className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-700 leading-relaxed focus:outline-none focus:bg-white focus:border-[#0D9488]"
-                                      />
-                                    </label>
-                                  )}
+                                            })
+                                          }
+                                          placeholder="Твой наставник..."
+                                          className={`w-full px-2.5 py-1.5 rounded-md border text-xs font-medium text-zinc-700 leading-relaxed focus:outline-none transition-colors ${
+                                            isSignatureOver
+                                              ? 'border-amber-500 ring-1 ring-amber-500/30 bg-amber-50/40 focus:border-amber-500'
+                                              : 'border-zinc-200 bg-zinc-50/50 focus:bg-white focus:border-[#0D9488]'
+                                          }`}
+                                        />
+                                        {isSignatureOver && (
+                                          <p
+                                            data-mentor-warning="signature"
+                                            className="text-[10px] font-medium text-amber-700"
+                                          >
+                                            Превышена рекомендуемая длина (
+                                            {MENTOR_SIGNATURE_MAX_CHARS} симв.) —
+                                            подпись может перенестись на несколько строк.
+                                          </p>
+                                        )}
+                                      </label>
+                                    );
+                                  })()}
                                 </div>
 
                                 {/* 4. Что интересного впереди? */}

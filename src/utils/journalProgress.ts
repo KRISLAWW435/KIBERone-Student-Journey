@@ -26,6 +26,9 @@ import {
 } from '../types/journal';
 
 export const STRENGTH_EXAMPLE_MAX_CHARS = 180;
+export const MENTOR_GREETING_MAX_CHARS = 60;
+export const MENTOR_BODY_MAX_CHARS = 280;
+export const MENTOR_SIGNATURE_MAX_CHARS = 50;
 export const MAX_PAGE1_MODULES = 6;
 export const MAX_PAGE1_PROJECTS = 6;
 export const PAGE1_CARD_LIMIT_MESSAGE =
@@ -93,10 +96,10 @@ export function computeActiveModuleSuggestedSkillIds(
 }
 
 export const UNIVERSAL_PRIDE_TEMPLATES: string[] = [
-  'Успешно защитил(а) проект перед группой',
-  'Самостоятельно нашёл(ла) и исправил(а) ошибку в коде',
-  'Довёл(а) сложный проект до рабочего результата',
-  'Помогал(а) одногруппникам и уверенно отвечал(а) на вопросы',
+  'Уверенная защита собственного проекта перед группой',
+  'Самостоятельный поиск и исправление ошибки в коде',
+  'Сложный проект доведён до рабочего результата',
+  'Активная помощь одногруппникам и уверенные ответы на вопросы',
 ];
 
 const MODULE_PRIDE_TEMPLATE_RULES: Array<{
@@ -107,45 +110,45 @@ const MODULE_PRIDE_TEMPLATE_RULES: Array<{
   {
     keywords: ['python', 'pygame', 'turtle'],
     templates: [
-      'Написал(а) первый код на Python',
-      'Создал(а) мини-игру на Python',
+      'Написан первый рабочий код на Python',
+      'Среди результатов — собственная мини-игра на Python',
     ],
   },
   {
     keywords: ['roblox', 'роблокс'],
     templates: [
-      'Разработал(а) собственную карту в Roblox',
-      'Настроил(а) игровые механики и объекты в Roblox Studio',
+      'Создана собственная игровая карта в Roblox',
+      'Самостоятельно настроены игровые механики и объекты в Roblox Studio',
     ],
   },
   {
     keywords: ['figma', 'дизайн', 'design', 'photoshop', 'blender', 'tinkercad', 'spline', 'aseprite'],
     categories: ['design-3d'],
     templates: [
-      'Создал(а) свой первый сайт в Figma',
-      'Собрал(а) авторскую 3D-модель и продумал(а) композицию',
+      'Создан первый макет сайта в Figma',
+      'Собрана авторская 3D-модель с продуманной композицией',
     ],
   },
   {
     keywords: ['minecraft', 'scratch', 'kodu', 'construct', 'godot', 'unity', 'unreal', 'геймдизайн'],
     categories: ['games'],
     templates: [
-      'Создал(а) собственную игру с уровнями и правилами',
-      'Продумал(а) и протестировал(а) логику игровых персонажей',
+      'Создана собственная игра с уровнями и правилами',
+      'Продумана и протестирована логика игровых персонажей',
     ],
   },
   {
     keywords: ['html', 'css', 'javascript', 'typescript', 'tilda', 'лендинг'],
     categories: ['web-mobile'],
     templates: [
-      'Сверстал(а) и оформил(а) собственную веб-страницу',
+      'Свёрстана и оформлена собственная веб-страница',
     ],
   },
   {
     keywords: ['ai', 'ии', 'нейросет', 'prompt', 'вайбкодинг', 'kodik'],
     categories: ['ai'],
     templates: [
-      'Освоил(а) работу с нейросетями и применил(а) ИИ в проекте',
+      'Освоены нейросети и применены AI-инструменты в проекте',
     ],
   },
 ];
@@ -157,10 +160,10 @@ export function getPrideTemplatesForModules(modules: ModuleItem[]): string[] {
   if (activeMods.length === 0) {
     // Общий список, если модули пока не выбраны
     [
-      'Написал(а) первый код на Python',
-      'Создал(а) мини-игру',
-      'Разработал(а) собственную карту в Roblox',
-      'Создал(а) свой первый сайт в Figma',
+      'Написан первый рабочий код на Python',
+      'Среди результатов — собственная мини-игра',
+      'Создана собственная игровая карта в Roblox',
+      'Создан первый макет сайта в Figma',
       ...UNIVERSAL_PRIDE_TEMPLATES,
     ].forEach((t) => picked.add(t));
     return Array.from(picked);

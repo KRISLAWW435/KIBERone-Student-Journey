@@ -573,8 +573,8 @@ test.describe('Задача №40: Аудит изменения размеро�
 
     // --- Г) Заполним полностью Стр. 2 и проверим PDF экспорт при максимальном заполнении ---
     await inspectorNav.getByRole('button', { name: /4\. Успехи/ }).click();
-    await rightSidebar.getByRole('button', { name: 'Любознательность' }).click();
-    await rightSidebar.getByRole('button', { name: 'Логика' }).click();
+    await rightSidebar.getByRole('button', { name: 'Любознательность', exact: true }).click();
+    await rightSidebar.getByRole('button', { name: 'Логика', exact: true }).click();
     await rightSidebar
       .getByPlaceholder('Чем ученик может гордиться по итогам периода?')
       .fill('Собрала все 6 модулей и защитила 6 проектов на отлично!');

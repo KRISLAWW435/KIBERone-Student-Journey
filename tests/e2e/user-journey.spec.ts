@@ -432,7 +432,9 @@ test.describe('Полный пользовательский путь KIBERone S
     });
     await inspectorNav.getByRole('button', { name: /5\. Письмо/ }).click();
 
-    const greetingField = page.getByPlaceholder('Саша, ты отлично поработал!');
+    const greetingField = page.getByPlaceholder(
+      'Дарья, отличный результат за этот период!'
+    );
     await expect(greetingField).toHaveJSProperty('tagName', 'TEXTAREA');
     const greetingInitialBox = await greetingField.boundingBox();
     await greetingField.fill('Привет!\nСтрока 2\nСтрока 3\nСтрока 4');
