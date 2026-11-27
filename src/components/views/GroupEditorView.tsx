@@ -616,6 +616,9 @@ export function GroupEditorView({
         setDesignTargetPage(tourDirective.pageFocus);
       }
     }
+    if (tourDirective.designPage) {
+      setDesignTargetPage(tourDirective.designPage);
+    }
     if (tourDirective.selectBlockId) {
       setActiveTarget({
         page: tourDirective.pageFocus === 2 ? 2 : 1,
@@ -2725,6 +2728,7 @@ export function GroupEditorView({
         <div className="flex items-center gap-6 h-full shrink-0">
           <button
             type="button"
+            data-tour-id="editor-common-tab"
             onClick={() => setEditorTab('common')}
             className={`h-full inline-flex items-center gap-1.5 px-1 border-b-2 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
               editorTab === 'common'
@@ -2771,7 +2775,10 @@ export function GroupEditorView({
           )}
 
           {editorTab === 'individual' && activeDoc && (
-            <div className="inline-flex items-center gap-1 mr-1 border border-zinc-200 rounded-lg p-0.5 bg-zinc-50/70 shrink-0">
+            <div
+              data-tour-id="editor-undo-redo"
+              className="inline-flex items-center gap-1 mr-1 border border-zinc-200 rounded-lg p-0.5 bg-zinc-50/70 shrink-0"
+            >
               <button
                 type="button"
                 disabled={!canUndo}
@@ -3685,7 +3692,10 @@ export function GroupEditorView({
                       </label>
                     </div>
 
-                    <div className="pt-5 border-t border-zinc-200/80 space-y-3">
+                    <div
+                      data-tour-id="editor-palette-card"
+                      className="pt-5 border-t border-zinc-200/80 space-y-3"
+                    >
                       <div className="inline-flex items-center gap-1.5 font-semibold text-zinc-700">
                         <Palette className="w-3.5 h-3.5 text-[#0D9488]" />
                         <span>Палитра оформления листов А4</span>
@@ -3733,7 +3743,10 @@ export function GroupEditorView({
 
                 {/* STEP 2: MODULES (2-COLUMN FLAT GRID + IMAGE THUMBNAIL & CROP/ZOOM) */}
                 {commonStep === 2 && (
-                  <section className="space-y-6 text-xs">
+                  <section
+                    data-tour-id="editor-common-modules"
+                    className="space-y-6 text-xs"
+                  >
                     <div className="pb-4 border-b border-zinc-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <h3 className="text-sm font-bold text-zinc-900">
@@ -4740,7 +4753,10 @@ export function GroupEditorView({
               {/* Slim Canvas Controls Bar */}
               <div className="h-11 shrink-0 bg-white/95 border-b border-zinc-200/80 px-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="flex items-center gap-1">
+                  <div
+                    data-tour-id="editor-page-switcher"
+                    className="flex items-center gap-1"
+                  >
                     <button
                       type="button"
                       onClick={() => setPageFocus(1)}
@@ -5860,7 +5876,10 @@ export function GroupEditorView({
                             </div>
 
                             {/* Global Design Scope 3-way Switcher */}
-                            <div className="pt-2 border-t border-zinc-100 space-y-2">
+                            <div
+                              data-tour-id="editor-design-apply"
+                              className="pt-2 border-t border-zinc-100 space-y-2"
+                            >
                               <div className="flex items-center justify-between gap-2">
                                 <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
                                   Область применения дизайна
@@ -5947,7 +5966,10 @@ export function GroupEditorView({
                           </div>
 
                           {/* Add Elements Toolbar (+ Text, + Sticker, + Image, + Icon) */}
-                          <div className="bg-white border border-zinc-200 rounded-lg p-3 space-y-2.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)]">
+                          <div
+                            data-tour-id="editor-design-add"
+                            className="bg-white border border-zinc-200 rounded-lg p-3 space-y-2.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)]"
+                          >
                             <div className="text-[11px] font-bold text-zinc-800">
                               Добавить на страницу {effectiveDesignPage}
                             </div>

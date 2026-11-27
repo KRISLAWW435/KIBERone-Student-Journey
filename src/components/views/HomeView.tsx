@@ -376,7 +376,12 @@ export function HomeView({
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1 shrink-0">
+                        <div
+                          data-tour-id={
+                            groupIndex === 0 ? 'home-group-edit' : undefined
+                          }
+                          className="flex items-center gap-1 shrink-0"
+                        >
                           <button
                             type="button"
                             onClick={() => setGroupModal({ ...group })}
@@ -666,6 +671,9 @@ export function HomeView({
                       <div className="grid grid-cols-3 gap-1.5">
                         <button
                           type="button"
+                          data-tour-id={
+                            groupIndex === 0 ? 'home-add-student' : undefined
+                          }
                           onClick={() => {
                             setDeleteStudentBar(null);
                             setAddStudentGroupId(

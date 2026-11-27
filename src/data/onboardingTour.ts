@@ -9,6 +9,7 @@ export interface EditorTourDirective {
   inspectorMode?: 'content' | 'design';
   inspectorStep?: 'profile' | 'curriculum' | 'projects' | 'pride' | 'mentorNote';
   pageFocus?: 1 | 2 | 'spread';
+  designPage?: 1 | 2;
   selectBlockId?: string | null;
 }
 
@@ -28,6 +29,7 @@ export interface OnboardingStepConfig {
   emptyDataNote?: string;
   editorDirective?: Omit<EditorTourDirective, 'nonce'>;
   previewLayout?: 'spread' | 'page1' | 'page2';
+  scrollIntoView?: boolean;
 }
 
 export const ONBOARDING_STEPS: OnboardingStepConfig[] = [

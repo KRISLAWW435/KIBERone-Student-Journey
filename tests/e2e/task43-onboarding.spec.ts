@@ -155,9 +155,13 @@ test.describe('Задача №43: Интерактивное обучение K
     await expect(page.getByRole('heading', { name: 'Дашборд наставника' })).toBeVisible();
     await expect(page.getByTestId('onboarding-welcome-screen')).toHaveCount(0);
 
-    // Перезапуск обучения через кнопку помощи «?»
+    // Перезапуск обучения через кнопку помощи «?» -> Центр помощи -> Пройти обучение заново
     await page.locator('[data-tour-id="help-trigger"]').click();
-    await page.getByRole('button', { name: 'Повторить тур с приветствия' }).click();
+    await expect(page.getByTestId('help-center-modal')).toBeVisible();
+    await page
+      .getByTestId('help-center-modal')
+      .getByRole('button', { name: 'Пройти обучение заново' })
+      .click();
     await expect(page.getByTestId('onboarding-welcome-screen')).toBeVisible();
     await page.getByTestId('onboarding-welcome-screen').getByRole('button', { name: 'Пропустить' }).click();
     await expect(page.getByTestId('onboarding-welcome-screen')).toHaveCount(0);

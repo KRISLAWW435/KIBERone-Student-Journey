@@ -14,7 +14,12 @@ import {
   hasCompletedOnboarding,
   markOnboardingCompleted,
   ONBOARDING_STEPS,
+  OnboardingStepConfig,
 } from './data/onboardingTour';
+import {
+  HelpCenterLocation,
+  HelpCenterModal,
+} from './components/onboarding/HelpCenterModal';
 import {
   HelpMenuButton,
   OnboardingTourOverlay,
@@ -122,10 +127,16 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Onboarding Welcome & Interactive Tour state (localStorage persisted, zero data mutation)
+  // Onboarding Welcome, Help Center & Interactive Tour state (localStorage persisted, zero data mutation)
   const [onboardingPhase, setOnboardingPhase] = useState<
     'closed' | 'welcome' | 'tour'
   >(() => (hasCompletedOnboarding() ? 'closed' : 'welcome'));
+  const [helpCenterOpen, setHelpCenterOpen] = useState(false);
+  const [helpCenterLocation, setHelpCenterLocation] =
+    useState<HelpCenterLocation>({ kind: 'home' });
+  const [activeTourSteps, setActiveTourSteps] =
+    useState<OnboardingStepConfig[]>(ONBOARDING_STEPS);
+  const [tourOrigin, setTourOrigin] = useState<'full' | 'help'>('full');
   const [tourStepIndex, setTourStepIndex] = useState(0);
   const [editorTourDirective, setEditorTourDirective] =
     useState<EditorTourDirective | null>(null);
@@ -1227,12 +1238,10 @@ export default function App() {
   };
 
   const applyTourStepView = useCallback(
-    (stepIdx: number) => {
-      const clampedIdx = Math.max(
-        0,
-        Math.min(ONBOARDING_STEPS.length - 1, stepIdx)
-      );
-      const step = ONBOARDING_STEPS[clampedIdx];
+    (stepIdx: number, stepsList: OnboardingStepConfig[] = activeTourSteps) => {
+      const safeSteps = stepsList.length > 0 ? stepsList : ONBOARDING_STEPS;
+      const clampedIdx = Math.max(0, Math.min(safeSteps.length - 1, stepIdx));
+      const step = safeSteps[clampedIdx];
       setTourStepIndex(clampedIdx);
 
       if (step.requiresExistingGroup) {
@@ -1292,37 +1301,68 @@ export default function App() {
 
       setRoute(step.route);
     },
-    [activeGroupId, activeId, groups, journals, residents]
+    [activeGroupId, activeId, activeTourSteps, groups, journals, residents]
   );
 
+  const handleOpenHelpCenter = useCallback(() => {
+    setHelpCenterLocation({ kind: 'home' });
+    setHelpCenterOpen(true);
+  }, []);
+
   const handleOpenWelcomeFromHelp = useCallback(() => {
+    setHelpCenterOpen(false);
+    setTourOrigin('full');
+    setActiveTourSteps(ONBOARDING_STEPS);
     tourReturnRouteRef.current = route;
     setOnboardingPhase('welcome');
   }, [route]);
 
   const handleStartTourFromWelcome = useCallback(() => {
+    setTourOrigin('full');
+    setActiveTourSteps(ONBOARDING_STEPS);
     setOnboardingPhase('tour');
-    applyTourStepView(0);
+    applyTourStepView(0, ONBOARDING_STEPS);
   }, [applyTourStepView]);
 
   const handleJumpToTourStep = useCallback(
     (stepIdx: number) => {
+      setHelpCenterOpen(false);
+      setTourOrigin('full');
+      setActiveTourSteps(ONBOARDING_STEPS);
       tourReturnRouteRef.current = route;
       setOnboardingPhase('tour');
-      applyTourStepView(stepIdx);
+      applyTourStepView(stepIdx, ONBOARDING_STEPS);
+    },
+    [applyTourStepView, route]
+  );
+
+  const handleStartMiniTourFromHelp = useCallback(
+    (steps: OnboardingStepConfig[], returnLocation: HelpCenterLocation) => {
+      const miniSteps = steps.length > 0 ? steps : ONBOARDING_STEPS;
+      tourReturnRouteRef.current = route;
+      setHelpCenterLocation(returnLocation);
+      setHelpCenterOpen(false);
+      setTourOrigin('help');
+      setActiveTourSteps(miniSteps);
+      setOnboardingPhase('tour');
+      applyTourStepView(0, miniSteps);
     },
     [applyTourStepView, route]
   );
 
   const handleCloseOrFinishOnboarding = useCallback(() => {
     const wasInTour = onboardingPhase === 'tour';
+    const wasFromHelp = tourOrigin === 'help';
     markOnboardingCompleted();
     setOnboardingPhase('closed');
     setPreviewTourLayout(null);
     if (wasInTour && route !== tourReturnRouteRef.current) {
       setRoute(tourReturnRouteRef.current);
     }
-  }, [onboardingPhase, route]);
+    if (wasInTour && wasFromHelp) {
+      setHelpCenterOpen(true);
+    }
+  }, [onboardingPhase, route, tourOrigin]);
 
   if (loading) {
     return (
@@ -1367,6 +1407,7 @@ export default function App() {
             openCreateGroupSignal={createGroupSignal}
             helpTrigger={
               <HelpMenuButton
+                onOpenHelpCenter={handleOpenHelpCenter}
                 onStartWelcome={handleOpenWelcomeFromHelp}
                 onJumpToStep={handleJumpToTourStep}
               />
@@ -1406,6 +1447,7 @@ export default function App() {
             }
             helpTrigger={
               <HelpMenuButton
+                onOpenHelpCenter={handleOpenHelpCenter}
                 onStartWelcome={handleOpenWelcomeFromHelp}
                 onJumpToStep={handleJumpToTourStep}
               />
@@ -1427,6 +1469,7 @@ export default function App() {
             }
             helpTrigger={
               <HelpMenuButton
+                onOpenHelpCenter={handleOpenHelpCenter}
                 onStartWelcome={handleOpenWelcomeFromHelp}
                 onJumpToStep={handleJumpToTourStep}
               />
@@ -1496,6 +1539,7 @@ export default function App() {
             helpTrigger={
               <HelpMenuButton
                 compact
+                onOpenHelpCenter={handleOpenHelpCenter}
                 onStartWelcome={handleOpenWelcomeFromHelp}
                 onJumpToStep={handleJumpToTourStep}
               />
@@ -1532,6 +1576,7 @@ export default function App() {
               <HelpMenuButton
                 variant="dark"
                 compact
+                onOpenHelpCenter={handleOpenHelpCenter}
                 onStartWelcome={handleOpenWelcomeFromHelp}
                 onJumpToStep={handleJumpToTourStep}
               />
@@ -1539,6 +1584,16 @@ export default function App() {
           />
         )}
       </div>
+
+      {/* HELP CENTER MODAL */}
+      {helpCenterOpen && (
+        <HelpCenterModal
+          initialLocation={helpCenterLocation}
+          onStartFullOnboarding={handleOpenWelcomeFromHelp}
+          onStartMiniTour={handleStartMiniTourFromHelp}
+          onClose={() => setHelpCenterOpen(false)}
+        />
+      )}
 
       {/* ONBOARDING WELCOME SCREEN & INTERACTIVE TOUR */}
       {onboardingPhase === 'welcome' && (
@@ -1551,9 +1606,11 @@ export default function App() {
       {onboardingPhase === 'tour' && (
         <OnboardingTourOverlay
           stepIndex={tourStepIndex}
+          steps={activeTourSteps}
+          isMiniTutorial={tourOrigin === 'help'}
           hasGroupData={groups.length > 0 && journals.length > 0}
-          onNext={() => applyTourStepView(tourStepIndex + 1)}
-          onPrev={() => applyTourStepView(tourStepIndex - 1)}
+          onNext={() => applyTourStepView(tourStepIndex + 1, activeTourSteps)}
+          onPrev={() => applyTourStepView(tourStepIndex - 1, activeTourSteps)}
           onSkip={handleCloseOrFinishOnboarding}
           onFinish={handleCloseOrFinishOnboarding}
         />

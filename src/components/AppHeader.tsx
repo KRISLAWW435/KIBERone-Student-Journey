@@ -88,6 +88,7 @@ export function AppHeader({
       <div className="flex items-center gap-2.5 shrink-0">
         <button
           type="button"
+          data-tour-id="media-trigger"
           onClick={onOpenMediaLibrary}
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 text-xs font-medium text-zinc-700 transition-colors whitespace-nowrap shrink-0"
         >
@@ -98,6 +99,7 @@ export function AppHeader({
         {onOpenSettings && (
           <button
             type="button"
+            data-tour-id="backup-trigger"
             onClick={onOpenSettings}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 text-xs font-medium text-zinc-700 transition-colors whitespace-nowrap shrink-0"
             title="Настройки и резервное копирование"

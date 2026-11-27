@@ -221,6 +221,7 @@ interface OnboardingTourOverlayProps {
   stepIndex: number;
   steps?: OnboardingStepConfig[];
   hasGroupData: boolean;
+  isMiniTutorial?: boolean;
   onNext: () => void;
   onPrev: () => void;
   onSkip: () => void;
@@ -231,6 +232,7 @@ export function OnboardingTourOverlay({
   stepIndex,
   steps = ONBOARDING_STEPS,
   hasGroupData,
+  isMiniTutorial = false,
   onNext,
   onPrev,
   onSkip,
@@ -292,6 +294,20 @@ export function OnboardingTourOverlay({
     }
     setRects(nextRects);
   }, [step, hasGroupData]);
+
+  useEffect(() => {
+    if (step.scrollIntoView) {
+      const scrollTimer = window.setTimeout(() => {
+        const el = document.querySelector(step.targetSelector);
+        if (el && typeof el.scrollIntoView === 'function') {
+          el.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior });
+        }
+        measureTargets();
+      }, 60);
+      return () => window.clearTimeout(scrollTimer);
+    }
+    return undefined;
+  }, [step, measureTargets]);
 
   useEffect(() => {
     measureTargets();
@@ -545,7 +561,7 @@ export function OnboardingTourOverlay({
               onClick={onSkip}
               className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors cursor-pointer"
             >
-              Пропустить
+              {isMiniTutorial ? 'В центр помощи' : 'Пропустить'}
             </button>
 
             <div className="flex items-center gap-2">
@@ -564,7 +580,13 @@ export function OnboardingTourOverlay({
                 onClick={isLast ? onFinish : onNext}
                 className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
               >
-                <span>{isLast ? 'Завершить' : 'Далее'}</span>
+                <span>
+                  {isLast
+                    ? isMiniTutorial
+                      ? 'Завершить и вернуться'
+                      : 'Завершить'
+                    : 'Далее'}
+                </span>
                 {!isLast && <ArrowRight className="w-3.5 h-3.5" />}
               </button>
             </div>
@@ -578,6 +600,7 @@ export function OnboardingTourOverlay({
 interface HelpMenuButtonProps {
   variant?: 'light' | 'dark';
   compact?: boolean;
+  onOpenHelpCenter?: () => void;
   onStartWelcome: () => void;
   onJumpToStep: (stepIndex: number) => void;
 }
@@ -585,6 +608,7 @@ interface HelpMenuButtonProps {
 export function HelpMenuButton({
   variant = 'light',
   compact = false,
+  onOpenHelpCenter,
   onStartWelcome,
   onJumpToStep,
 }: HelpMenuButtonProps) {
@@ -595,9 +619,15 @@ export function HelpMenuButton({
       <button
         type="button"
         data-tour-id="help-trigger"
-        onClick={() => setOpen((v) => !v)}
-        aria-label="Обучение и помощь"
-        title="Повторить обучение и подсказки"
+        onClick={() => {
+          if (onOpenHelpCenter) {
+            onOpenHelpCenter();
+          } else {
+            setOpen((v) => !v);
+          }
+        }}
+        aria-label="Центр помощи и обучение"
+        title="Открыть центр помощи"
         className={
           variant === 'dark'
             ? 'inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-semibold transition-colors cursor-pointer'
@@ -616,7 +646,7 @@ export function HelpMenuButton({
         </span>
       </button>
 
-      {open && (
+      {open && !onOpenHelpCenter && (
         <>
           <div
             className="fixed inset-0 z-40"
