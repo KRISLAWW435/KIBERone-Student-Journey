@@ -826,45 +826,124 @@ export async function exportFullBackupPayload(): Promise<FullBackupPayload> {
   };
 }
 
+export const STORAGE_DB_NAME = DB_NAME;
+export const STORAGE_DB_VERSION = DB_VERSION;
+
+const ALL_OBJECT_STORES = [
+  STORE_BRANCHES,
+  STORE_GROUPS,
+  STORE_RESIDENTS,
+  STORE_JOURNALS,
+  STORE_MODULE_LIBRARY,
+  STORE_MODULE_CATEGORIES,
+  STORE_SKILL_LIBRARY,
+  STORE_GROUP_TEMPLATES,
+  STORE_TEMPLATES,
+  STORE_MEDIA,
+] as const;
+
+export async function clearAllDatabaseStores(): Promise<void> {
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([...ALL_OBJECT_STORES], 'readwrite');
+    for (const storeName of ALL_OBJECT_STORES) {
+      if (db.objectStoreNames.contains(storeName)) {
+        tx.objectStore(storeName).clear();
+      }
+    }
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error('Не удалось очистить IndexedDB'));
+    tx.onabort = () => reject(tx.error ?? new Error('Транзакция очистки IndexedDB прервана'));
+  });
+}
+
+export async function replaceAllStoresFromBackup(
+  payload: Partial<FullBackupPayload>
+): Promise<{ journalsCount: number }> {
+  const db = await openDatabase();
+  const journals = Array.isArray(payload.journals) ? payload.journals : [];
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([...ALL_OBJECT_STORES], 'readwrite');
+
+    const replaceStore = <T>(
+      storeName: string,
+      items: T[] | undefined,
+      filterFn?: (item: T) => boolean
+    ) => {
+      if (!Array.isArray(items) || !db.objectStoreNames.contains(storeName)) return;
+      const store = tx.objectStore(storeName);
+      store.clear();
+      const filtered = filterFn ? items.filter(filterFn) : items;
+      for (const item of filtered) {
+        store.put(item);
+      }
+    };
+
+    replaceStore(STORE_BRANCHES, payload.branches);
+    replaceStore(STORE_GROUPS, payload.groups);
+    replaceStore(STORE_RESIDENTS, payload.residents);
+    replaceStore(STORE_JOURNALS, journals);
+    replaceStore(STORE_MODULE_LIBRARY, payload.moduleLibrary);
+    replaceStore(STORE_MODULE_CATEGORIES, payload.categories);
+    replaceStore(STORE_SKILL_LIBRARY, payload.skillsCatalog);
+    replaceStore(STORE_GROUP_TEMPLATES, payload.groupTemplates);
+    replaceStore(STORE_TEMPLATES, payload.templates, (t) => !t.isBuiltIn);
+    replaceStore(STORE_MEDIA, payload.media, (m) => !m.isBuiltIn);
+
+    tx.oncomplete = () => resolve({ journalsCount: journals.length });
+    tx.onerror = () => reject(tx.error ?? new Error('Не удалось записать данные резервной копии'));
+    tx.onabort = () => reject(tx.error ?? new Error('Восстановление данных прервано'));
+  });
+}
+
+export async function mergeIntoStoresFromBackup(
+  payload: Partial<FullBackupPayload>
+): Promise<{ journalsCount: number }> {
+  const db = await openDatabase();
+  const journals = Array.isArray(payload.journals) ? payload.journals : [];
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([...ALL_OBJECT_STORES], 'readwrite');
+
+    const upsertStore = <T>(
+      storeName: string,
+      items: T[] | undefined,
+      filterFn?: (item: T) => boolean
+    ) => {
+      if (!Array.isArray(items) || items.length === 0 || !db.objectStoreNames.contains(storeName)) {
+        return;
+      }
+      const store = tx.objectStore(storeName);
+      const filtered = filterFn ? items.filter(filterFn) : items;
+      for (const item of filtered) {
+        store.put(item);
+      }
+    };
+
+    upsertStore(STORE_BRANCHES, payload.branches);
+    upsertStore(STORE_GROUPS, payload.groups);
+    upsertStore(STORE_RESIDENTS, payload.residents);
+    upsertStore(STORE_JOURNALS, journals);
+    upsertStore(STORE_MODULE_LIBRARY, payload.moduleLibrary);
+    upsertStore(STORE_MODULE_CATEGORIES, payload.categories);
+    upsertStore(STORE_SKILL_LIBRARY, payload.skillsCatalog);
+    upsertStore(STORE_GROUP_TEMPLATES, payload.groupTemplates);
+    upsertStore(STORE_TEMPLATES, payload.templates, (t) => !t.isBuiltIn);
+    upsertStore(STORE_MEDIA, payload.media, (m) => !m.isBuiltIn);
+
+    tx.oncomplete = () => resolve({ journalsCount: journals.length });
+    tx.onerror = () =>
+      reject(tx.error ?? new Error('Не удалось объединить данные в IndexedDB'));
+    tx.onabort = () =>
+      reject(tx.error ?? new Error('Транзакция объединения данных прервана'));
+  });
+}
+
 export async function restoreFullBackupPayload(
   payload: Partial<FullBackupPayload>
 ): Promise<{ journalsCount: number }> {
-  const journals = Array.isArray(payload.journals) ? payload.journals : [];
-  await Promise.all([
-    ...(Array.isArray(payload.branches)
-      ? payload.branches.map((b) => putItem(STORE_BRANCHES, b))
-      : []),
-    ...journals.map((j) => putItem(STORE_JOURNALS, j)),
-    ...(Array.isArray(payload.groups)
-      ? payload.groups.map((g) => putItem(STORE_GROUPS, g))
-      : []),
-    ...(Array.isArray(payload.residents)
-      ? payload.residents.map((r) => putItem(STORE_RESIDENTS, r))
-      : []),
-    ...(Array.isArray(payload.moduleLibrary)
-      ? payload.moduleLibrary.map((m) => putItem(STORE_MODULE_LIBRARY, m))
-      : []),
-    ...(Array.isArray(payload.categories)
-      ? payload.categories.map((c) => putItem(STORE_MODULE_CATEGORIES, c))
-      : []),
-    ...(Array.isArray(payload.skillsCatalog)
-      ? payload.skillsCatalog.map((s) => putItem(STORE_SKILL_LIBRARY, s))
-      : []),
-    ...(Array.isArray(payload.groupTemplates)
-      ? payload.groupTemplates.map((gt) => putItem(STORE_GROUP_TEMPLATES, gt))
-      : []),
-    ...(Array.isArray(payload.templates)
-      ? payload.templates
-          .filter((t) => !t.isBuiltIn)
-          .map((t) => putItem(STORE_TEMPLATES, t))
-      : []),
-    ...(Array.isArray(payload.media)
-      ? payload.media
-          .filter((m) => !m.isBuiltIn)
-          .map((m) => putItem(STORE_MEDIA, m))
-      : []),
-  ]);
-  return { journalsCount: journals.length };
+  return replaceAllStoresFromBackup(payload);
 }
 
 export { formatGroupPeriod };

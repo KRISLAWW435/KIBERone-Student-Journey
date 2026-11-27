@@ -31,7 +31,6 @@ import {
   deleteResident,
   deleteSkillDefinition,
   deleteTemplate,
-  exportFullBackupPayload,
   getAllBranches,
   getAllCategories,
   getAllGroups,
@@ -42,7 +41,6 @@ import {
   getAllResidents,
   getAllSkillsCatalog,
   getAllTemplates,
-  restoreFullBackupPayload,
   saveBranch,
   saveCategory,
   saveGroup,
@@ -54,6 +52,16 @@ import {
   saveSkillDefinition,
   saveTemplate,
 } from './db/storage';
+import {
+  createBackupZipBlob,
+  requestPersistentStorage,
+} from './utils/backupService';
+import {
+  AnalyzedBackupImport,
+  ConflictResolutionChoice,
+  executeAnalyzedBackupImport,
+  restoreFromLastAutoSafetyBackup,
+} from './utils/backupMerge';
 import {
   Branch,
   BulkDesignUndoState,
@@ -258,6 +266,7 @@ export default function App() {
       .finally(() => {
         if (mounted) setLoading(false);
       });
+    void requestPersistentStorage();
     return () => {
       mounted = false;
     };
@@ -1104,78 +1113,112 @@ export default function App() {
     showToast('Шаблон удалён');
   };
 
-  // Full JSON backup & restore
+  const reloadAllStoresFromIdb = useCallback(async () => {
+    const [
+      refreshedBranches,
+      refreshedJournals,
+      refreshedGroups,
+      refreshedResidents,
+      refreshedModules,
+      refreshedCategories,
+      refreshedSkills,
+      refreshedGroupTemplates,
+      refreshedTemplates,
+      refreshedMedia,
+    ] = await Promise.all([
+      getAllBranches(),
+      getAllJournals(),
+      getAllGroups(),
+      getAllResidents(),
+      getAllLibraryModules(),
+      getAllCategories(),
+      getAllSkillsCatalog(),
+      getAllGroupTemplates(),
+      getAllTemplates(),
+      getAllMediaAssets(),
+    ]);
+
+    setBranches(refreshedBranches);
+    setJournals(refreshedJournals);
+    setGroups(refreshedGroups);
+    setResidents(refreshedResidents);
+    setLibraryModules(refreshedModules);
+    setCategories(refreshedCategories);
+    setSkillsCatalog(refreshedSkills);
+    setGroupTemplates(refreshedGroupTemplates);
+    setTemplates(refreshedTemplates);
+    setMediaAssets(refreshedMedia);
+    setActiveGroupId((prev) =>
+      prev && refreshedGroups.some((g) => g.id === prev)
+        ? prev
+        : refreshedGroups[0]?.id ?? null
+    );
+    setActiveId((prev) =>
+      prev && refreshedJournals.some((j) => j.id === prev)
+        ? prev
+        : refreshedJournals[0]?.id ?? null
+    );
+    setBulkDesignUndo(null);
+    setSaveState('saved');
+    setOnboardingPhase(hasCompletedOnboarding() ? 'closed' : 'welcome');
+
+    return {
+      groupsCount: refreshedGroups.length,
+      residentsCount: refreshedResidents.length,
+      journalsCount: refreshedJournals.length,
+    };
+  }, []);
+
+  // Full ZIP backup & 3-mode restore/merge
   const handleExportAllBackup = async () => {
-    const payload = await exportFullBackupPayload();
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: 'application/json',
-    });
+    await flushPendingSaves();
+    const { blob, filename, manifest } = await createBackupZipBlob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `kiberone-student-journey-backup-${new Date()
-      .toISOString()
-      .slice(0, 10)}.json`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-    showToast('Полная резервная копия JSON скачана');
+    showToast(
+      `Резервная копия ZIP создана (групп: ${manifest.counts.groups}, журналов: ${manifest.counts.journals}, изображений: ${manifest.counts.extractedImages})`
+    );
   };
 
-  const handleImportBackup = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const parsed = JSON.parse(String(reader.result));
-        if (Array.isArray(parsed)) {
-          await Promise.all(parsed.map((j: JournalDocument) => saveJournal(j)));
-        } else if (parsed?.id && parsed?.resident) {
-          await saveJournal(parsed);
-        } else {
-          await restoreFullBackupPayload(parsed);
-        }
+  const handleExecuteBackupImport = async (
+    analysis: AnalyzedBackupImport,
+    conflictChoices: Record<string, ConflictResolutionChoice>
+  ) => {
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    pendingSaveMapRef.current.clear();
 
-        const [
-          refreshedBranches,
-          refreshedJournals,
-          refreshedGroups,
-          refreshedResidents,
-          refreshedModules,
-          refreshedCategories,
-          refreshedSkills,
-          refreshedGroupTemplates,
-          refreshedTemplates,
-          refreshedMedia,
-        ] = await Promise.all([
-          getAllBranches(),
-          getAllJournals(),
-          getAllGroups(),
-          getAllResidents(),
-          getAllLibraryModules(),
-          getAllCategories(),
-          getAllSkillsCatalog(),
-          getAllGroupTemplates(),
-          getAllTemplates(),
-          getAllMediaAssets(),
-        ]);
+    const outcome = await executeAnalyzedBackupImport(analysis, conflictChoices);
+    const refreshed = await reloadAllStoresFromIdb();
 
-        setBranches(refreshedBranches);
-        setJournals(refreshedJournals);
-        setGroups(refreshedGroups);
-        setResidents(refreshedResidents);
-        setLibraryModules(refreshedModules);
-        setCategories(refreshedCategories);
-        setSkillsCatalog(refreshedSkills);
-        setGroupTemplates(refreshedGroupTemplates);
-        setTemplates(refreshedTemplates);
-        setMediaAssets(refreshedMedia);
-        showToast(
-          `База данных восстановлена (групп: ${refreshedGroups.length}, журналов: ${refreshedJournals.length})`
-        );
-      } catch {
-        showToast('Ошибка чтения резервной копии JSON');
-      }
-    };
-    reader.readAsText(file);
+    const modeLabel =
+      outcome.mode === 'replace'
+        ? 'База полностью восстановлена'
+        : outcome.mode === 'updates_only'
+        ? 'Обновления импортированы'
+        : 'Данные объединены';
+
+    showToast(
+      `${modeLabel} (групп: ${refreshed.groupsCount}, резидентов: ${refreshed.residentsCount}, журналов: ${refreshed.journalsCount})`
+    );
+  };
+
+  const handleRollbackSafetyBackup = async () => {
+    const restored = await restoreFromLastAutoSafetyBackup();
+    if (!restored) {
+      showToast('Страхующая резервная копия недоступна');
+      return;
+    }
+    const refreshed = await reloadAllStoresFromIdb();
+    showToast(
+      `База восстановлена из страхующей копии (групп: ${refreshed.groupsCount}, журналов: ${refreshed.journalsCount})`
+    );
   };
 
   const triggerCreateGroupFromSubTab = () => {
@@ -1314,8 +1357,11 @@ export default function App() {
             onOpenMediaLibrary={() =>
               setMediaModal({ open: true, category: 'all' })
             }
+            templatesCount={templates.filter((t) => !t.isBuiltIn).length}
+            mediaCount={mediaAssets.filter((m) => !m.isBuiltIn).length}
             onExportAllBackup={handleExportAllBackup}
-            onImportBackup={handleImportBackup}
+            onExecuteImport={handleExecuteBackupImport}
+            onRollbackSafetyBackup={handleRollbackSafetyBackup}
             onBatchExportGroupZip={handleBatchExportGroupZip}
             batchProgress={batchProgress}
             openCreateGroupSignal={createGroupSignal}

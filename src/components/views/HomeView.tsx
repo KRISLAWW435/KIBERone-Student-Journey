@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRightLeft,
   Calendar,
-  Download,
   Edit3,
   FolderArchive,
   FolderOpen,
@@ -12,7 +11,6 @@ import {
   Plus,
   Search,
   Trash2,
-  Upload,
   UserMinus,
   UserPlus,
   Users,
@@ -26,10 +24,15 @@ import {
   StudentGroup,
 } from '../../types/journal';
 import {
+  AnalyzedBackupImport,
+  ConflictResolutionChoice,
+} from '../../utils/backupMerge';
+import {
   computeJournalProgress,
   formatGroupPeriod,
 } from '../../utils/journalProgress';
 import { AppHeader, WorkspaceTab } from '../AppHeader';
+import { BackupRestoreModal } from '../BackupRestoreModal';
 
 interface HomeViewProps {
   branches: Branch[];
@@ -57,8 +60,14 @@ interface HomeViewProps {
   ) => Promise<void>;
   onDeleteStudent: (residentId: string) => Promise<void>;
   onOpenMediaLibrary: () => void;
-  onImportBackup: (file: File) => void;
-  onExportAllBackup: () => void;
+  templatesCount: number;
+  mediaCount: number;
+  onExecuteImport: (
+    analysis: AnalyzedBackupImport,
+    conflictChoices: Record<string, ConflictResolutionChoice>
+  ) => Promise<void>;
+  onRollbackSafetyBackup: () => Promise<void>;
+  onExportAllBackup: () => Promise<void>;
   onBatchExportGroupZip: (group: StudentGroup) => Promise<void> | void;
   batchProgress?: {
     active: boolean;
@@ -101,7 +110,10 @@ export function HomeView({
   onTransferStudent,
   onDeleteStudent,
   onOpenMediaLibrary,
-  onImportBackup,
+  templatesCount,
+  mediaCount,
+  onExecuteImport,
+  onRollbackSafetyBackup,
   onExportAllBackup,
   onBatchExportGroupZip,
   batchProgress,
@@ -112,7 +124,6 @@ export function HomeView({
   const [searchQuery, setSearchQuery] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [branchesModalOpen, setBranchesModalOpen] = useState(false);
-  const backupInputRef = useRef<HTMLInputElement | null>(null);
 
   // Create/Edit Group Modal
   const [groupModal, setGroupModal] = useState<StudentGroup | null>(null);
@@ -1139,63 +1150,22 @@ export function HomeView({
         </div>
       )}
 
-      {/* SETTINGS & FULL JSON BACKUP MODAL */}
+      {/* BACKUP, RESTORE & STORAGE MODAL */}
       {settingsOpen && (
-        <div className="fixed inset-0 z-50 bg-zinc-900/40 backdrop-blur-[2px] flex items-center justify-center p-6">
-          <div className="bg-white border border-zinc-200 rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-bold text-zinc-900">
-                Настройки и полное резервное копирование
-              </h2>
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(false)}
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-900"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-zinc-600 leading-relaxed">
-              Все локации, группы, ученики, журналы, библиотека модулей, шаблоны и
-              загруженные изображения хранятся локально в IndexedDB. Скачайте полную
-              резервную копию JSON для переноса на другой компьютер.
-            </p>
-
-            <div className="space-y-2.5">
-              <button
-                type="button"
-                onClick={onExportAllBackup}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold transition-colors"
-              >
-                <Download className="w-4 h-4" />
-                <span>Скачать полный бэкап (JSON)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => backupInputRef.current?.click()}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900 text-xs font-semibold transition-colors"
-              >
-                <Upload className="w-4 h-4" />
-                <span>Восстановить базу из JSON</span>
-              </button>
-              <input
-                ref={backupInputRef}
-                type="file"
-                accept="application/json"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    onImportBackup(file);
-                    setSettingsOpen(false);
-                  }
-                }}
-              />
-            </div>
-          </div>
-        </div>
+        <BackupRestoreModal
+          counts={{
+            branches: branches.length,
+            groups: groups.length,
+            residents: residents.length,
+            journals: journals.length,
+            templates: templatesCount,
+            media: mediaCount,
+          }}
+          onCreateBackup={onExportAllBackup}
+          onExecuteImport={onExecuteImport}
+          onRollbackSafetyBackup={onRollbackSafetyBackup}
+          onClose={() => setSettingsOpen(false)}
+        />
       )}
     </div>
   );
