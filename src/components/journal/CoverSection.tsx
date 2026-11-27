@@ -388,7 +388,7 @@ export function CoverSection({
       {showSpeechBubble && (
         <DraggableDesignWrapper
           id="coverBubble"
-          movementMode="vertical"
+          movementMode="both"
           transform={bubbleTransform}
           defaultZIndex={COVER_OBJECT_DEFAULTS.coverBubble.zIndex}
           designMode={designMode}
@@ -419,7 +419,7 @@ export function CoverSection({
           <div
             data-card-label="Речевое облачко медведя"
             style={{ backgroundColor: resolvedBubbleBgColor }}
-            className={`relative h-full w-full min-h-[72px] border-[2.2px] border-[#18181B] rounded-2xl px-[18px] py-[12px] shadow-[3.5px_3.5px_0_#18181B] transition-shadow flex items-center justify-center ${
+            className={`relative h-full w-full min-h-[48px] border-[2.2px] border-[#18181B] rounded-2xl px-[18px] py-[12px] shadow-[3.5px_3.5px_0_#18181B] transition-shadow flex items-center justify-center ${
               !designMode && (isBubbleTextSelected || isBubbleActive)
                 ? 'ring-2 ring-[#0D9488] ring-offset-2'
                 : ''

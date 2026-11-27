@@ -1,5 +1,9 @@
-import React from 'react';
-import { ASSETS } from '../../data/presets';
+import React, { useId } from 'react';
+import {
+  ASSETS,
+  getNextPinPalette,
+  NextPinColorOption,
+} from '../../data/presets';
 import {
   ActiveTextFieldTarget,
   AgeCategory,
@@ -13,13 +17,13 @@ import {
   InlineEditableText,
   SnapLinesState,
 } from './DecorLayer';
-import { NextTopicLineIcon } from './JournalArtwork';
 
 interface NextChapterProps {
   config: Page2Config;
   ageCategory: AgeCategory;
   designMode?: boolean;
   scaleFactor?: number;
+  titleTransform?: CanvasObjectTransform;
   bearTransform?: CanvasObjectTransform;
   activeTarget?: EditorSectionTarget;
   activeTextField?: ActiveTextFieldTarget;
@@ -33,31 +37,174 @@ interface NextChapterProps {
   onInteractionEnd?: () => void;
 }
 
-const PIN_COLORS = ['#4ECDC4', '#FFD426', '#F87B72'];
+function getStationLabelFontSize(
+  title: string,
+  labelWidth: number,
+  isFourStations: boolean
+): number {
+  const trimmed = title.trim();
+  const tokens = trimmed.split(/[\s-]+/).filter(Boolean);
+  const maxWordLen = tokens.reduce((max, w) => Math.max(max, w.length), 0);
+  const totalLen = trimmed.length;
+  const innerWidth = Math.max(60, labelWidth - (isFourStations ? 14 : 16));
 
-function MapPinMarker({ color }: { color: string }) {
+  let fontSize = isFourStations ? 11 : 12;
+  if (totalLen > 28) {
+    fontSize = isFourStations ? 9.2 : 10.2;
+  } else if (totalLen > 20) {
+    fontSize = isFourStations ? 9.8 : 10.8;
+  } else if (totalLen > 14 && isFourStations) {
+    fontSize = 10.4;
+  }
+
+  if (maxWordLen > 0) {
+    const safeForWord = (innerWidth - 4) / (maxWordLen * 0.64);
+    if (safeForWord < fontSize) {
+      fontSize = Math.max(8.5, Number(safeForWord.toFixed(1)));
+    }
+  }
+
+  return fontSize;
+}
+
+interface RoutePoint {
+  x: number;
+  y: number;
+}
+
+function buildSmoothRoutePath(points: RoutePoint[]): string {
+  if (points.length === 0) return '';
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+  let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const p0 = points[Math.max(0, i - 1)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(points.length - 1, i + 2)];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
+export function LocationPinIcon({
+  color,
+  size = 20,
+}: {
+  color?: string;
+  size?: number;
+}) {
+  const palette = getNextPinPalette(color, 0);
+  const h = Math.round((size * 56) / 44);
   return (
     <svg
-      width="34"
-      height="44"
-      viewBox="0 0 24 32"
+      width={size}
+      height={h}
+      viewBox="0 0 44 56"
       fill="none"
-      className="shrink-0 drop-shadow-[0_3px_4px_rgba(17,24,39,0.28)]"
+      className="shrink-0"
+      aria-hidden="true"
     >
       <path
-        d="M12 1.5C6.2 1.5 1.5 6.2 1.5 12C1.5 19.6 12 30.5 12 30.5C12 30.5 22.5 19.6 22.5 12C22.5 6.2 17.8 1.5 12 1.5Z"
-        fill={color}
+        d="M22 3C11.5 3 3 11.4 3 21.8C3 34.4 18.2 49.4 21.1 52.2C21.6 52.7 22.4 52.7 22.9 52.2C25.8 49.4 41 34.4 41 21.8C41 11.4 32.5 3 22 3Z"
+        fill={palette.hex}
         stroke="#18181B"
-        strokeWidth="1.7"
+        strokeWidth="2.4"
         strokeLinejoin="round"
       />
       <circle
-        cx="12"
-        cy="11.5"
-        r="4.2"
+        cx="22"
+        cy="21"
+        r="8.5"
         fill="#FFFFFF"
         stroke="#18181B"
-        strokeWidth="1.5"
+        strokeWidth="2"
+      />
+      <circle cx="22" cy="21" r="3.6" fill={palette.dark} />
+    </svg>
+  );
+}
+
+function VolumetricLocationPin({
+  palette,
+  gradId,
+  compact = false,
+}: {
+  palette: NextPinColorOption;
+  gradId: string;
+  compact?: boolean;
+}) {
+  const w = compact ? 40 : 44;
+  const h = compact ? 51 : 56;
+  return (
+    <svg
+      width={w}
+      height={h}
+      viewBox="0 0 44 56"
+      fill="none"
+      className="shrink-0 drop-shadow-[0_4px_6px_rgba(15,23,42,0.24)]"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient
+          id={gradId}
+          x1="8"
+          y1="5"
+          x2="37"
+          y2="49"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop offset="0%" stopColor={palette.light} />
+          <stop offset="52%" stopColor={palette.hex} />
+          <stop offset="100%" stopColor={palette.dark} />
+        </linearGradient>
+      </defs>
+
+      {/* Outer Volumetric Pin Body */}
+      <path
+        d="M22 3C11.5 3 3 11.4 3 21.8C3 34.4 18.2 49.4 21.1 52.2C21.6 52.7 22.4 52.7 22.9 52.2C25.8 49.4 41 34.4 41 21.8C41 11.4 32.5 3 22 3Z"
+        fill={`url(#${gradId})`}
+        stroke="#18181B"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+
+      {/* 3D Specular Gloss Highlight */}
+      <path
+        d="M10.5 18.5C11.4 12.2 15.8 7.8 21.8 6.9"
+        stroke="#FFFFFF"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        opacity="0.7"
+      />
+      <circle cx="9.2" cy="23.2" r="1.4" fill="#FFFFFF" opacity="0.65" />
+
+      {/* Center Recessed Medallion */}
+      <circle
+        cx="22"
+        cy="21"
+        r="9.2"
+        fill="#FFFFFF"
+        stroke="#18181B"
+        strokeWidth="1.8"
+      />
+      <circle
+        cx="22"
+        cy="21"
+        r="6.2"
+        fill={palette.light}
+        opacity="0.4"
+      />
+      <circle
+        cx="22"
+        cy="21"
+        r="3.8"
+        fill={palette.dark}
+        stroke="#18181B"
+        strokeWidth="1.2"
       />
     </svg>
   );
@@ -68,6 +215,7 @@ export function NextChapter({
   ageCategory,
   designMode = false,
   scaleFactor = 1,
+  titleTransform,
   bearTransform,
   activeTarget,
   activeTextField,
@@ -78,31 +226,55 @@ export function NextChapter({
   onInteractionStart,
   onInteractionEnd,
 }: NextChapterProps) {
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const { nextChapter } = config;
   const isActive =
     activeTarget?.page === 2 && activeTarget.block === 'nextChapter';
+  const isTitleActive =
+    activeTarget?.page === 2 && activeTarget.block === 'nextChapterTitle';
   const isBearActive =
     activeTarget?.page === 2 && activeTarget.block === 'nextBear';
 
-  const topics = nextChapter.topics.slice(0, 3);
+  const topics = nextChapter.topics.slice(0, 4);
+  const showDecor = nextChapter.showDecor !== false;
+  const showRouteLine = nextChapter.showRouteLine !== false;
+  const backdropColor = nextChapter.bgColor || '#BCEFF4';
 
-  // Exact (centerX, pinTipY) coordinates lying directly on the winding road centerline
   const stationPositions =
-    topics.length <= 2
+    topics.length <= 1
+      ? [{ centerX: 280, pinTipY: 148, labelWidth: 224 }]
+      : topics.length === 2
       ? [
-          { centerX: 185, pinTipY: 212 },
-          { centerX: 415, pinTipY: 158 },
+          { centerX: 166, pinTipY: 162, labelWidth: 208 },
+          { centerX: 404, pinTipY: 125, labelWidth: 208 },
+        ]
+      : topics.length === 3
+      ? [
+          { centerX: 108, pinTipY: 166, labelWidth: 172 },
+          { centerX: 290, pinTipY: 138, labelWidth: 172 },
+          { centerX: 472, pinTipY: 113, labelWidth: 172 },
         ]
       : [
-          { centerX: 149, pinTipY: 224 },
-          { centerX: 336, pinTipY: 178 },
-          { centerX: 478, pinTipY: 144 },
+          { centerX: 94, pinTipY: 168, labelWidth: 126 },
+          { centerX: 226, pinTipY: 144, labelWidth: 126 },
+          { centerX: 358, pinTipY: 125, labelWidth: 126 },
+          { centerX: 490, pinTipY: 110, labelWidth: 126 },
         ];
+
+  const routeAnchorPoints: RoutePoint[] = [
+    { x: 14, y: 210 },
+    ...stationPositions.map((s) => ({ x: s.centerX, y: s.pinTipY })),
+    { x: 586, y: 94 },
+    { x: 804, y: 68 },
+  ];
+  const smoothRouteD = buildSmoothRoutePath(routeAnchorPoints);
+  const isFourStations = topics.length >= 4;
 
   return (
     <section
       data-card-label="Что интересного впереди?"
-      className="relative w-full h-full min-h-[266px] shrink-0 overflow-visible"
+      data-next-stations-count={topics.length}
+      className="relative w-full h-full flex-1 min-h-0 shrink-0 flex flex-col overflow-visible"
     >
       <div
         onClick={(e) => {
@@ -110,11 +282,11 @@ export function NextChapter({
           e.stopPropagation();
           onSelectTarget({ page: 2, block: 'nextChapter' });
         }}
-        className={`relative w-full h-full min-h-[266px] overflow-visible ${
+        className={`relative w-full h-full flex-1 min-h-0 overflow-visible ${
           onSelectTarget ? 'editable-block' : ''
         } ${isActive ? 'editable-block-active' : ''}`}
       >
-        {/* Open Winding Road, Meadow Hill & Isometric 3D Figures Seated Cleanly on Green Grass */}
+        {/* Route Backdrop, Curved Meadow, Dashed Discovery Trail & Subtle Decorative Accents */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <svg
             aria-hidden="true"
@@ -125,7 +297,19 @@ export function NextChapter({
           >
             <defs>
               <linearGradient
-                id="next-meadow-grad"
+                id={`next-sky-grad-${uid}`}
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="266"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop offset="0%" stopColor={backdropColor} stopOpacity="0" />
+                <stop offset="28%" stopColor={backdropColor} stopOpacity="0.58" />
+                <stop offset="100%" stopColor={backdropColor} stopOpacity="0.92" />
+              </linearGradient>
+              <linearGradient
+                id={`next-meadow-grad-${uid}`}
                 x1="0"
                 y1="70"
                 x2="794"
@@ -136,292 +320,325 @@ export function NextChapter({
                 <stop offset="55%" stopColor="#4ADE80" />
                 <stop offset="100%" stopColor="#22C55E" />
               </linearGradient>
-              <filter id="iso-shadow" x="-20%" y="-20%" width="140%" height="150%">
+              <filter
+                id={`iso-shadow-${uid}`}
+                x="-20%"
+                y="-20%"
+                width="140%"
+                height="150%"
+              >
                 <feDropShadow
                   dx="0"
                   dy="3"
                   stdDeviation="2"
                   floodColor="#111827"
-                  floodOpacity="0.22"
+                  floodOpacity="0.2"
                 />
               </filter>
             </defs>
 
-            {/* Open Curved Green Meadow Terrain (No Container Box) */}
+            {/* Soft Sky / Backdrop Tint Controlled by nextChapter.bgColor */}
+            <rect
+              x="0"
+              y="0"
+              width="794"
+              height="266"
+              fill={`url(#next-sky-grad-${uid})`}
+            />
+
+            {/* Soft Background Cloud / Horizon Hill Accent */}
             <path
-              d="M0 174 C 180 124, 470 52, 794 78 V266 H0 Z"
-              fill="url(#next-meadow-grad)"
+              d="M0 140 C 190 88, 460 34, 794 52 V266 H0 Z"
+              fill="#FFFFFF"
+              opacity="0.32"
+            />
+
+            {/* Open Curved Green Meadow Terrain */}
+            <path
+              d="M0 160 C 180 110, 470 42, 794 66 V266 H0 Z"
+              fill={`url(#next-meadow-grad-${uid})`}
             />
 
             {/* Subtle Sunlit Meadow Highlight */}
             <path
-              d="M0 206 C 195 164, 450 108, 794 122 V266 H0 Z"
+              d="M0 194 C 195 152, 450 96, 794 110 V266 H0 Z"
               fill="#FFFFFF"
-              opacity="0.12"
+              opacity="0.14"
             />
 
-            {/* Playful Purple Corner Hill Accent under Bear (Right Corner) */}
+            {/* Playful Purple Corner Hill Accent under Bear */}
             <path
-              d="M 554 266 C 598 202, 690 156, 794 142 V266 H554 Z"
+              d="M 554 266 C 598 196, 690 150, 794 136 V266 H554 Z"
               fill="#8B5CF6"
             />
 
-            {/* Road Comic Dark Outer Edge */}
-            <path
-              d="M 58 278 C 145 204, 240 206, 336 178 C 420 154, 570 124, 804 82"
-              stroke="#18181B"
-              strokeWidth="44"
-              strokeLinecap="round"
-            />
+            {/* Light Curved Trail Ribbon + Dashed Route Line Connecting All Pins */}
+            {showRouteLine && (
+              <g>
+                {/* Soft Trail Shadow */}
+                <path
+                  d={smoothRouteD}
+                  stroke="#18181B"
+                  strokeWidth="22"
+                  strokeLinecap="round"
+                  opacity="0.14"
+                  transform="translate(0, 3)"
+                />
+                {/* Crisp Trail Border */}
+                <path
+                  d={smoothRouteD}
+                  stroke="#18181B"
+                  strokeWidth="21"
+                  strokeLinecap="round"
+                />
+                {/* Bright Light Discovery Trail Surface */}
+                <path
+                  d={smoothRouteD}
+                  stroke="#F8FAFC"
+                  strokeWidth="17"
+                  strokeLinecap="round"
+                />
+                {/* Fine Dashed Route Line Along Centerline */}
+                <path
+                  d={smoothRouteD}
+                  stroke="#0F766E"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeDasharray="7 7"
+                />
+              </g>
+            )}
 
-            {/* Road Crisp White Outer Shoulders */}
-            <path
-              d="M 58 278 C 145 204, 240 206, 336 178 C 420 154, 570 124, 804 82"
-              stroke="#FFFFFF"
-              strokeWidth="39"
-              strokeLinecap="round"
-            />
+            {/* Waypoint Anchor Nodes Directly Under Each Location Pin Tip */}
+            {topics.map((topic, idx) => {
+              const pos = stationPositions[idx] || stationPositions[0];
+              const palette = getNextPinPalette(topic.pinColor, idx);
+              return (
+                <g key={`wp-${topic.id}`}>
+                  <ellipse
+                    cx={pos.centerX}
+                    cy={pos.pinTipY + 1}
+                    rx="11"
+                    ry="4.2"
+                    fill="#18181B"
+                    opacity="0.16"
+                  />
+                  <circle
+                    cx={pos.centerX}
+                    cy={pos.pinTipY}
+                    r="5.5"
+                    fill="#FFFFFF"
+                    stroke="#18181B"
+                    strokeWidth="1.6"
+                  />
+                  <circle
+                    cx={pos.centerX}
+                    cy={pos.pinTipY}
+                    r="2.7"
+                    fill={palette.hex}
+                  />
+                </g>
+              );
+            })}
 
-            {/* Dark Slate Gray Asphalt Surface */}
-            <path
-              d="M 58 278 C 145 204, 240 206, 336 178 C 420 154, 570 124, 804 82"
-              stroke="#475569"
-              strokeWidth="32"
-              strokeLinecap="round"
-            />
+            {/* Light Decorative Details (Non-cluttering Geometric Accents & Sparkles) */}
+            {showDecor && (
+              <g>
+                {/* Open Sky 4-Point Sparkles & Route Dots */}
+                <path
+                  d="M424 38L426.4 44.6L433 47L426.4 49.4L424 56L421.6 49.4L415 47L421.6 44.6Z"
+                  fill="#FACC15"
+                  stroke="#18181B"
+                  strokeWidth="1.1"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M554 48L556 53L561 55L556 57L554 62L552 57L547 55L552 53Z"
+                  fill="#5EEAD4"
+                  stroke="#18181B"
+                  strokeWidth="1.1"
+                  strokeLinejoin="round"
+                />
+                <circle
+                  cx="396"
+                  cy="68"
+                  r="3.2"
+                  fill="#FB7185"
+                  stroke="#18181B"
+                  strokeWidth="1.1"
+                />
+                <circle
+                  cx="526"
+                  cy="34"
+                  r="2.8"
+                  fill="#8B5CF6"
+                  stroke="#18181B"
+                  strokeWidth="1.1"
+                />
+                <circle
+                  cx="176"
+                  cy="68"
+                  r="2.8"
+                  fill="#38BDF8"
+                  stroke="#18181B"
+                  strokeWidth="1.1"
+                />
 
-            {/* White Dashed Road Centerline */}
-            <path
-              d="M 58 278 C 145 204, 240 206, 336 178 C 420 154, 570 124, 804 82"
-              stroke="#FFFFFF"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeDasharray="11 9"
-            />
+                {/* Left Margin Small Isometric 3D Cube (clear of raised station 1 pill) */}
+                <g filter={`url(#iso-shadow-${uid})`}>
+                  <polygon
+                    points="20,218 30,223 20,228 10,223"
+                    fill="#FEF08A"
+                    stroke="#18181B"
+                    strokeWidth="1.2"
+                    strokeLinejoin="round"
+                  />
+                  <polygon
+                    points="10,223 20,228 20,242 10,237"
+                    fill="#FACC15"
+                    stroke="#18181B"
+                    strokeWidth="1.2"
+                    strokeLinejoin="round"
+                  />
+                  <polygon
+                    points="30,223 20,228 20,242 30,237"
+                    fill="#CA8A04"
+                    stroke="#18181B"
+                    strokeWidth="1.2"
+                    strokeLinejoin="round"
+                  />
+                </g>
 
-            {/* ISOMETRIC 3D FIGURE 1: Red Cube + Small Yellow Cube Seated Inside Left Green Meadow (x=12..66, y=188..244) */}
-            <g filter="url(#iso-shadow)">
-              {/* Red Isometric Cube */}
-              <polygon
-                points="46,188 64,197 46,206 28,197"
-                fill="#FDA4AF"
-                stroke="#18181B"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-              <polygon
-                points="28,197 46,206 46,227 28,218"
-                fill="#FB7185"
-                stroke="#18181B"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-              <polygon
-                points="64,197 46,206 46,227 64,218"
-                fill="#E11D48"
-                stroke="#18181B"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-
-              {/* Small Yellow Isometric Cube */}
-              <polygon
-                points="23,220 34,225 23,230 12,225"
-                fill="#FEF08A"
-                stroke="#18181B"
-                strokeWidth="1.3"
-                strokeLinejoin="round"
-              />
-              <polygon
-                points="12,225 23,230 23,244 12,239"
-                fill="#FACC15"
-                stroke="#18181B"
-                strokeWidth="1.3"
-                strokeLinejoin="round"
-              />
-              <polygon
-                points="34,225 23,230 23,244 34,239"
-                fill="#EAB308"
-                stroke="#18181B"
-                strokeWidth="1.3"
-                strokeLinejoin="round"
-              />
-            </g>
-
-            {/* ISOMETRIC 3D FIGURE 2: Twin Blue 3D Pillars Seated Inside Mid-Bottom Green Grass (x=336..378, y=208..254) */}
-            <g filter="url(#iso-shadow)">
-              {/* Tall Blue Pillar */}
-              <polygon
-                points="348,208 361,214 348,220 335,214"
-                fill="#93C5FD"
-                stroke="#18181B"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-              <polygon
-                points="335,214 348,220 348,250 335,244"
-                fill="#60A5FA"
-                stroke="#18181B"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-              <polygon
-                points="361,214 348,220 348,250 361,244"
-                fill="#2563EB"
-                stroke="#18181B"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-
-              {/* Shorter Front Blue Cube */}
-              <polygon
-                points="364,224 377,230 364,236 351,230"
-                fill="#BFDBFE"
-                stroke="#18181B"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-              <polygon
-                points="351,230 364,236 364,254 351,248"
-                fill="#60A5FA"
-                stroke="#18181B"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-              <polygon
-                points="377,230 364,236 364,254 377,248"
-                fill="#3B82F6"
-                stroke="#18181B"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-            </g>
-
-            {/* ISOMETRIC 3D FIGURE 3: Yellow L-Step Block Seated Inside Green Grass Below Road (x=432..474, y=198..246) */}
-            <g filter="url(#iso-shadow)">
-              <polygon
-                points="446,198 459,204 446,210 433,204"
-                fill="#FEF08A"
-                stroke="#18181B"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-              <polygon
-                points="433,204 446,210 446,236 433,230"
-                fill="#FACC15"
-                stroke="#18181B"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-              <polygon
-                points="459,204 446,210 446,236 459,230"
-                fill="#CA8A04"
-                stroke="#18181B"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-
-              <polygon
-                points="461,216 474,222 461,228 448,222"
-                fill="#FEF08A"
-                stroke="#18181B"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-              <polygon
-                points="448,222 461,228 461,246 448,240"
-                fill="#FDE047"
-                stroke="#18181B"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-              <polygon
-                points="474,222 461,228 461,246 474,240"
-                fill="#EAB308"
-                stroke="#18181B"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-            </g>
-
-            {/* ISOMETRIC 3D FIGURE 4: Teal Pyramid Seated Inside Green Grass (x=514..548, y=178..216) */}
-            <g filter="url(#iso-shadow)">
-              <polygon
-                points="531,178 514,209 531,216"
-                fill="#5EEAD4"
-                stroke="#18181B"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-              <polygon
-                points="531,178 548,209 531,216"
-                fill="#0D9488"
-                stroke="#18181B"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-            </g>
+                {/* Right Meadow Small Teal Pyramid Accent Near Bear */}
+                <g filter={`url(#iso-shadow-${uid})`}>
+                  <polygon
+                    points="562,190 548,218 562,224"
+                    fill="#5EEAD4"
+                    stroke="#18181B"
+                    strokeWidth="1.3"
+                    strokeLinejoin="round"
+                  />
+                  <polygon
+                    points="562,190 576,218 562,224"
+                    fill="#0D9488"
+                    stroke="#18181B"
+                    strokeWidth="1.3"
+                    strokeLinejoin="round"
+                  />
+                </g>
+              </g>
+            )}
           </svg>
         </div>
 
-        {/* Expressive Heading & Intro Directly Over Open Background */}
-        <div
-          style={{ left: '40px', top: '2px', width: '340px', maxWidth: '340px' }}
-          className="absolute z-10 min-w-0 box-border"
+        {/* Independent 2D Editable Heading & Intro Block */}
+        <DraggableDesignWrapper
+          id="nextChapterTitle"
+          movementMode="both"
+          transform={titleTransform}
+          defaultZIndex={26}
+          designMode={designMode}
+          scaleFactor={scaleFactor}
+          isActive={isTitleActive}
+          onSelect={
+            onSelectTarget
+              ? () => onSelectTarget({ page: 2, block: 'nextChapterTitle' })
+              : undefined
+          }
+          onUpdateTransform={
+            onUpdateTransform
+              ? (next) => onUpdateTransform('nextChapterTitle', next)
+              : undefined
+          }
+          onSnapLinesChange={onSnapLinesChange}
+          onInteractionStart={onInteractionStart}
+          onInteractionEnd={onInteractionEnd}
+          style={{
+            position: 'absolute',
+            left: '40px',
+            top: '2px',
+            width: '340px',
+          }}
         >
-          <InlineEditableText
-            value={nextChapter.title || 'ЧТО ИНТЕРЕСНОГО ВПЕРЕДИ?'}
-            onSelectText={
-              onSelectTextField
-                ? () =>
-                    onSelectTextField({
-                      page: 2,
-                      field: 'nextChapterTitle',
-                    })
-                : undefined
-            }
-            isSelected={
-              activeTextField?.page === 2 &&
-              activeTextField.field === 'nextChapterTitle'
-            }
-            as="h3"
-            className="font-journal-display font-black text-[19px] leading-[1.08] tracking-tight uppercase text-[#111827] block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]"
-          />
-          {nextChapter.description?.trim() && (
-            <p className="font-journal-body m-0 mt-[3px] text-[10.5px] leading-[1.28] font-semibold text-[#27272A] w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]">
-              {nextChapter.description}
-            </p>
-          )}
-        </div>
+          <div
+            data-card-label="Заголовок «Что интересного впереди?»"
+            className="w-full h-full min-w-0 box-border flex flex-col justify-start"
+          >
+            <InlineEditableText
+              value={nextChapter.title || 'ЧТО ИНТЕРЕСНОГО ВПЕРЕДИ?'}
+              designMode={designMode}
+              onSelectText={
+                onSelectTextField
+                  ? () =>
+                      onSelectTextField({
+                        page: 2,
+                        field: 'nextChapterTitle',
+                      })
+                  : undefined
+              }
+              isSelected={
+                !designMode &&
+                activeTextField?.page === 2 &&
+                activeTextField.field === 'nextChapterTitle'
+              }
+              as="h3"
+              className="font-journal-display font-black text-[19px] leading-[1.08] tracking-tight uppercase text-[#111827] block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]"
+            />
+            {nextChapter.description?.trim() && (
+              <p className="font-journal-body m-0 mt-[3px] text-[10.5px] leading-[1.28] font-semibold text-[#27272A] w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]">
+                {nextChapter.description}
+              </p>
+            )}
+          </div>
+        </DraggableDesignWrapper>
 
-        {/* Vertically Aligned Road Stations: [Module Icon] -> [High-Contrast Label] -> [Large Pin] */}
+        {/* Route Stations: [Bright Volumetric Location Pin] -> [Readable Direction Title Below] */}
         {topics.map((topic, idx) => {
           const pos = stationPositions[idx] || stationPositions[0];
-          const pinColor = PIN_COLORS[idx % PIN_COLORS.length];
+          const palette = getNextPinPalette(topic.pinColor, idx);
+          const pinHeightPx = isFourStations ? 51 : 56;
+          const labelFontSize = getStationLabelFontSize(
+            topic.title,
+            pos.labelWidth,
+            isFourStations
+          );
 
           return (
             <div
               key={topic.id}
+              data-next-station={topic.id}
+              data-pin-color={palette.hex}
               style={{
-                left: `${pos.centerX}px`,
-                top: `${pos.pinTipY}px`,
-                transform: 'translate(-50%, -100%)',
-                width: '138px',
+                left: `${(pos.centerX / 794) * 100}%`,
+                top: `${(pos.pinTipY / 266) * 100}%`,
+                transform: 'translate(-50%, 0)',
+                width: `${(pos.labelWidth / 794) * 100}%`,
               }}
-              className="absolute z-20 flex flex-col items-center text-center gap-[5px]"
+              className="absolute z-20 flex flex-col items-center text-center"
             >
-              {/* 1. Module Sticker Icon Centered Above Pin */}
-              <div className="w-[48px] h-[48px] rounded-full bg-white border-[2px] border-[#18181B] ring-[2.5px] ring-white shadow-[0_5px_11px_rgba(17,24,39,0.22)] flex items-center justify-center shrink-0">
-                <NextTopicLineIcon
-                  type={topic.iconKey}
-                  className="w-[29px] h-[29px]"
+              {/* 1. Volumetric Location Pin Anchored Directly on Route Waypoint */}
+              <div
+                style={{ marginTop: `-${pinHeightPx}px` }}
+                className="pointer-events-none shrink-0 leading-none"
+              >
+                <VolumetricLocationPin
+                  palette={palette}
+                  gradId={`pin-grad-${uid}-${idx}`}
+                  compact={isFourStations}
                 />
               </div>
 
-              {/* 2. High-Contrast Readable Label Pill Strictly Between Icon and Pin */}
-              <div className="bg-white/95 border-[1.6px] border-[#18181B] rounded-lg px-[8px] py-[3px] shadow-[2px_2px_0_#18181B] w-full max-w-[136px] min-w-0 box-border">
+              {/* 2. Readable Direction Label Strictly Below the Pin (No mid-word breaking, no truncation) */}
+              <div
+                style={{ borderTop: `3px solid ${palette.hex}` }}
+                className={`mt-[6px] bg-white/95 border-[1.6px] border-[#18181B] rounded-xl ${
+                  isFourStations ? 'px-[4px] py-[3.5px]' : 'px-[6px] py-[4px]'
+                } shadow-[2px_2px_0_#18181B] w-full min-w-0 box-border`}
+              >
                 <InlineEditableText
                   value={topic.title}
+                  designMode={designMode}
+                  wrapMode="normal"
                   onSelectText={
                     onSelectTextField
                       ? () =>
@@ -438,13 +655,15 @@ export function NextChapter({
                     activeTextField.itemId === topic.id
                   }
                   as="span"
-                  className="font-journal-display text-[12px] font-extrabold leading-[1.15] text-[#111827] block w-full min-w-0 box-border whitespace-pre-wrap [overflow-wrap:anywhere]"
+                  style={{
+                    fontSize: `${labelFontSize}px`,
+                    wordBreak: 'normal',
+                    overflowWrap: 'normal',
+                    hyphens: 'none',
+                    textWrap: 'balance',
+                  }}
+                  className="font-journal-display font-extrabold leading-[1.15] text-[#111827] block w-full min-w-0 box-border"
                 />
-              </div>
-
-              {/* 3. Large Map Pin Anchored Directly on Road Centerline */}
-              <div className="pointer-events-none shrink-0 leading-none">
-                <MapPinMarker color={pinColor} />
               </div>
             </div>
           );
@@ -477,7 +696,7 @@ export function NextChapter({
             right: '8px',
             bottom: '4px',
             width: '218px',
-            height: '266px',
+            height: '100%',
           }}
           className="flex items-end justify-center"
         >

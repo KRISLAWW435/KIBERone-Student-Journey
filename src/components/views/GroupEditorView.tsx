@@ -58,8 +58,11 @@ import {
   ASSETS,
   DEFAULT_SPEECH_BUBBLE_TEXT,
   DESIGN_PALETTES,
+  getNextPinPalette,
   MENTOR_NOTE_TEMPLATES,
+  NEXT_PIN_COLOR_OPTIONS,
   NEXT_TOPIC_LIBRARY,
+  pickNextAvailablePinColor,
   SPEECH_BUBBLE_PRESETS,
   STICKER_PRESET_OPTIONS,
   StickerPresetOption,
@@ -123,8 +126,8 @@ import { COVER_OBJECT_DEFAULTS } from '../journal/CoverSection';
 import {
   DECOR_VECTOR_ICON_OPTIONS,
   DecorVectorIcon,
-  NextTopicLineIcon,
 } from '../journal/JournalArtwork';
+import { LocationPinIcon } from '../journal/NextChapter';
 import { JournalPageOne } from '../journal/JournalPageOne';
 import { JournalPageTwo } from '../journal/JournalPageTwo';
 import { EditorTourDirective } from '../../data/onboardingTour';
@@ -897,6 +900,8 @@ export function GroupEditorView({
           id: `nt-${Date.now()}-${idx}`,
           title,
           iconKey: cat?.iconKey ?? 'ai',
+          pinColor:
+            NEXT_PIN_COLOR_OPTIONS[idx % NEXT_PIN_COLOR_OPTIONS.length].hex,
         };
       }
     );
@@ -922,6 +927,7 @@ export function GroupEditorView({
       id: `nt-custom-${Date.now()}`,
       title: trimmed,
       iconKey: 'ai',
+      pinColor: pickNextAvailablePinColor(commonDraft.nextChapterTopics),
     };
     setCommonDraft((prev) => ({
       ...prev,
@@ -1446,8 +1452,10 @@ export function GroupEditorView({
 
   const FREE_2D_DESIGN_BLOCKS = new Set([
     'coverBear',
+    'coverBubble',
     'prideBear',
     'nextBear',
+    'nextChapterTitle',
     'logo',
   ]);
 
@@ -1469,6 +1477,7 @@ export function GroupEditorView({
 
   const getDefaultZForBlock = (blockId: string): number => {
     if (blockId === 'coverBubble') return 28;
+    if (blockId === 'nextChapterTitle') return 26;
     if (blockId === 'coverBear') return 25;
     if (blockId === 'coverInfo') return 24;
     if (
@@ -1529,6 +1538,8 @@ export function GroupEditorView({
         return 'Лист «Слово наставника»';
       case 'nextChapter':
         return 'Блок «Что интересного впереди?»';
+      case 'nextChapterTitle':
+        return 'Заголовок «Что интересного впереди?»';
       case 'nextBear':
         return 'Мишка внизу страницы 2';
       default:
@@ -1543,20 +1554,53 @@ export function GroupEditorView({
   ) => {
     if (!activeDoc) return;
     const is2D = FREE_2D_DESIGN_BLOCKS.has(blockId);
+    const sanitizedWidth =
+      next.width !== undefined
+        ? Math.max(48, Math.min(794, Math.round(next.width)))
+        : undefined;
+    const sanitizedHeight =
+      next.height !== undefined
+        ? Math.max(28, Math.min(1123, Math.round(next.height)))
+        : undefined;
+
+    let clampedX = is2D ? Math.max(-720, Math.min(720, Math.round(next.x))) : 0;
+    let clampedY = Math.max(-960, Math.min(960, Math.round(next.y)));
+
+    if (blockId === 'coverBubble') {
+      const w = sanitizedWidth ?? COVER_OBJECT_DEFAULTS.coverBubble.width;
+      const h = sanitizedHeight ?? COVER_OBJECT_DEFAULTS.coverBubble.height;
+      const minX = -COVER_OBJECT_DEFAULTS.coverBubble.x;
+      const maxX = Math.max(
+        minX,
+        794 - w - COVER_OBJECT_DEFAULTS.coverBubble.x
+      );
+      const minY = -COVER_OBJECT_DEFAULTS.coverBubble.y;
+      const maxY = Math.max(
+        minY,
+        1123 - h - COVER_OBJECT_DEFAULTS.coverBubble.y
+      );
+      clampedX = Math.max(minX, Math.min(maxX, clampedX));
+      clampedY = Math.max(minY, Math.min(maxY, clampedY));
+    } else if (blockId === 'nextChapterTitle') {
+      const w = sanitizedWidth ?? 340;
+      const h = sanitizedHeight ?? 48;
+      const minX = -40;
+      const maxX = Math.max(minX, 794 - w - 40);
+      const maxY = Math.max(-820, 266 - 2 - h);
+      clampedX = Math.max(minX, Math.min(maxX, clampedX));
+      clampedY = Math.max(-820, Math.min(maxY, clampedY));
+    }
+
     const sanitized: CanvasObjectTransform = {
       ...next,
-      x: is2D ? Math.max(-720, Math.min(720, Math.round(next.x))) : 0,
-      y: Math.max(-960, Math.min(960, Math.round(next.y))),
+      x: clampedX,
+      y: clampedY,
       scale: 1,
       rotation: is2D
         ? Math.max(-180, Math.min(180, Math.round(next.rotation)))
         : 0,
-      ...(next.width !== undefined
-        ? { width: Math.max(48, Math.min(794, Math.round(next.width))) }
-        : {}),
-      ...(next.height !== undefined
-        ? { height: Math.max(28, Math.min(1123, Math.round(next.height))) }
-        : {}),
+      ...(sanitizedWidth !== undefined ? { width: sanitizedWidth } : {}),
+      ...(sanitizedHeight !== undefined ? { height: sanitizedHeight } : {}),
     };
     if (page === 1) {
       onChangeJournal({
@@ -2026,7 +2070,8 @@ export function GroupEditorView({
         focusSection('pride', 2);
       } else if (
         target.block === 'nextBear' ||
-        target.block === 'nextChapter'
+        target.block === 'nextChapter' ||
+        target.block === 'nextChapterTitle'
       ) {
         focusSection('mentorNote', 2);
       }
@@ -4319,136 +4364,193 @@ export function GroupEditorView({
                       </label>
                     </div>
 
-                    {/* Selected Interactive Topic Chips with (x) Delete */}
+                    {/* Selected Interactive Direction Pins with Color, Reorder, Rename & Delete */}
                     <div className="p-4 rounded-xl bg-white border border-zinc-200/80 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3">
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-bold text-zinc-800">
-                          Станции «Карты будущего» (
+                          Направления маршрута (
                           {commonDraft.nextChapterTopics.length})
                         </span>
                         {commonDraft.nextChapterTopics.length > 4 && (
                           <span className="text-[11px] text-amber-700 font-medium">
-                            На карте отображаются первые 4 станции
+                            На карте отображаются первые 4 направления
                           </span>
                         )}
                       </div>
 
                       {commonDraft.nextChapterTopics.length === 0 ? (
                         <div className="py-5 rounded-lg bg-[#F4F4F5]/70 border border-dashed border-zinc-300 text-center text-zinc-500">
-                          Темы ещё не выбраны. Добавьте свою тему ниже или выберите из каталога.
+                          Направления ещё не выбраны. Добавьте своё направление ниже или выберите из каталога.
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          <div className="flex flex-wrap gap-2">
-                            {commonDraft.nextChapterTopics.map((topic) => {
-                              const isPickerOpen = editingTopicIconId === topic.id;
-                              return (
-                                <div
-                                  key={topic.id}
-                                  className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-lg bg-[#0D9488] text-white border border-[#0D9488] shadow-[0_1px_2px_rgba(13,148,136,0.18)] text-xs font-medium"
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setEditingTopicIconId(
-                                        isPickerOpen ? null : topic.id
-                                      )
-                                    }
-                                    className={`w-6 h-6 rounded-md bg-white flex items-center justify-center shrink-0 transition-transform hover:scale-105 ${
-                                      isPickerOpen ? 'ring-2 ring-[#FACC15]' : ''
-                                    }`}
-                                    title="Сменить иконку станции на карте"
-                                  >
-                                    <NextTopicLineIcon
-                                      type={topic.iconKey}
-                                      className="w-4 h-4"
-                                    />
-                                  </button>
-                                  <span>{topic.title}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setCommonDraft((prev) => ({
-                                        ...prev,
-                                        nextChapterTopics:
-                                          prev.nextChapterTopics.filter(
-                                            (t) => t.id !== topic.id
-                                          ),
-                                      }));
-                                      if (editingTopicIconId === topic.id) {
-                                        setEditingTopicIconId(null);
-                                      }
-                                    }}
-                                    className="ml-0.5 p-0.5 rounded text-white/80 hover:text-white hover:bg-white/15 transition-colors"
-                                    title={`Удалить тему «${topic.title}»`}
-                                    aria-label={`Удалить тему ${topic.title}`}
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          {/* Inline SVG Icon Picker for the selected Roadmap station */}
-                          {editingTopicIconId &&
-                            (() => {
-                              const activeTopic =
-                                commonDraft.nextChapterTopics.find(
-                                  (t) => t.id === editingTopicIconId
+                          <div className="space-y-2">
+                            {commonDraft.nextChapterTopics.map(
+                              (topic, topicIdx) => {
+                                const palette = getNextPinPalette(
+                                  topic.pinColor,
+                                  topicIdx
                                 );
-                              if (!activeTopic) return null;
-                              return (
-                                <div className="p-3 rounded-xl bg-[#F8F8F6] border border-zinc-200 space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[11px] font-bold text-zinc-700">
-                                      Иконка для станции «{activeTopic.title}»
-                                    </span>
+                                const isPickerOpen =
+                                  editingTopicIconId === topic.id;
+                                return (
+                                  <div
+                                    key={topic.id}
+                                    className="flex flex-wrap items-center gap-2 p-2 rounded-lg bg-[#F8F8F6] border border-zinc-200"
+                                  >
                                     <button
                                       type="button"
-                                      onClick={() => setEditingTopicIconId(null)}
-                                      className="text-[11px] font-semibold text-[#0D9488] hover:underline"
+                                      onClick={() =>
+                                        setEditingTopicIconId(
+                                          isPickerOpen ? null : topic.id
+                                        )
+                                      }
+                                      className={`w-7 h-7 rounded-md bg-white border border-zinc-200 flex items-center justify-center shrink-0 transition-transform hover:scale-105 ${
+                                        isPickerOpen
+                                          ? 'ring-2 ring-[#0D9488]'
+                                          : ''
+                                      }`}
+                                      title={`Цвет геометки: ${palette.label}`}
                                     >
-                                      Готово
+                                      <LocationPinIcon
+                                        color={palette.hex}
+                                        size={15}
+                                      />
                                     </button>
-                                  </div>
-                                  <div className="grid grid-cols-6 sm:grid-cols-9 gap-1.5">
-                                    {DECOR_VECTOR_ICON_OPTIONS.map((opt) => {
-                                      const selected =
-                                        activeTopic.iconKey === opt.key;
-                                      return (
-                                        <button
-                                          key={opt.key}
-                                          type="button"
-                                          onClick={() =>
-                                            setCommonDraft((prev) => ({
-                                              ...prev,
-                                              nextChapterTopics:
-                                                prev.nextChapterTopics.map((t) =>
-                                                  t.id === activeTopic.id
-                                                    ? { ...t, iconKey: opt.key }
-                                                    : t
-                                                ),
-                                            }))
-                                          }
-                                          className={`p-1.5 rounded-lg border flex flex-col items-center justify-center gap-0.5 transition-colors ${
-                                            selected
-                                              ? 'border-[#0D9488] bg-[#F0FDFA] ring-1 ring-[#0D9488]'
-                                              : 'border-zinc-200 bg-white hover:border-zinc-300'
-                                          }`}
-                                          title={opt.label}
-                                        >
-                                          <DecorVectorIcon
-                                            iconKey={opt.key}
-                                            className="w-6 h-6"
+                                    <input
+                                      type="text"
+                                      value={topic.title}
+                                      onChange={(e) =>
+                                        setCommonDraft((prev) => ({
+                                          ...prev,
+                                          nextChapterTopics:
+                                            prev.nextChapterTopics.map((t) =>
+                                              t.id === topic.id
+                                                ? { ...t, title: e.target.value }
+                                                : t
+                                            ),
+                                        }))
+                                      }
+                                      className="flex-1 min-w-[160px] px-2.5 py-1 rounded-md border border-zinc-200 bg-white text-xs font-semibold text-zinc-900 focus:outline-none focus:border-[#0D9488]"
+                                    />
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      {NEXT_PIN_COLOR_OPTIONS.map((opt) => {
+                                        const isSelected =
+                                          palette.hex.toLowerCase() ===
+                                          opt.hex.toLowerCase();
+                                        return (
+                                          <button
+                                            key={opt.id}
+                                            type="button"
+                                            onClick={() =>
+                                              setCommonDraft((prev) => ({
+                                                ...prev,
+                                                nextChapterTopics:
+                                                  prev.nextChapterTopics.map(
+                                                    (t) =>
+                                                      t.id === topic.id
+                                                        ? {
+                                                            ...t,
+                                                            pinColor: opt.hex,
+                                                          }
+                                                        : t
+                                                  ),
+                                              }))
+                                            }
+                                            title={opt.label}
+                                            aria-label={`Цвет геометки: ${opt.label}`}
+                                            style={{ backgroundColor: opt.hex }}
+                                            className={`w-4 h-4 rounded-full border transition-transform ${
+                                              isSelected
+                                                ? 'border-[#18181B] ring-2 ring-offset-1 ring-[#18181B] scale-110'
+                                                : 'border-black/25 hover:scale-110'
+                                            }`}
                                           />
-                                        </button>
-                                      );
-                                    })}
+                                        );
+                                      })}
+                                    </div>
+                                    <div className="flex items-center gap-0.5 shrink-0">
+                                      <button
+                                        type="button"
+                                        disabled={topicIdx === 0}
+                                        onClick={() =>
+                                          setCommonDraft((prev) => {
+                                            const arr = [
+                                              ...prev.nextChapterTopics,
+                                            ];
+                                            if (topicIdx <= 0) return prev;
+                                            [arr[topicIdx - 1], arr[topicIdx]] =
+                                              [
+                                                arr[topicIdx],
+                                                arr[topicIdx - 1],
+                                              ];
+                                            return {
+                                              ...prev,
+                                              nextChapterTopics: arr,
+                                            };
+                                          })
+                                        }
+                                        className="p-1 rounded text-zinc-500 hover:text-zinc-900 hover:bg-white disabled:opacity-30"
+                                        title="Переместить выше"
+                                      >
+                                        <ArrowUp className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={
+                                          topicIdx ===
+                                          commonDraft.nextChapterTopics.length -
+                                            1
+                                        }
+                                        onClick={() =>
+                                          setCommonDraft((prev) => {
+                                            const arr = [
+                                              ...prev.nextChapterTopics,
+                                            ];
+                                            if (topicIdx >= arr.length - 1)
+                                              return prev;
+                                            [arr[topicIdx], arr[topicIdx + 1]] =
+                                              [
+                                                arr[topicIdx + 1],
+                                                arr[topicIdx],
+                                              ];
+                                            return {
+                                              ...prev,
+                                              nextChapterTopics: arr,
+                                            };
+                                          })
+                                        }
+                                        className="p-1 rounded text-zinc-500 hover:text-zinc-900 hover:bg-white disabled:opacity-30"
+                                        title="Переместить ниже"
+                                      >
+                                        <ArrowDown className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCommonDraft((prev) => ({
+                                            ...prev,
+                                            nextChapterTopics:
+                                              prev.nextChapterTopics.filter(
+                                                (t) => t.id !== topic.id
+                                              ),
+                                          }));
+                                          if (editingTopicIconId === topic.id) {
+                                            setEditingTopicIconId(null);
+                                          }
+                                        }}
+                                        className="p-1 rounded text-zinc-400 hover:text-red-600 hover:bg-white transition-colors"
+                                        title={`Удалить тему «${topic.title}»`}
+                                        aria-label={`Удалить тему ${topic.title}`}
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
                                   </div>
-                                </div>
-                              );
-                            })()}
+                                );
+                              }
+                            )}
+                          </div>
                         </div>
                       )}
 
@@ -4485,6 +4587,9 @@ export function GroupEditorView({
                                         id: `nt-${Date.now()}-${item.iconKey}`,
                                         title: item.title,
                                         iconKey: item.iconKey,
+                                        pinColor: pickNextAvailablePinColor(
+                                          prev.nextChapterTopics
+                                        ),
                                       },
                                     ],
                                   }))
@@ -6875,8 +6980,7 @@ export function GroupEditorView({
                                 const coverDefaults =
                                   selectedBlockId === 'coverTitle' ||
                                   selectedBlockId === 'coverSubtitle' ||
-                                  selectedBlockId === 'coverInfo' ||
-                                  selectedBlockId === 'coverBubble'
+                                  selectedBlockId === 'coverInfo'
                                     ? COVER_OBJECT_DEFAULTS[selectedBlockId]
                                     : null;
                                 const BLOCK_DEFAULT_SIZES: Record<
@@ -6884,6 +6988,11 @@ export function GroupEditorView({
                                   { width: number; height: number }
                                 > = {
                                   cover: { width: 794, height: 316 },
+                                  coverBubble: {
+                                    width: COVER_OBJECT_DEFAULTS.coverBubble.width,
+                                    height:
+                                      COVER_OBJECT_DEFAULTS.coverBubble.height,
+                                  },
                                   coverBear: {
                                     width: COVER_OBJECT_DEFAULTS.coverBear.width,
                                     height:
@@ -6902,6 +7011,7 @@ export function GroupEditorView({
                                   prideBear: { width: 232, height: 214 },
                                   mentorNote: { width: 345, height: 340 },
                                   nextChapter: { width: 794, height: 266 },
+                                  nextChapterTitle: { width: 340, height: 48 },
                                   nextBear: { width: 218, height: 266 },
                                 };
                                 const domBlockEl =
@@ -7710,6 +7820,60 @@ export function GroupEditorView({
                                 </div>
                               )}
 
+                              {selectedBlockId === 'nextChapterTitle' && (
+                                <div className="pt-2.5 border-t border-zinc-100 space-y-2.5">
+                                  <div className="text-[11px] font-bold text-zinc-800">
+                                    Текст заголовка и подзаголовка
+                                  </div>
+                                  <label className="block">
+                                    <span className="text-[10px] text-zinc-500">
+                                      Заголовок блока
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={activeDoc.page2.nextChapter.title}
+                                      onChange={(e) =>
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page2: {
+                                            ...activeDoc.page2,
+                                            nextChapter: {
+                                              ...activeDoc.page2.nextChapter,
+                                              title: e.target.value,
+                                            },
+                                          },
+                                        })
+                                      }
+                                      className={flatInputClass}
+                                    />
+                                  </label>
+                                  <label className="block">
+                                    <span className="text-[10px] text-zinc-500">
+                                      Подзаголовок блока
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={
+                                        activeDoc.page2.nextChapter.description
+                                      }
+                                      onChange={(e) =>
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page2: {
+                                            ...activeDoc.page2,
+                                            nextChapter: {
+                                              ...activeDoc.page2.nextChapter,
+                                              description: e.target.value,
+                                            },
+                                          },
+                                        })
+                                      }
+                                      className={flatInputClass}
+                                    />
+                                  </label>
+                                </div>
+                              )}
+
                               {(selectedBlockId === 'nextChapter' ||
                                 selectedBlockId === 'nextBear') && (
                                 <div className="pt-2.5 border-t border-zinc-100 space-y-2.5">
@@ -7739,10 +7903,129 @@ export function GroupEditorView({
                                             },
                                           })
                                         }
-                                      className={flatInputClass}
+                                        className={flatInputClass}
+                                      />
+                                    </label>
+                                  )}
+
+                                  <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-[10px] text-zinc-500">
+                                        Цвет фона маршрута
+                                      </span>
+                                      <input
+                                        type="color"
+                                        aria-label="Цвет фона маршрута"
+                                        value={
+                                          activeDoc.page2.nextChapter.bgColor ||
+                                          '#BCEFF4'
+                                        }
+                                        onChange={(e) =>
+                                          onChangeJournal({
+                                            ...activeDoc,
+                                            page2: {
+                                              ...activeDoc.page2,
+                                              nextChapter: {
+                                                ...activeDoc.page2.nextChapter,
+                                                bgColor: e.target.value,
+                                              },
+                                            },
+                                          })
+                                        }
+                                        className="w-8 h-6 rounded border border-zinc-200 cursor-pointer bg-white p-0.5"
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      {[
+                                        '#BCEFF4',
+                                        '#DBEAFE',
+                                        '#EDE9FE',
+                                        '#FEF3C7',
+                                        '#D1FAE5',
+                                        '#FFE4E6',
+                                        '#FFFFFF',
+                                      ].map((hex) => (
+                                        <button
+                                          key={hex}
+                                          type="button"
+                                          onClick={() =>
+                                            onChangeJournal({
+                                              ...activeDoc,
+                                              page2: {
+                                                ...activeDoc.page2,
+                                                nextChapter: {
+                                                  ...activeDoc.page2.nextChapter,
+                                                  bgColor: hex,
+                                                },
+                                              },
+                                            })
+                                          }
+                                          style={{ backgroundColor: hex }}
+                                          title={hex}
+                                          className={`w-5 h-5 rounded border ${
+                                            (
+                                              activeDoc.page2.nextChapter
+                                                .bgColor || '#BCEFF4'
+                                            ).toLowerCase() === hex.toLowerCase()
+                                              ? 'border-[#0D9488] ring-2 ring-[#0D9488]/30'
+                                              : 'border-zinc-300'
+                                          }`}
+                                        />
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  <label className="flex items-center justify-between gap-2 cursor-pointer pt-0.5">
+                                    <span className="text-[11px] text-zinc-700">
+                                      Декоративное оформление
+                                    </span>
+                                    <input
+                                      type="checkbox"
+                                      checked={
+                                        activeDoc.page2.nextChapter
+                                          .showDecor !== false
+                                      }
+                                      onChange={(e) =>
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page2: {
+                                            ...activeDoc.page2,
+                                            nextChapter: {
+                                              ...activeDoc.page2.nextChapter,
+                                              showDecor: e.target.checked,
+                                            },
+                                          },
+                                        })
+                                      }
+                                      className="rounded border-zinc-300 text-[#0D9488]"
                                     />
                                   </label>
-                                  )}
+
+                                  <label className="flex items-center justify-between gap-2 cursor-pointer">
+                                    <span className="text-[11px] text-zinc-700">
+                                      Пунктирная линия маршрута
+                                    </span>
+                                    <input
+                                      type="checkbox"
+                                      checked={
+                                        activeDoc.page2.nextChapter
+                                          .showRouteLine !== false
+                                      }
+                                      onChange={(e) =>
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page2: {
+                                            ...activeDoc.page2,
+                                            nextChapter: {
+                                              ...activeDoc.page2.nextChapter,
+                                              showRouteLine: e.target.checked,
+                                            },
+                                          },
+                                        })
+                                      }
+                                      className="rounded border-zinc-300 text-[#0D9488]"
+                                    />
+                                  </label>
                                 </div>
                               )}
                             </div>
@@ -10326,6 +10609,7 @@ export function GroupEditorView({
                                   className={`bg-white border rounded-lg p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.03)] space-y-3 ${
                                     activeTarget?.page === 2 &&
                                     (activeTarget.block === 'nextChapter' ||
+                                      activeTarget.block === 'nextChapterTitle' ||
                                       activeTarget.block === 'nextBear')
                                       ? 'border-[#0D9488]/40'
                                       : 'border-zinc-200'
@@ -10336,6 +10620,7 @@ export function GroupEditorView({
                                       className={`text-[11px] font-bold ${
                                         activeTarget?.page === 2 &&
                                         (activeTarget.block === 'nextChapter' ||
+                                          activeTarget.block === 'nextChapterTitle' ||
                                           activeTarget.block === 'nextBear')
                                           ? 'text-[#0F766E]'
                                           : 'text-zinc-800'
@@ -10345,6 +10630,7 @@ export function GroupEditorView({
                                     </span>
                                     {activeTarget?.page === 2 &&
                                       (activeTarget.block === 'nextChapter' ||
+                                        activeTarget.block === 'nextChapterTitle' ||
                                         activeTarget.block === 'nextBear') && (
                                         <button
                                           type="button"
@@ -10408,16 +10694,49 @@ export function GroupEditorView({
                                     </label>
                                   )}
 
+                                  <label className="block">
+                                    <span className="text-[10px] font-medium text-zinc-500 mb-1 block">
+                                      Подзаголовок блока
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={
+                                        activeDoc.page2.nextChapter.description
+                                      }
+                                      onChange={(e) =>
+                                        onChangeJournal({
+                                          ...activeDoc,
+                                          page2: {
+                                            ...activeDoc.page2,
+                                            nextChapter: {
+                                              ...activeDoc.page2.nextChapter,
+                                              description: e.target.value,
+                                            },
+                                          },
+                                        })
+                                      }
+                                      placeholder="Тебя ждут новые интересные модули:"
+                                      className="w-full px-2.5 py-1.5 rounded-md border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-800 focus:outline-none focus:bg-white focus:border-[#0D9488]"
+                                    />
+                                  </label>
+
                                   <div className="space-y-2">
                                     <div className="flex items-center justify-between">
                                       <span className="text-[10px] font-medium text-zinc-500">
-                                        Станции на маршруте (до 3)
+                                        Направления маршрута (до 4)
                                       </span>
                                       {activeDoc.page2.nextChapter.topics
-                                        .length < 3 && (
+                                        .length < 4 && (
                                         <button
                                           type="button"
-                                          onClick={() =>
+                                          onClick={() => {
+                                            const currentTopics =
+                                              activeDoc.page2.nextChapter
+                                                .topics;
+                                            const nextColor =
+                                              pickNextAvailablePinColor(
+                                                currentTopics
+                                              );
                                             onChangeJournal({
                                               ...activeDoc,
                                               page2: {
@@ -10426,28 +10745,34 @@ export function GroupEditorView({
                                                   ...activeDoc.page2
                                                     .nextChapter,
                                                   topics: [
-                                                    ...activeDoc.page2
-                                                      .nextChapter.topics,
+                                                    ...currentTopics,
                                                     {
                                                       id: `nt-${Date.now()}`,
-                                                      title: 'Новый модуль',
+                                                      title: 'Новое направление',
                                                       iconKey: 'ai',
+                                                      pinColor: nextColor,
                                                     },
                                                   ],
                                                 },
                                               },
-                                            })
-                                          }
+                                            });
+                                          }}
                                           className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#0D9488] hover:underline"
                                         >
                                           <Plus className="w-3 h-3" />
-                                          <span>Добавить</span>
+                                          <span>Добавить направление</span>
                                         </button>
                                       )}
                                     </div>
 
                                     {activeDoc.page2.nextChapter.topics.map(
-                                      (topic) => {
+                                      (topic, topicIdx) => {
+                                        const topicsList =
+                                          activeDoc.page2.nextChapter.topics;
+                                        const pinPalette = getNextPinPalette(
+                                          topic.pinColor,
+                                          topicIdx
+                                        );
                                         const editingThisTopicText =
                                           activeTextField?.page === 2 &&
                                           activeTextField.field ===
@@ -10456,21 +10781,129 @@ export function GroupEditorView({
                                         return (
                                           <div
                                             key={topic.id}
-                                            className="flex items-center gap-1.5 p-1.5 rounded-md border border-zinc-200 bg-zinc-50/60"
+                                            data-editor-next-topic={topic.id}
+                                            className="p-2 rounded-lg border border-zinc-200 bg-zinc-50/60 space-y-1.5"
                                           >
-                                            <NextTopicLineIcon
-                                              type={topic.iconKey}
-                                              className="w-4 h-4 shrink-0 text-[#0F766E]"
-                                            />
-                                            {editingThisTopicText ? (
-                                              <span className="flex-1 text-[11px] font-medium text-zinc-600 truncate">
-                                                {topic.title}
-                                              </span>
-                                            ) : (
-                                              <input
-                                                type="text"
-                                                value={topic.title}
-                                                onChange={(e) =>
+                                            <div className="flex items-center gap-1.5">
+                                              <LocationPinIcon
+                                                color={pinPalette.hex}
+                                                size={15}
+                                              />
+                                              {editingThisTopicText ? (
+                                                <span className="flex-1 text-[11px] font-medium text-zinc-600 truncate">
+                                                  {topic.title}
+                                                </span>
+                                              ) : (
+                                                <input
+                                                  type="text"
+                                                  aria-label={`Название направления ${
+                                                    topicIdx + 1
+                                                  }`}
+                                                  value={topic.title}
+                                                  onChange={(e) =>
+                                                    onChangeJournal({
+                                                      ...activeDoc,
+                                                      page2: {
+                                                        ...activeDoc.page2,
+                                                        nextChapter: {
+                                                          ...activeDoc.page2
+                                                            .nextChapter,
+                                                          topics:
+                                                            topicsList.map(
+                                                              (t) =>
+                                                                t.id ===
+                                                                topic.id
+                                                                  ? {
+                                                                      ...t,
+                                                                      title:
+                                                                        e.target
+                                                                          .value,
+                                                                    }
+                                                                  : t
+                                                            ),
+                                                        },
+                                                      },
+                                                    })
+                                                  }
+                                                  className="flex-1 min-w-0 bg-white border border-zinc-200 rounded px-2 py-1 text-[11px] font-semibold text-zinc-900 focus:outline-none focus:border-[#0D9488]"
+                                                />
+                                              )}
+                                              <button
+                                                type="button"
+                                                disabled={topicIdx === 0}
+                                                onClick={() => {
+                                                  if (topicIdx <= 0) return;
+                                                  const nextTopics = [
+                                                    ...topicsList,
+                                                  ];
+                                                  [
+                                                    nextTopics[topicIdx - 1],
+                                                    nextTopics[topicIdx],
+                                                  ] = [
+                                                    nextTopics[topicIdx],
+                                                    nextTopics[topicIdx - 1],
+                                                  ];
+                                                  onChangeJournal({
+                                                    ...activeDoc,
+                                                    page2: {
+                                                      ...activeDoc.page2,
+                                                      nextChapter: {
+                                                        ...activeDoc.page2
+                                                          .nextChapter,
+                                                        topics: nextTopics,
+                                                      },
+                                                    },
+                                                  });
+                                                }}
+                                                className="p-1 text-zinc-400 hover:text-zinc-900 disabled:opacity-30"
+                                                title="Переместить выше"
+                                                aria-label={`Переместить выше: ${topic.title}`}
+                                              >
+                                                <ArrowUp className="w-3 h-3" />
+                                              </button>
+                                              <button
+                                                type="button"
+                                                disabled={
+                                                  topicIdx ===
+                                                  topicsList.length - 1
+                                                }
+                                                onClick={() => {
+                                                  if (
+                                                    topicIdx >=
+                                                    topicsList.length - 1
+                                                  )
+                                                    return;
+                                                  const nextTopics = [
+                                                    ...topicsList,
+                                                  ];
+                                                  [
+                                                    nextTopics[topicIdx],
+                                                    nextTopics[topicIdx + 1],
+                                                  ] = [
+                                                    nextTopics[topicIdx + 1],
+                                                    nextTopics[topicIdx],
+                                                  ];
+                                                  onChangeJournal({
+                                                    ...activeDoc,
+                                                    page2: {
+                                                      ...activeDoc.page2,
+                                                      nextChapter: {
+                                                        ...activeDoc.page2
+                                                          .nextChapter,
+                                                        topics: nextTopics,
+                                                      },
+                                                    },
+                                                  });
+                                                }}
+                                                className="p-1 text-zinc-400 hover:text-zinc-900 disabled:opacity-30"
+                                                title="Переместить ниже"
+                                                aria-label={`Переместить ниже: ${topic.title}`}
+                                              >
+                                                <ArrowDown className="w-3 h-3" />
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() =>
                                                   onChangeJournal({
                                                     ...activeDoc,
                                                     page2: {
@@ -10479,89 +10912,136 @@ export function GroupEditorView({
                                                         ...activeDoc.page2
                                                           .nextChapter,
                                                         topics:
-                                                          activeDoc.page2.nextChapter.topics.map(
+                                                          topicsList.filter(
                                                             (t) =>
-                                                              t.id === topic.id
-                                                                ? {
-                                                                    ...t,
-                                                                    title:
-                                                                      e.target
-                                                                        .value,
-                                                                  }
-                                                                : t
+                                                              t.id !== topic.id
                                                           ),
                                                       },
                                                     },
                                                   })
                                                 }
-                                                className="flex-1 min-w-0 bg-white border border-zinc-200 rounded px-2 py-1 text-[11px] font-medium text-zinc-900 focus:outline-none focus:border-[#0D9488]"
-                                              />
-                                            )}
-                                            <select
-                                              value={topic.iconKey}
-                                              onChange={(e) =>
-                                                onChangeJournal({
-                                                  ...activeDoc,
-                                                  page2: {
-                                                    ...activeDoc.page2,
-                                                    nextChapter: {
-                                                      ...activeDoc.page2
-                                                        .nextChapter,
-                                                      topics:
-                                                        activeDoc.page2.nextChapter.topics.map(
-                                                          (t) =>
-                                                            t.id === topic.id
-                                                              ? {
-                                                                  ...t,
-                                                                  iconKey:
-                                                                    e.target
-                                                                      .value as NextTopicIconKey,
-                                                                }
-                                                              : t
-                                                        ),
-                                                    },
-                                                  },
-                                                })
-                                              }
-                                              aria-label="Иконка станции"
-                                              className="bg-white border border-zinc-200 rounded px-1 py-1 text-[10px] text-zinc-700"
-                                            >
-                                              {NEXT_TOPIC_LIBRARY.map((opt) => (
-                                                <option
-                                                  key={opt.iconKey}
-                                                  value={opt.iconKey}
-                                                >
-                                                  {opt.title}
-                                                </option>
-                                              ))}
-                                            </select>
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                onChangeJournal({
-                                                  ...activeDoc,
-                                                  page2: {
-                                                    ...activeDoc.page2,
-                                                    nextChapter: {
-                                                      ...activeDoc.page2
-                                                        .nextChapter,
-                                                      topics:
-                                                        activeDoc.page2.nextChapter.topics.filter(
-                                                          (t) =>
-                                                            t.id !== topic.id
-                                                        ),
-                                                    },
-                                                  },
-                                                })
-                                              }
-                                              className="p-1 text-zinc-400 hover:text-red-600"
-                                              title="Убрать станцию"
-                                            >
-                                              <Trash2 className="w-3 h-3" />
-                                            </button>
+                                                className="p-1 text-zinc-400 hover:text-red-600"
+                                                title="Удалить направление"
+                                                aria-label={`Удалить направление: ${topic.title}`}
+                                              >
+                                                <Trash2 className="w-3 h-3" />
+                                              </button>
+                                            </div>
+
+                                            <div className="flex items-center justify-between gap-2 pl-5">
+                                              <span className="text-[10px] text-zinc-500">
+                                                Цвет геометки:
+                                              </span>
+                                              <div className="flex items-center gap-1.5">
+                                                {NEXT_PIN_COLOR_OPTIONS.map(
+                                                  (opt) => {
+                                                    const isSelected =
+                                                      pinPalette.hex.toLowerCase() ===
+                                                      opt.hex.toLowerCase();
+                                                    return (
+                                                      <button
+                                                        key={opt.id}
+                                                        type="button"
+                                                        onClick={() =>
+                                                          onChangeJournal({
+                                                            ...activeDoc,
+                                                            page2: {
+                                                              ...activeDoc.page2,
+                                                              nextChapter: {
+                                                                ...activeDoc
+                                                                  .page2
+                                                                  .nextChapter,
+                                                                topics:
+                                                                  topicsList.map(
+                                                                    (t) =>
+                                                                      t.id ===
+                                                                      topic.id
+                                                                        ? {
+                                                                            ...t,
+                                                                            pinColor:
+                                                                              opt.hex,
+                                                                          }
+                                                                        : t
+                                                                  ),
+                                                              },
+                                                            },
+                                                          })
+                                                        }
+                                                        title={opt.label}
+                                                        aria-label={`${opt.label} для ${topic.title}`}
+                                                        style={{
+                                                          backgroundColor:
+                                                            opt.hex,
+                                                        }}
+                                                        className={`w-4 h-4 rounded-full border transition-transform ${
+                                                          isSelected
+                                                            ? 'border-[#18181B] ring-2 ring-offset-1 ring-[#18181B] scale-110'
+                                                            : 'border-black/25 hover:scale-110'
+                                                        }`}
+                                                      />
+                                                    );
+                                                  }
+                                                )}
+                                              </div>
+                                            </div>
                                           </div>
                                         );
                                       }
+                                    )}
+
+                                    {activeDoc.page2.nextChapter.topics.length <
+                                      4 && (
+                                      <div className="pt-1 flex flex-wrap gap-1">
+                                        {NEXT_TOPIC_LIBRARY.filter(
+                                          (item) =>
+                                            !activeDoc.page2.nextChapter.topics.some(
+                                              (t) =>
+                                                t.title.toLowerCase() ===
+                                                item.title.toLowerCase()
+                                            )
+                                        )
+                                          .slice(0, 4)
+                                          .map((item) => (
+                                            <button
+                                              key={item.title}
+                                              type="button"
+                                              onClick={() => {
+                                                const currentTopics =
+                                                  activeDoc.page2.nextChapter
+                                                    .topics;
+                                                const nextColor =
+                                                  pickNextAvailablePinColor(
+                                                    currentTopics
+                                                  );
+                                                onChangeJournal({
+                                                  ...activeDoc,
+                                                  page2: {
+                                                    ...activeDoc.page2,
+                                                    nextChapter: {
+                                                      ...activeDoc.page2
+                                                        .nextChapter,
+                                                      topics: [
+                                                        ...currentTopics,
+                                                        {
+                                                          id: `nt-${Date.now()}-${
+                                                            item.iconKey
+                                                          }`,
+                                                          title: item.title,
+                                                          iconKey: item.iconKey,
+                                                          pinColor: nextColor,
+                                                        },
+                                                      ],
+                                                    },
+                                                  },
+                                                });
+                                              }}
+                                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-zinc-200 bg-white hover:border-[#0D9488] hover:bg-[#F0FDFA] text-[10px] font-medium text-zinc-700"
+                                            >
+                                              <Plus className="w-2.5 h-2.5 text-[#0D9488]" />
+                                              <span>{item.title}</span>
+                                            </button>
+                                          ))}
+                                      </div>
                                     )}
                                   </div>
 

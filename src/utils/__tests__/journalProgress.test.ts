@@ -713,5 +713,85 @@ describe('Задача №40: лимиты стр. 1, последователь
   });
 });
 
+describe('Задача №44: геометки маршрута и настройки декора/линии в nextChapter', () => {
+  it('поддерживает 5 ярких цветов геометок и подбирает свободный цвет при добавлении', async () => {
+    const {
+      NEXT_PIN_COLOR_OPTIONS,
+      getNextPinPalette,
+      pickNextAvailablePinColor,
+    } = await import('../../data/presets');
+
+    expect(NEXT_PIN_COLOR_OPTIONS.map((o) => o.id)).toEqual([
+      'teal',
+      'yellow',
+      'coral',
+      'purple',
+      'blue',
+    ]);
+
+    expect(getNextPinPalette('coral').hex).toBe('#FB7185');
+    expect(getNextPinPalette(undefined, 3).id).toBe('purple');
+
+    const picked = pickNextAvailablePinColor([
+      { pinColor: '#14B8A6' },
+      { pinColor: '#FB7185' },
+    ]);
+    expect(picked).toBe('#FACC15');
+  });
+
+  it('переносит showDecor, showRouteLine и bgColor при копировании дизайна без перезаписи личных направлений', () => {
+    const group = createBaseGroup();
+    const res1 = createBaseResident({
+      id: 'res-44-1',
+      fullName: 'Максим',
+      journalId: 'j-44-1',
+    });
+    const res2 = createBaseResident({
+      id: 'res-44-2',
+      fullName: 'Алина',
+      journalId: 'j-44-2',
+    });
+
+    const source = createStudentJournal(res1, group, TEST_BRANCH);
+    source.page2.nextChapter.bgColor = '#EDE9FE';
+    source.page2.nextChapter.showDecor = false;
+    source.page2.nextChapter.showRouteLine = false;
+    source.page2.nextChapter.topics = [
+      {
+        id: 't1',
+        title: 'Секретный курс Максима',
+        iconKey: 'python',
+        pinColor: '#FB7185',
+      },
+    ];
+
+    const target = createStudentJournal(res2, group, TEST_BRANCH);
+    target.page2.nextChapter.topics = [
+      {
+        id: 'a1',
+        title: '3D-моделирование Алины',
+        iconKey: 'cube3d',
+        pinColor: '#8B5CF6',
+      },
+    ];
+
+    expect(hasJournalDesignChanged(target, source)).toBe(true);
+    const updated = applyDesignSnapshotToJournal(target, source);
+
+    expect(updated.page2.nextChapter.bgColor).toBe('#EDE9FE');
+    expect(updated.page2.nextChapter.showDecor).toBe(false);
+    expect(updated.page2.nextChapter.showRouteLine).toBe(false);
+    expect(updated.page2.nextChapter.topics).toEqual([
+      {
+        id: 'a1',
+        title: '3D-моделирование Алины',
+        iconKey: 'cube3d',
+        pinColor: '#8B5CF6',
+      },
+    ]);
+  });
+});
+
+
 
 

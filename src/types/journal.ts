@@ -329,6 +329,7 @@ export interface NextTopicItem {
   id: string;
   title: string;
   iconKey: NextTopicIconKey;
+  pinColor?: string;
 }
 
 export type Page2SectionKey = 'strengths' | 'pride' | 'mentorNote' | 'nextChapter';
@@ -379,6 +380,8 @@ export interface Page2Config {
     bearOffsetY: number;
     speechBubbleText?: string;
     bearVrMigrated?: boolean;
+    showDecor?: boolean;
+    showRouteLine?: boolean;
   };
   footerWebsite: string;
 }
@@ -566,6 +569,7 @@ export type EditorSectionTarget =
   | { page: 2; block: 'prideBear' }
   | { page: 2; block: 'mentorNote' }
   | { page: 2; block: 'nextChapter' }
+  | { page: 2; block: 'nextChapterTitle' }
   | { page: 2; block: 'nextBear' }
   | { page: 2; block: 'decor'; itemId: string }
   | { page: 2; block: 'background' }

@@ -259,6 +259,7 @@ export interface InlineEditableTextProps {
   inlineEditOnDoubleClick?: boolean;
   designMode?: boolean;
   multiline?: boolean;
+  wrapMode?: 'anywhere' | 'normal';
   as?: 'span' | 'div' | 'p' | 'h1' | 'h2' | 'h3' | 'h4';
   className?: string;
   style?: React.CSSProperties;
@@ -275,6 +276,7 @@ export function InlineEditableText({
   inlineEditOnDoubleClick = false,
   designMode = false,
   multiline = false,
+  wrapMode = 'anywhere',
   as: Tag = 'span',
   className = '',
   style,
@@ -412,7 +414,11 @@ export function InlineEditableText({
           : undefined
       }
       style={style}
-      className={`min-w-0 max-w-full box-border whitespace-pre-wrap [overflow-wrap:anywhere] ${className} ${
+      className={`min-w-0 max-w-full box-border whitespace-pre-wrap ${
+        wrapMode === 'normal'
+          ? '[overflow-wrap:normal] break-normal'
+          : '[overflow-wrap:anywhere]'
+      } ${className} ${
         interactive && !designMode
           ? isSelected
             ? 'cursor-pointer outline outline-2 outline-[#0D9488] bg-[#F0FDFA]/45 rounded-[3px] transition-[outline,background-color]'

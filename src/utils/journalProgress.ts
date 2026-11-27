@@ -829,6 +829,8 @@ export function applyDesignSnapshotToJournal(
         bearOffsetY: source.page2.nextChapter.bearOffsetY,
         speechBubbleText: source.page2.nextChapter.speechBubbleText,
         bearVrMigrated: source.page2.nextChapter.bearVrMigrated,
+        showDecor: source.page2.nextChapter.showDecor,
+        showRouteLine: source.page2.nextChapter.showRouteLine,
       },
       footerWebsite: source.page2.footerWebsite,
     },
@@ -909,6 +911,8 @@ export function getJournalDesignSignature(doc: JournalDocument): string {
         bearScale: doc.page2.nextChapter.bearScale,
         bearOffsetX: doc.page2.nextChapter.bearOffsetX,
         bearOffsetY: doc.page2.nextChapter.bearOffsetY,
+        showDecor: doc.page2.nextChapter.showDecor ?? true,
+        showRouteLine: doc.page2.nextChapter.showRouteLine ?? true,
       },
     },
   });

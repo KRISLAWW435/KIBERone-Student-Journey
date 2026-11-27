@@ -315,6 +315,7 @@ export function JournalPageTwo({
             ageCategory={resident.ageCategory}
             designMode={designMode}
             scaleFactor={scaleFactor}
+            titleTransform={layouts.nextChapterTitle}
             bearTransform={layouts.nextBear}
             activeTarget={activeTarget}
             activeTextField={activeTextField}

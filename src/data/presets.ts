@@ -166,6 +166,95 @@ export const STRENGTH_LIBRARY: Array<{
   },
 ];
 
+export interface NextPinColorOption {
+  id: 'teal' | 'yellow' | 'coral' | 'purple' | 'blue';
+  label: string;
+  hex: string;
+  light: string;
+  dark: string;
+}
+
+export const NEXT_PIN_COLOR_OPTIONS: NextPinColorOption[] = [
+  {
+    id: 'teal',
+    label: 'Бирюзовый',
+    hex: '#14B8A6',
+    light: '#5EEAD4',
+    dark: '#0F766E',
+  },
+  {
+    id: 'yellow',
+    label: 'Жёлтый',
+    hex: '#FACC15',
+    light: '#FEF08A',
+    dark: '#CA8A04',
+  },
+  {
+    id: 'coral',
+    label: 'Коралловый',
+    hex: '#FB7185',
+    light: '#FDA4AF',
+    dark: '#E11D48',
+  },
+  {
+    id: 'purple',
+    label: 'Фиолетовый',
+    hex: '#8B5CF6',
+    light: '#C4B5FD',
+    dark: '#6D28D9',
+  },
+  {
+    id: 'blue',
+    label: 'Голубой',
+    hex: '#38BDF8',
+    light: '#BAE6FD',
+    dark: '#0284C7',
+  },
+];
+
+export function getNextPinPalette(
+  colorOrId?: string,
+  fallbackIndex = 0
+): NextPinColorOption {
+  if (colorOrId) {
+    const normalized = colorOrId.trim().toLowerCase();
+    const matched = NEXT_PIN_COLOR_OPTIONS.find(
+      (opt) =>
+        opt.id === normalized || opt.hex.toLowerCase() === normalized
+    );
+    if (matched) return matched;
+    if (/^#[0-9a-f]{3,8}$/i.test(normalized)) {
+      return {
+        id: 'teal',
+        label: 'Свой цвет',
+        hex: colorOrId,
+        light: colorOrId,
+        dark: colorOrId,
+      };
+    }
+  }
+  return NEXT_PIN_COLOR_OPTIONS[
+    Math.abs(fallbackIndex) % NEXT_PIN_COLOR_OPTIONS.length
+  ];
+}
+
+export function pickNextAvailablePinColor(
+  existing: Array<{ pinColor?: string }>
+): string {
+  const used = new Set(
+    existing.map((item, idx) =>
+      getNextPinPalette(item.pinColor, idx).hex.toLowerCase()
+    )
+  );
+  const unused = NEXT_PIN_COLOR_OPTIONS.find(
+    (opt) => !used.has(opt.hex.toLowerCase())
+  );
+  if (unused) return unused.hex;
+  return NEXT_PIN_COLOR_OPTIONS[
+    existing.length % NEXT_PIN_COLOR_OPTIONS.length
+  ].hex;
+}
+
 export const NEXT_TOPIC_LIBRARY: Array<{
   title: string;
   iconKey: NextTopicIconKey;
